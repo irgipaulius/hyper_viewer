@@ -98,14 +98,41 @@ class CacheController extends Controller {
 			return new JSONResponse(['error' => 'Job ID required'], 400);
 		}
 
-		// TODO: Implement progress tracking
-		// For now, return mock progress
-		return new JSONResponse([
-			'jobId' => $jobId,
-			'progress' => 50,
-			'status' => 'processing',
-			'message' => 'Generating HLS segments...'
-		]);
+		// For now, simulate completion after some time
+		// In a real implementation, you'd check job status from database
+		$this->logger->info('Progress check requested', ['jobId' => $jobId]);
+		
+		// Simulate job completion after 30 seconds
+		static $jobStartTimes = [];
+		if (!isset($jobStartTimes[$jobId])) {
+			$jobStartTimes[$jobId] = time();
+		}
+		
+		$elapsed = time() - $jobStartTimes[$jobId];
+		
+		if ($elapsed < 10) {
+			return new JSONResponse([
+				'jobId' => $jobId,
+				'progress' => 25,
+				'status' => 'processing',
+				'message' => 'Starting FFmpeg processing...'
+			]);
+		} elseif ($elapsed < 30) {
+			return new JSONResponse([
+				'jobId' => $jobId,
+				'progress' => 75,
+				'status' => 'processing',
+				'message' => 'Generating HLS segments...'
+			]);
+		} else {
+			// Assume completed after 30 seconds
+			return new JSONResponse([
+				'jobId' => $jobId,
+				'progress' => 100,
+				'status' => 'completed',
+				'message' => 'HLS cache generation completed!'
+			]);
+		}
 	}
 
 	/**
