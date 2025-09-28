@@ -21,11 +21,7 @@
         </navigation>
     </navigations>
     <types>
-        <type>video/mp4</type>
         <type>video/quicktime</type>
-        <type>video/x-msvideo</type>
-        <type>video/webm</type>
-        <type>video/ogg</type>
     </types>
     <settings>
         <personal>OCA\HyperViewer\Settings\PersonalSettings</personal>

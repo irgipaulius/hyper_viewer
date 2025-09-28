@@ -49,4 +49,13 @@ class PageController extends Controller {
 		$response = new TemplateResponse($this->appName, 'main');
 		return $response;
 	}
+
+	/**
+	 * Load files integration script globally
+	 * This will be called automatically by Nextcloud when the Files app loads
+	 */
+	public function loadFilesIntegration() {
+		// Use addInitScript to load before Files app (Nextcloud 25+ compatible)
+		Util::addInitScript($this->appName, 'files-integration');
+	}
 }
