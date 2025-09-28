@@ -66,7 +66,7 @@ class CacheController extends Controller {
 		
 		// Add background job for each file
 		foreach ($files as $fileData) {
-			$this->jobList->add(HlsCacheGenerationJob::class, [
+			$jobData = [
 				'jobId' => $jobId,
 				'userId' => $user->getUID(),
 				'filename' => $fileData['filename'],
@@ -75,7 +75,14 @@ class CacheController extends Controller {
 				'customPath' => $customPath,
 				'overwriteExisting' => $overwriteExisting,
 				'notifyCompletion' => $notifyCompletion
+			];
+			
+			$this->logger->info('Adding HLS cache generation job to queue', [
+				'jobId' => $jobId,
+				'jobData' => $jobData
 			]);
+			
+			$this->jobList->add(HlsCacheGenerationJob::class, $jobData);
 		}
 
 		return new JSONResponse([

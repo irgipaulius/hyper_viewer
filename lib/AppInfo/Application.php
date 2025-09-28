@@ -9,6 +9,7 @@ use OCP\AppFramework\Bootstrap\IBootContext;
 use OCP\AppFramework\Bootstrap\IBootstrap;
 use OCP\AppFramework\Bootstrap\IRegistrationContext;
 use OCP\Util;
+use OCA\HyperViewer\BackgroundJob\HlsCacheGenerationJob;
 
 class Application extends App implements IBootstrap {
 	public const APP_ID = 'hyper_viewer';

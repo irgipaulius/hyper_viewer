@@ -23,6 +23,7 @@ class HlsCacheGenerationJob extends QueuedJob {
 		LoggerInterface $logger,
 		INotificationManager $notificationManager
 	) {
+		parent::__construct();
 		$this->rootFolder = $rootFolder;
 		$this->userManager = $userManager;
 		$this->logger = $logger;
@@ -30,6 +31,8 @@ class HlsCacheGenerationJob extends QueuedJob {
 	}
 
 	protected function run($argument): void {
+		$this->logger->info('🚀 HLS cache generation job STARTED', ['argument' => $argument]);
+		
 		$jobId = $argument['jobId'] ?? 'unknown';
 		$userId = $argument['userId'] ?? null;
 		$filename = $argument['filename'] ?? null;
