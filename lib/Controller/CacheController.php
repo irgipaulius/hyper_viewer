@@ -187,7 +187,7 @@ class CacheController extends Controller {
 
 		foreach ($cacheLocations as $cachePath) {
 			try {
-				if ($userFolder->nodeExists($cachePath . '/master.m3u8')) {
+				if ($userFolder->nodeExists($cachePath . '/playlist.m3u8')) {
 					$this->logger->debug('Found HLS cache', ['path' => $cachePath]);
 					return $cachePath;
 				}

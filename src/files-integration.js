@@ -384,7 +384,7 @@ function showProgressDialog(fileCount) {
 async function trackProgress(jobId, fileCount) {
 	console.log(`📈 Tracking progress for job: ${jobId}`)
 
-	const maxAttempts = 60 // 5 minutes max
+	const maxAttempts = 240 // 20 minutes max (for large videos)
 	let attempts = 0
 
 	const checkProgress = async () => {
