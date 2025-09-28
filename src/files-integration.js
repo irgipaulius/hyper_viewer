@@ -3,7 +3,7 @@
  * Adds "Generate HLS Cache" action to MOV and MP4 files
  */
 
-/* global shaka */
+/* global OC, OCA, t */
 
 console.log('🎬 Hyper Viewer Files integration loading...')
 
@@ -44,10 +44,9 @@ function initializeFilesIntegration() {
 
 	// Register "Play with HLS" action for MOV files (higher priority)
 	OCA.Files.fileActions.registerAction({
-		name: 'playHlsMov',
 		displayName: t('hyper_viewer', 'Play with HLS'),
 		mime: 'video/quicktime',
-		permissions: OC.PERMISSION_READ,
+		permissions: OC.permission_READ,
 		iconClass: 'icon-play',
 		async actionHandler(filename, context) {
 			console.log('🎬 Play with HLS triggered for MOV:', filename)
@@ -56,32 +55,54 @@ function initializeFilesIntegration() {
 		},
 	})
 
-	// Register "Generate HLS Cache" action for MP4 files
-	OCA.Files.fileActions.registerAction({
-		name: 'generateHlsCacheMp4',
-		displayName: t('hyper_viewer', 'Generate HLS Cache'),
-		mime: 'video/mp4',
-		permissions: OC.PERMISSION_UPDATE,
-		iconClass: 'icon-category-multimedia',
-		actionHandler(filename, context) {
-			console.log('🚀 Generate HLS Cache action triggered for MP4:', filename)
-			console.log('📁 Context:', context)
-			openCacheGenerationDialog([{ filename, context }])
-		},
-	})
+	// Register smart video player for all video types
+	const videoMimeTypes = [
+		'video/mp4', 'video/avi', 'video/mov', 'video/wmv', 'video/flv',
+		'video/webm', 'video/mkv', 'video/m4v', 'video/3gp', 'video/quicktime'
+	]
 
-	// Register "Play with HLS" action for MP4 files (higher priority)
-	OCA.Files.fileActions.registerAction({
-		name: 'playHlsMp4',
-		displayName: t('hyper_viewer', 'Play with HLS'),
-		mime: 'video/mp4',
-		permissions: OC.PERMISSION_READ,
-		iconClass: 'icon-play',
-		async actionHandler(filename, context) {
-			console.log('🎬 Play with HLS triggered for MP4:', filename)
-			const directory = context?.dir || context?.fileList?.getCurrentDirectory() || '/'
-			await playWithHls(filename, directory, context)
-		},
+	videoMimeTypes.forEach(mimeType => {
+		// Override default video action to auto-route to HLS if cache exists
+		OCA.Files.fileActions.registerAction({
+			name: 'ViewVideoSmart',
+			displayName: t('hyper_viewer', 'View'),
+			mime: mimeType,
+			permissions: OC.permission_READ,
+			iconClass: 'icon-play',
+			order: -1, // Higher priority than default
+			actionHandler: async (filename, context) => {
+				console.log(`🎬 Smart video player triggered for ${mimeType}: ${filename}`)
+				const directory = context?.dir || context?.fileList?.getCurrentDirectory() || '/'
+				await smartVideoPlayer(filename, directory, context)
+			}
+		})
+
+		// Generate HLS Cache action for all video types
+		OCA.Files.fileActions.registerAction({
+			name: `GenerateHlsCache_${mimeType.replace('/', '_')}`,
+			displayName: t('hyper_viewer', 'Generate HLS Cache'),
+			mime: mimeType,
+			permissions: OC.permission_READ,
+			iconClass: 'icon-video',
+			actionHandler: (filename, context) => {
+				console.log(`🚀 Generate HLS Cache action triggered for ${mimeType}: ${filename}`)
+				openCacheGenerationDialog([{ filename, context }])
+			}
+		})
+
+		// Manual Play with HLS action for all video types
+		OCA.Files.fileActions.registerAction({
+			name: `PlayWithHls_${mimeType.replace('/', '_')}`,
+			displayName: t('hyper_viewer', 'Play with HLS'),
+			mime: mimeType,
+			permissions: OC.permission_READ,
+			iconClass: 'icon-play',
+			actionHandler: async (filename, context) => {
+				console.log(`🎬 Manual HLS play triggered for ${mimeType}: ${filename}`)
+				const directory = context?.dir || context?.fileList?.getCurrentDirectory() || '/'
+				await playWithHls(filename, directory, context)
+			}
+		})
 	})
 
 	// Register bulk action for multiple file selection
@@ -458,6 +479,55 @@ async function checkHlsCache(filename, directory) {
 }
 
 /**
+ * Smart video player - automatically chooses HLS or default player
+ *
+ * @param filename
+ * @param directory
+ * @param context
+ */
+async function smartVideoPlayer(filename, directory, context) {
+	console.log(`🧠 Smart video player checking: ${filename}`)
+
+	try {
+		// Check if HLS cache exists
+		const cachePath = await checkHlsCache(filename, directory)
+
+		if (cachePath) {
+			console.log(`✅ HLS cache found, using Shaka Player: ${cachePath}`)
+			// Load Shaka Player with HLS
+			loadShakaPlayer(filename, cachePath, context)
+		} else {
+			console.log('❌ No HLS cache found, using default video player')
+			// Fallback to default video player
+			fallbackToDefaultPlayer(filename, context)
+		}
+	} catch (error) {
+		console.error('Error in smart video player:', error)
+		// Fallback to default video player on error
+		fallbackToDefaultPlayer(filename, context)
+	}
+}
+
+/**
+ * Fallback to default Nextcloud video player
+ *
+ * @param filename
+ * @param context
+ */
+function fallbackToDefaultPlayer(filename, context) {
+	console.log('🎥 Using default Nextcloud video player')
+	// Trigger the default video action
+	if (context && context.fileList) {
+		// Use Nextcloud's built-in video viewer
+		const fileModel = context.fileList.getModelForFile(filename)
+		if (fileModel) {
+			// Open with default viewer app
+			OCA.Viewer.open({ path: context.dir + '/' + filename })
+		}
+	}
+}
+
+/**
  * Play video with HLS if cache exists, otherwise fallback to regular player
  *
  * @param filename
@@ -589,6 +659,32 @@ function loadShakaPlayer(filename, cachePath, context) {
 }
 
 /**
+ * Load Shaka Player library dynamically
+ */
+async function loadShakaPlayerLibrary() {
+	return new Promise((resolve, reject) => {
+		// Check if already loaded
+		if (typeof window.shaka !== 'undefined') {
+			resolve()
+			return
+		}
+
+		// Load Shaka Player from CDN
+		const script = document.createElement('script')
+		script.src = 'https://cdnjs.cloudflare.com/ajax/libs/shaka-player/4.7.10/shaka-player.compiled.js'
+		script.onload = () => {
+			console.log('✅ Shaka Player loaded successfully')
+			resolve()
+		}
+		script.onerror = () => {
+			console.error('❌ Failed to load Shaka Player')
+			reject(new Error('Failed to load Shaka Player library'))
+		}
+		document.head.appendChild(script)
+	})
+}
+
+/**
  * Initialize Shaka Player with HLS content
  *
  * @param cachePath
@@ -603,21 +699,22 @@ async function initializeShakaPlayer(cachePath) {
 	}
 
 	try {
-		// Import Shaka Player (should be available from our webpack build)
-		if (typeof shaka === 'undefined') {
-			throw new Error('Shaka Player not loaded')
+		// Load Shaka Player dynamically if not already loaded
+		if (typeof window.shaka === 'undefined') {
+			console.log('📦 Loading Shaka Player...')
+			await loadShakaPlayerLibrary()
 		}
 
 		// Install built-in polyfills to patch browser incompatibilities
-		shaka.polyfill.installAll()
+		window.shaka.polyfill.installAll()
 
 		// Check if browser is supported
-		if (!shaka.Player.isBrowserSupported()) {
+		if (!window.shaka.Player.isBrowserSupported()) {
 			throw new Error('Browser not supported by Shaka Player')
 		}
 
 		// Create player
-		const player = new shaka.Player(video)
+		const player = new window.shaka.Player(video)
 
 		// Listen for error events
 		player.addEventListener('error', (event) => {
