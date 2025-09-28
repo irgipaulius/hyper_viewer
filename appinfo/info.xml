@@ -22,6 +22,7 @@
     </navigations>
     <types>
         <type>video/quicktime</type>
+        <type>video/mp4</type>
     </types>
     <settings>
         <personal>OCA\HyperViewer\Settings\PersonalSettings</personal>
