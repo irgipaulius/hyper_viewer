@@ -57,9 +57,10 @@ function initializeFilesIntegration() {
 
 	// Register smart video player for all video types
 	const videoMimeTypes = [
-		'video/mp4', 'video/avi', 'video/mov', 'video/wmv', 'video/flv',
-		'video/webm', 'video/mkv', 'video/m4v', 'video/3gp', 'video/quicktime'
-	]
+        'video/mp4', 'video/avi', 'video/wmv', 'video/flv',
+        'video/webm', 'video/mkv', 'video/m4v', 'video/3gp'
+        // Removed 'video/mov' and 'video/quicktime' since they're handled above
+    ]
 
 	videoMimeTypes.forEach(mimeType => {
 		// Override default video action to auto-route to HLS if cache exists
