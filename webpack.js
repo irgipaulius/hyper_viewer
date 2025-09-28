@@ -7,4 +7,10 @@ webpackConfig.entry = {
 	'settings': path.join(__dirname, 'src', 'settings.js')
 }
 
+// Fix output filename to avoid double app name
+webpackConfig.output = {
+	...webpackConfig.output,
+	filename: '[name].js'
+}
+
 module.exports = webpackConfig
