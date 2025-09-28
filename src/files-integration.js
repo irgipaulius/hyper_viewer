@@ -496,57 +496,19 @@ async function playWithHls(filename, directory, context) {
 }
 
 /**
- * Load HLS Player in modal with relaxed CSP
+ * Simple HLS action - just console log for now
  *
  * @param filename
  * @param cachePath
  * @param context
  */
-async function loadShakaPlayer(filename, cachePath, context) {
-	console.log(`🎬 Loading HLS Player for: ${filename}`)
+function loadShakaPlayer(filename, cachePath, context) {
+	console.log(`🎬 Play with HLS triggered for: ${filename}`)
 	console.log(`📁 Cache path: ${cachePath}`)
-
-	// Build the modal player URL
-	const modalUrl = OC.generateUrl('/apps/hyper_viewer/player/modal') 
-		+ '?filename=' + encodeURIComponent(filename)
-		+ '&cachePath=' + encodeURIComponent(cachePath)
-
-	console.log(`🎬 Loading HLS player modal: ${modalUrl}`)
-
-	try {
-		// Fetch the player HTML from our CSP-relaxed endpoint
-		const response = await fetch(modalUrl)
-		if (!response.ok) {
-			throw new Error(`Failed to load player: ${response.status}`)
-		}
-		
-		const playerHtml = await response.text()
-		
-		// Show the player in a modal
-		OC.dialogs.confirmHtml(
-			playerHtml,
-			`Play: ${filename}`,
-			function(confirmed) {
-				// Modal closed - cleanup HLS player if needed
-				console.log('🎬 HLS Player modal closed')
-				if (window.currentHlsPlayer) {
-					window.currentHlsPlayer.destroy()
-					window.currentHlsPlayer = null
-				}
-			},
-			true // modal
-		)
-
-		// Initialize the HLS player after modal is shown
-		setTimeout(() => {
-			// The player HTML should include its own initialization script
-			console.log('🎬 HLS Player modal loaded')
-		}, 500)
-
-	} catch (error) {
-		console.error('Failed to load HLS player modal:', error)
-		OC.dialogs.alert('Failed to load HLS player: ' + error.message, 'Error')
-	}
+	console.log(`🎯 Context:`, context)
+	
+	// TODO: Implement your own player here
+	console.log('🚀 Ready for you to implement the player!')
 }
 
 console.log('✅ Hyper Viewer Files integration loaded!')
