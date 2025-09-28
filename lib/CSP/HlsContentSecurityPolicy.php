@@ -20,10 +20,14 @@ class HlsContentSecurityPolicy extends ContentSecurityPolicy {
         // Allow scripts from blob: URLs (required for HLS.js workers)
         $this->addAllowedScriptDomain('blob:');
 
-        // Allow workers (some HLS players use web workers)
-        $this->addAllowedWorkerSrcDomain('blob:');
+        // Try to allow workers if the method exists (Nextcloud version dependent)
+        if (method_exists($this, 'addAllowedWorkerSrcDomain')) {
+            $this->addAllowedWorkerSrcDomain('blob:');
+        }
         
-        // Allow object sources for blob URLs (fallback for some players)
-        $this->addAllowedObjectDomain('blob:');
+        // Try to allow object sources if the method exists
+        if (method_exists($this, 'addAllowedObjectDomain')) {
+            $this->addAllowedObjectDomain('blob:');
+        }
     }
 }

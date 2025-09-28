@@ -32,9 +32,14 @@ class PlayerController extends Controller {
 
         $response = new TemplateResponse($this->appName, 'player');
         
-        // Apply custom CSP that allows blob URLs for HLS playback
-        $csp = new HlsContentSecurityPolicy();
-        $response->setContentSecurityPolicy($csp);
+        // Try to apply custom CSP that allows blob URLs for HLS playback
+        try {
+            $csp = new HlsContentSecurityPolicy();
+            $response->setContentSecurityPolicy($csp);
+        } catch (\Exception $e) {
+            // If CSP fails, continue without it for now
+            error_log('HLS CSP failed: ' . $e->getMessage());
+        }
         
         return $response;
     }
@@ -44,14 +49,20 @@ class PlayerController extends Controller {
      * @NoCSRFRequired
      */
     public function modal() {
-        // Endpoint for modal HLS player (called via AJAX)
-        // Don't load any scripts - the modal template includes everything inline
-        $response = new TemplateResponse($this->appName, 'player-modal', [], 'blank');
+        // Simple test first - return basic HTML without template
+        $filename = $_GET['filename'] ?? 'Unknown Video';
+        $cachePath = $_GET['cachePath'] ?? '';
         
-        // Apply custom CSP that allows blob URLs for HLS playback
-        $csp = new HlsContentSecurityPolicy();
-        $response->setContentSecurityPolicy($csp);
+        $html = '<div style="padding: 20px;">
+            <h3>HLS Player Test</h3>
+            <p><strong>File:</strong> ' . htmlspecialchars($filename) . '</p>
+            <p><strong>Cache:</strong> ' . htmlspecialchars($cachePath) . '</p>
+            <video controls style="width: 100%; height: 300px; background: #000;">
+                <source src="/apps/files/ajax/download.php?dir=' . urlencode($cachePath) . '&files=playlist.m3u8" type="application/vnd.apple.mpegurl">
+                Your browser does not support the video tag.
+            </video>
+        </div>';
         
-        return $response;
+        return new \OCP\AppFramework\Http\Response($html);
     }
 }
