@@ -1,10 +1,10 @@
 {
     "name": "hyper_viewer",
     "description": "HLS-capable video viewer prototype for Nextcloud using vue-components",
-    "version": "6.0.0",
-    "author": "John Molakvoæ <skjnldsv@protonmail.com>",
+    "version": "1.0.0",
+    "author": "Paulius Jacinkevicius <irgipaulius@gmail.com>",
     "contributors": [
-        "John Molakvoæ <skjnldsv@protonmail.com>"
+        "Paulius Jacinkevicius <irgipaulius@gmail.com>"
     ],
     "keywords": [
         "nextcloud",
@@ -14,13 +14,13 @@
         "vuejs"
     ],
     "bugs": {
-        "url": "https://github.com/skjnldsv/hyper_viewer/issues"
+        "url": "https://github.com/irgipaulius/hyper_viewer/issues"
     },
     "repository": {
-        "url": "https://github.com/skjnldsv/hyper_viewer",
+        "url": "https://github.com/irgipaulius/hyper_viewer",
         "type": "git"
     },
-    "homepage": "https://github.com/skjnldsv/hyper_viewer",
+    "homepage": "https://github.com/irgipaulius/hyper_viewer",
     "license": "agpl",
     "private": true,
     "scripts": {

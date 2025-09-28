@@ -3,7 +3,7 @@
  * Adds "Generate HLS Cache" action to MOV and MP4 files
  */
 
-/* global shaka */
+import shaka from 'shaka-player'
 
 console.log('🎬 Hyper Viewer Files integration loading...')
 
@@ -631,7 +631,7 @@ async function initializeShakaPlayer(cachePath) {
 		// Build HLS manifest URL
 		const manifestUrl = OC.generateUrl('/apps/files/ajax/download.php')
 			+ '?dir=' + encodeURIComponent(cachePath)
-			+ '&files=' + encodeURIComponent('master.m3u8')
+			+ '&files=' + encodeURIComponent('playlist.m3u8')
 
 		console.log(`🎬 Loading HLS manifest: ${manifestUrl}`)
 
