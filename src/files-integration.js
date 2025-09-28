@@ -3,7 +3,7 @@
  * Adds "Generate HLS Cache" action to MOV and MP4 files
  */
 
-import shaka from 'shaka-player'
+import Hls from 'hls.js'
 
 console.log('🎬 Hyper Viewer Files integration loading...')
 
@@ -626,57 +626,69 @@ async function initializeShakaPlayer(cachePath) {
 			return
 		}
 
-		// Fallback to Shaka Player for browsers without native HLS support
-		if (typeof shaka === 'undefined') {
-			throw new Error('Shaka Player not loaded and no native HLS support')
+		// Use HLS.js for browsers without native HLS support
+		if (!Hls.isSupported()) {
+			throw new Error('HLS.js is not supported in this browser')
 		}
 
-		// Install built-in polyfills to patch browser incompatibilities
-		shaka.polyfill.installAll()
+		console.log('🎬 Using HLS.js for HLS playback')
 
-		// Check if browser is supported
-		if (!shaka.Player.isBrowserSupported()) {
-			throw new Error('Browser not supported by Shaka Player')
-		}
-
-		console.log('🎬 Using Shaka Player for HLS')
-
-		// Create player
-		const player = new shaka.Player(video)
-
-		// Configure player to work with CSP restrictions
-		player.configure({
-			streaming: {
-				// Try to avoid blob URLs
-				useNativeHlsOnSafari: true,
-				forceHTTPS: false,
-				bufferBehind: 30,
-				bufferingGoal: 10,
-				rebufferingGoal: 2,
-			}
+		// Create HLS.js instance
+		const hls = new Hls({
+			// Configure HLS.js to work better with CSP restrictions
+			enableWorker: false, // Disable web workers to avoid CSP issues
+			lowLatencyMode: false,
+			backBufferLength: 30,
+			maxBufferLength: 60,
+			maxMaxBufferLength: 120,
+			// Disable some features that might cause CSP issues
+			enableSoftwareAES: false,
 		})
 
-		// Listen for error events
-		player.addEventListener('error', (event) => {
-			console.error('Shaka Player error:', event.detail)
+		// Listen for errors
+		hls.on(Hls.Events.ERROR, (event, data) => {
+			console.error('HLS.js error:', data)
 			if (statusElement) {
-				statusElement.textContent = 'Error: ' + event.detail.message
+				statusElement.textContent = 'Error: ' + (data.details || 'HLS playback error')
 				statusElement.style.color = '#ff4444'
 			}
+			
+			// Try to recover from some errors
+			if (data.fatal) {
+				switch (data.type) {
+				case Hls.ErrorTypes.NETWORK_ERROR:
+					console.log('Trying to recover from network error')
+					hls.startLoad()
+					break
+				case Hls.ErrorTypes.MEDIA_ERROR:
+					console.log('Trying to recover from media error')
+					hls.recoverMediaError()
+					break
+				default:
+					console.log('Fatal error, destroying HLS instance')
+					hls.destroy()
+					break
+				}
+			}
 		})
 
+		// Listen for successful manifest loading
+		hls.on(Hls.Events.MANIFEST_LOADED, () => {
+			console.log('✅ HLS manifest loaded successfully')
+			if (statusElement) {
+				statusElement.textContent = 'Playing HLS stream (HLS.js)'
+				statusElement.style.color = '#00aa00'
+			}
+		})
+
+		// Attach HLS to video element
+		hls.attachMedia(video)
+
 		// Load the manifest
-		await player.load(manifestUrl)
+		hls.loadSource(manifestUrl)
 
-		console.log('✅ Shaka Player loaded successfully')
-
-		if (statusElement) {
-			statusElement.textContent = 'Playing HLS stream (Shaka)'
-			statusElement.style.color = '#00aa00'
-		}
-
-		// Store player reference for cleanup
-		window.currentShakaPlayer = player
+		// Store HLS instance for cleanup
+		window.currentHlsPlayer = hls
 
 	} catch (error) {
 		console.error('Failed to initialize Shaka Player:', error)
@@ -697,9 +709,16 @@ async function initializeShakaPlayer(cachePath) {
 }
 
 /**
- * Close Shaka Player modal
+ * Close HLS Player modal
  */
 window.closeShakaPlayer = function() {
+	// Clean up HLS.js instance
+	if (window.currentHlsPlayer) {
+		window.currentHlsPlayer.destroy()
+		window.currentHlsPlayer = null
+	}
+
+	// Clean up legacy Shaka Player instance (if any)
 	if (window.currentShakaPlayer) {
 		window.currentShakaPlayer.destroy()
 		window.currentShakaPlayer = null
