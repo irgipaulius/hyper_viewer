@@ -602,10 +602,33 @@ async function initializeShakaPlayer(cachePath) {
 		return
 	}
 
+	// Build HLS manifest URL
+	const manifestUrl = OC.generateUrl('/apps/files/ajax/download.php')
+		+ '?dir=' + encodeURIComponent(cachePath)
+		+ '&files=' + encodeURIComponent('playlist.m3u8')
+
+	console.log(`🎬 Loading HLS manifest: ${manifestUrl}`)
+
+	if (statusElement) {
+		statusElement.textContent = 'Loading HLS stream...'
+	}
+
 	try {
-		// Import Shaka Player (should be available from our webpack build)
+		// First try native HLS support (Safari, iOS, some Android browsers)
+		if (video.canPlayType('application/vnd.apple.mpegurl') || video.canPlayType('application/x-mpegURL')) {
+			console.log('🍎 Using native HLS support')
+			video.src = manifestUrl
+			video.load()
+			if (statusElement) {
+				statusElement.textContent = 'Playing HLS stream (native)'
+				statusElement.style.color = '#00aa00'
+			}
+			return
+		}
+
+		// Fallback to Shaka Player for browsers without native HLS support
 		if (typeof shaka === 'undefined') {
-			throw new Error('Shaka Player not loaded')
+			throw new Error('Shaka Player not loaded and no native HLS support')
 		}
 
 		// Install built-in polyfills to patch browser incompatibilities
@@ -616,8 +639,22 @@ async function initializeShakaPlayer(cachePath) {
 			throw new Error('Browser not supported by Shaka Player')
 		}
 
+		console.log('🎬 Using Shaka Player for HLS')
+
 		// Create player
 		const player = new shaka.Player(video)
+
+		// Configure player to work with CSP restrictions
+		player.configure({
+			streaming: {
+				// Try to avoid blob URLs
+				useNativeHlsOnSafari: true,
+				forceHTTPS: false,
+				bufferBehind: 30,
+				bufferingGoal: 10,
+				rebufferingGoal: 2,
+			}
+		})
 
 		// Listen for error events
 		player.addEventListener('error', (event) => {
@@ -628,24 +665,13 @@ async function initializeShakaPlayer(cachePath) {
 			}
 		})
 
-		// Build HLS manifest URL
-		const manifestUrl = OC.generateUrl('/apps/files/ajax/download.php')
-			+ '?dir=' + encodeURIComponent(cachePath)
-			+ '&files=' + encodeURIComponent('playlist.m3u8')
-
-		console.log(`🎬 Loading HLS manifest: ${manifestUrl}`)
-
-		if (statusElement) {
-			statusElement.textContent = 'Loading HLS stream...'
-		}
-
 		// Load the manifest
 		await player.load(manifestUrl)
 
 		console.log('✅ Shaka Player loaded successfully')
 
 		if (statusElement) {
-			statusElement.textContent = 'Playing HLS stream'
+			statusElement.textContent = 'Playing HLS stream (Shaka)'
 			statusElement.style.color = '#00aa00'
 		}
 

@@ -9,6 +9,7 @@ module.exports = {
 		'quotes': 'off',
 		'semi': 'off',
 		'operator-linebreak': 'off',
+		'no-trailing-spaces': 'off',
 		// Keep only the important rules
 		'no-unused-vars': 'warn',
 		'no-undef': 'error'
