@@ -1,8 +1,6 @@
 /**
  * @copyright Copyright (c) 2018 John Molakvoæ <skjnldsv@protonmail.com>
- *
  * @author John Molakvoæ <skjnldsv@protonmail.com>
- *
  * @license GNU AGPL version 3 or any later version
  *
  * This program is free software: you can redistribute it and/or modify
@@ -17,7 +15,6 @@
  *
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
- *
  */
 import Vue from 'vue'
 import { translate as t, translatePlural as n } from '@nextcloud/l10n'
@@ -26,13 +23,13 @@ import App from './App'
 
 // Adding translations to the whole app
 Vue.mixin({
-    methods: {
-        t,
-        n,
-    },
+	methods: {
+		t,
+		n,
+	},
 })
 
 export default new Vue({
-    el: '#vue-content',
-    render: h => h(App),
+	el: '#vue-content',
+	render: h => h(App),
 })

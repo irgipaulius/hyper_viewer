@@ -1,157 +1,169 @@
 <template>
-	<Content :class="{'icon-loading': loading}" app-name="hyper_viewer">
-		<AppNavigation>
-			<AppNavigationNew v-if="!loading"
-				:text="t('hyper_viewer', 'New XXXXXX')"
-				:disabled="false"
-				button-id="new-vueexample-button"
-				button-class="icon-add"
-				@click="newButtonAction" />
-			<template id="app-hyper_viewer-navigation" #list>
-				<AppNavigationItem icon="icon-user" title="This is a user">
-					<AppNavigationCounter slot="counter" :highlighted="true">
-						99+
-					</AppNavigationCounter>
-					<template slot="actions">
-						<ActionButton icon="icon-edit" @click="alert('Edit')">
-							Edit
-						</ActionButton>
-						<ActionButton icon="icon-delete" @click="alert('Delete')">
-							Delete
-						</ActionButton>
-						<ActionLink icon="icon-external" title="Link" href="https://nextcloud.com" />
-					</template>
-				</AppNavigationItem>
-				<AppNavigationItem title="This is bullet item">
-					<AppNavigationIconBullet slot="icon" color="0082c9" />
-					<template slot="actions">
-						<ActionButton :disabled="false" icon="icon-edit" @click="alert('Edit')">
-							Edit
-						</ActionButton>
-						<ActionLink :disabled="false"
-							icon="icon-external"
-							title="Link"
-							href="https://nextcloud.com" />
-						<ActionCheckbox :disabled="false">
-							Checkbox
-						</ActionCheckbox>
-						<ActionInput :disabled="false" icon="icon-add">
-							ActionInput
-						</ActionInput>
-						<ActionRouter :disabled="false" icon="icon-add" to="#">
-							ActionRouter
-						</ActionRouter>
-						<ActionText :disabled="false" icon="icon-add">
-							ActionText
-						</ActionText>
-						<ActionTextEditable :disabled="false">
-							ActionTextEditable
-						</ActionTextEditable>
-					</template>
-				</AppNavigationItem>
-				<AppNavigationItem title="Counter and actions"
-					icon="icon-category-enabled">
-					<AppNavigationCounter slot="counter" :highlighted="true">
-						99+
-					</AppNavigationCounter>
-					<template slot="actions">
-						<ActionButton icon="icon-edit" @click="alert('Edit')">
-							Edit
-						</ActionButton>
-						<ActionButton icon="icon-delete" @click="alert('Delete')">
-							Delete
-						</ActionButton>
-						<ActionLink icon="icon-external" title="Link" href="https://nextcloud.com" />
-					</template>
-				</AppNavigationItem>
-				<AppNavigationItem title="Item with children"
-					:allow-collapse="true"
-					icon="icon-folder">
-					<template>
-						<AppNavigationItem title="AppNavigationItemChild1">
-							<AppNavigationIconBullet slot="icon" color="0082c9" />
-						</AppNavigationItem>
-						<AppNavigationItem title="AppNavigationItemChild2" icon="icon-category-enabled" />
-						<AppNavigationItem title="AppNavigationItemChild3" icon="icon-category-enabled" />
-						<AppNavigationItem title="AppNavigationItemChild4" icon="icon-category-enabled" />
-					</template>
-				</AppNavigationItem>
-				<AppNavigationItem title="Loading Item" :loading="true" />
-				<AppNavigationItem title="Event Item" icon="icon-folder" @click="log($event, 'clicked')" />
-				<AppNavigationItem title="Editable Item"
-					icon="icon-folder"
-					:editable="true"
-					edit-placeholder="I am a placeholder" />
-				<AppNavigationItem title="Are you sure you want to delete?" :undo="true" />
-				<AppNavigationItem title="First pinned item"
-					icon="icon-category-enabled"
-					:pinned="true" />
-				<AppNavigationItem title="Second pinned item"
-					icon="icon-category-enabled"
-					:pinned="true" />
-				<AppNavigationItem title="Third pinned item"
-					icon="icon-category-enabled"
-					:pinned="true" />
-			</template>
+	<div>
+		<div class="hyper-viewer-app">
+			<h1>🎬 Hyper Viewer Debug</h1>
+			<p>App loaded successfully! Check console for debug info.</p>
+			<div class="debug-info">
+				<h3>Current URL Parameters:</h3>
+				<pre>{{ urlParams }}</pre>
+			</div>
+		</div>
 
-			<template #footer>
-				<AppNavigationSettings>
-					Example settings
-				</AppNavigationSettings>
-			</template>
-		</AppNavigation>
+		<!-- Original demo UI (hidden for now) -->
+		<Content :class="{'icon-loading': loading}" app-name="hyper_viewer" style="display: none;">
+			<AppNavigation>
+				<AppNavigationNew v-if="!loading"
+					:text="t('hyper_viewer', 'New XXXXXX')"
+					:disabled="false"
+					button-id="new-vueexample-button"
+					button-class="icon-add"
+					@click="newButtonAction" />
+				<template id="app-hyper_viewer-navigation" #list>
+					<AppNavigationItem icon="icon-user" title="This is a user">
+						<AppNavigationCounter slot="counter" :highlighted="true">
+							99+
+						</AppNavigationCounter>
+						<template slot="actions">
+							<ActionButton icon="icon-edit" @click="alert('Edit')">
+								Edit
+							</ActionButton>
+							<ActionButton icon="icon-delete" @click="alert('Delete')">
+								Delete
+							</ActionButton>
+							<ActionLink icon="icon-external" title="Link" href="https://nextcloud.com" />
+						</template>
+					</AppNavigationItem>
+					<AppNavigationItem title="This is bullet item">
+						<AppNavigationIconBullet slot="icon" color="0082c9" />
+						<template slot="actions">
+							<ActionButton :disabled="false" icon="icon-edit" @click="alert('Edit')">
+								Edit
+							</ActionButton>
+							<ActionLink :disabled="false"
+								icon="icon-external"
+								title="Link"
+								href="https://nextcloud.com" />
+							<ActionCheckbox :disabled="false">
+								Checkbox
+							</ActionCheckbox>
+							<ActionInput :disabled="false" icon="icon-add">
+								ActionInput
+							</ActionInput>
+							<ActionRouter :disabled="false" icon="icon-add" to="#">
+								ActionRouter
+							</ActionRouter>
+							<ActionText :disabled="false" icon="icon-add">
+								ActionText
+							</ActionText>
+							<ActionTextEditable :disabled="false">
+								ActionTextEditable
+							</ActionTextEditable>
+						</template>
+					</AppNavigationItem>
+					<AppNavigationItem title="Counter and actions"
+						icon="icon-category-enabled">
+						<AppNavigationCounter slot="counter" :highlighted="true">
+							99+
+						</AppNavigationCounter>
+						<template slot="actions">
+							<ActionButton icon="icon-edit" @click="alert('Edit')">
+								Edit
+							</ActionButton>
+							<ActionButton icon="icon-delete" @click="alert('Delete')">
+								Delete
+							</ActionButton>
+							<ActionLink icon="icon-external" title="Link" href="https://nextcloud.com" />
+						</template>
+					</AppNavigationItem>
+					<AppNavigationItem title="Item with children"
+						:allow-collapse="true"
+						icon="icon-folder">
+						<template>
+							<AppNavigationItem title="AppNavigationItemChild1">
+								<AppNavigationIconBullet slot="icon" color="0082c9" />
+							</AppNavigationItem>
+							<AppNavigationItem title="AppNavigationItemChild2" icon="icon-category-enabled" />
+							<AppNavigationItem title="AppNavigationItemChild3" icon="icon-category-enabled" />
+							<AppNavigationItem title="AppNavigationItemChild4" icon="icon-category-enabled" />
+						</template>
+					</AppNavigationItem>
+					<AppNavigationItem title="Loading Item" :loading="true" />
+					<AppNavigationItem title="Event Item" icon="icon-folder" @click="log($event, 'clicked')" />
+					<AppNavigationItem title="Editable Item"
+						icon="icon-folder"
+						:editable="true"
+						edit-placeholder="I am a placeholder" />
+					<AppNavigationItem title="Are you sure you want to delete?" :undo="true" />
+					<AppNavigationItem title="First pinned item"
+						icon="icon-category-enabled"
+						:pinned="true" />
+					<AppNavigationItem title="Second pinned item"
+						icon="icon-category-enabled"
+						:pinned="true" />
+					<AppNavigationItem title="Third pinned item"
+						icon="icon-category-enabled"
+						:pinned="true" />
+				</template>
 
-		<AppContent>
-			<div>This is the content</div>
-			<button @click="show = !show">
-				Toggle sidebar
-			</button>
-		</AppContent>
+				<template #footer>
+					<AppNavigationSettings>
+						Example settings
+					</AppNavigationSettings>
+				</template>
+			</AppNavigation>
 
-		<AppSidebar
-			v-show="show"
-			title="eberhard-grossgasteiger-VDw-nsi5TpE-unsplash.jpg"
-			subtitle="4,3 MB, last edited 41 days ago"
-			:starred.sync="starred"
-			@close="close">
-			<template #primary-actions>
-				<button class="primary">
-					Button 1
+			<AppContent>
+				<div>This is the content</div>
+				<button @click="show = !show">
+					Toggle sidebar
 				</button>
-				<input id="link-checkbox"
-					name="link-checkbox"
-					class="checkbox link-checkbox"
-					type="checkbox">
-				<label for="link-checkbox" class="link-checkbox-label">Do something</label>
-			</template>
+			</AppContent>
 
-			<template #secondary-actions>
-				<ActionButton icon="icon-edit" @click="alert('Edit')">
-					Edit
-				</ActionButton>
-				<ActionButton icon="icon-delete" @click="alert('Delete')">
-					Delete
-				</ActionButton>
-				<ActionLink icon="icon-external" title="Link" href="https://nextcloud.com" />
-			</template>
+			<AppSidebar
+				v-show="show"
+				title="eberhard-grossgasteiger-VDw-nsi5TpE-unsplash.jpg"
+				subtitle="4,3 MB, last edited 41 days ago"
+				:starred.sync="starred"
+				@close="close">
+				<template #primary-actions>
+					<button class="primary">
+						Button 1
+					</button>
+					<input id="link-checkbox"
+						name="link-checkbox"
+						class="checkbox link-checkbox"
+						type="checkbox">
+					<label for="link-checkbox" class="link-checkbox-label">Do something</label>
+				</template>
 
-			<AppSidebarTab id="hyper_viewer" name="Hyper Viewer" icon="icon-hyper_viewer">
-				this is the vueexample tab
-			</AppSidebarTab>
-			<AppSidebarTab id="activity" name="Activity" icon="icon-activity">
-				this is the activity tab
-			</AppSidebarTab>
-			<AppSidebarTab id="comments" name="Comments" icon="icon-comment">
-				this is the comments tab
-			</AppSidebarTab>
-			<AppSidebarTab id="sharing" name="Sharing" icon="icon-shared">
-				this is the sharing tab
-			</AppSidebarTab>
-			<AppSidebarTab id="versions" name="Versions" icon="icon-history">
-				this is the versions tab
-			</AppSidebarTab>
-		</AppSidebar>
-	</Content>
+				<template #secondary-actions>
+					<ActionButton icon="icon-edit" @click="alert('Edit')">
+						Edit
+					</ActionButton>
+					<ActionButton icon="icon-delete" @click="alert('Delete')">
+						Delete
+					</ActionButton>
+					<ActionLink icon="icon-external" title="Link" href="https://nextcloud.com" />
+				</template>
+
+				<AppSidebarTab id="hyper_viewer" name="Hyper Viewer" icon="icon-hyper_viewer">
+					this is the vueexample tab
+				</AppSidebarTab>
+				<AppSidebarTab id="activity" name="Activity" icon="icon-activity">
+					this is the activity tab
+				</AppSidebarTab>
+				<AppSidebarTab id="comments" name="Comments" icon="icon-comment">
+					this is the comments tab
+				</AppSidebarTab>
+				<AppSidebarTab id="sharing" name="Sharing" icon="icon-shared">
+					this is the sharing tab
+				</AppSidebarTab>
+				<AppSidebarTab id="versions" name="Versions" icon="icon-history">
+					this is the versions tab
+				</AppSidebarTab>
+			</AppSidebar>
+		</Content>
+	</div>
 </template>
 
 <script>
@@ -199,6 +211,23 @@ export default {
 			loading: false,
 			show: true,
 			starred: false,
+			urlParams: {},
+		}
+	},
+	mounted() {
+		console.log('🎬 Hyper Viewer App mounted!')
+		console.log('📍 Current URL:', window.location.href)
+
+		// Parse URL parameters
+		const urlParams = new URLSearchParams(window.location.search)
+		this.urlParams = Object.fromEntries(urlParams.entries())
+		console.log('🔗 URL Parameters:', this.urlParams)
+
+		// Check if we have a file parameter
+		if (this.urlParams.file) {
+			console.log('🎥 Video file requested:', this.urlParams.file)
+		} else {
+			console.log('ℹ️ No file parameter - showing debug interface')
 		}
 	},
 	methods: {

@@ -1,0 +1,79 @@
+/* Hyper Viewer Settings Styles */
+
+#hyper_viewer_settings {
+	margin-bottom: 20px;
+}
+
+#hyper_viewer_settings h2 {
+	margin-bottom: 10px;
+}
+
+#hyper_viewer_settings .settings-hint {
+	color: var(--color-text-lighter);
+	margin-bottom: 20px;
+}
+
+.cache-locations {
+	margin-bottom: 20px;
+}
+
+.cache-locations h3 {
+	margin-bottom: 10px;
+}
+
+#cache-location-list {
+	margin: 15px 0;
+}
+
+.cache-location-item {
+	display: flex;
+	align-items: center;
+	margin-bottom: 10px;
+	gap: 10px;
+}
+
+.cache-location-input {
+	flex: 1;
+	min-width: 300px;
+}
+
+.remove-location {
+	background: none;
+	border: none;
+	cursor: pointer;
+	opacity: 0.7;
+}
+
+.remove-location:hover {
+	opacity: 1;
+}
+
+#add-cache-location {
+	margin-right: 10px;
+}
+
+.cache-help {
+	background: var(--color-background-hover);
+	padding: 15px;
+	border-radius: var(--border-radius);
+	margin-top: 20px;
+}
+
+.cache-help h4 {
+	margin-bottom: 10px;
+}
+
+.cache-help ul {
+	margin-left: 20px;
+}
+
+.cache-help li {
+	margin-bottom: 5px;
+}
+
+.cache-help code {
+	background: var(--color-background-dark);
+	padding: 2px 6px;
+	border-radius: 3px;
+	font-family: monospace;
+}

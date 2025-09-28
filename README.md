@@ -2,12 +2,20 @@
 
 Prototype HLS-capable video viewer using Vue and Nextcloud components. This app will detect pre-generated HLS proxies and play them with Shaka Player.
 
-## Development Setup
+## Installation (No Build Required!)
 1. ☁ Clone this into your `apps` folder of your Nextcloud
-2. 👩‍💻 In a terminal, run the command `make dev-setup` to install the dependencies
-3. 🏗 Then to build the Javascript whenever you make changes, run `make build-js`
-4. ✅ Enable the app through the app management of your Nextcloud
-5. 🎉 Partytime!
+2. 🔧 Fix file ownership: `chown -R www:www hyper_viewer/`
+3. ✅ Enable the app through the app management of your Nextcloud
+4. 🎉 Ready to use!
+
+**Note**: Build files are committed to the repository, so no Node.js or build step is required on the server.
+
+## Development Setup
+If you want to modify the frontend:
+1. 📦 Install dependencies: `npm install`
+2. 🔨 Build for development: `npm run dev` or `npm run watch`
+3. 🚀 Build for production: `npm run build`
+4. 📤 Commit the updated `js/` files
 
 ## Server Deployment
 After `git pull` on your server (as root), run this command:
