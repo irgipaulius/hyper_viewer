@@ -5,43 +5,15 @@ declare(strict_types=1);
 namespace OCA\HyperViewer\Controller;
 
 use OCP\IRequest;
-use OCP\AppFramework\Http\TemplateResponse;
 use OCP\AppFramework\Controller;
-use OCP\Util;
-use OCA\HyperViewer\CSP\HlsContentSecurityPolicy;
 
 /**
- * Controller for HLS video player with relaxed CSP for blob URLs
+ * Simple HLS video player controller
  */
 class PlayerController extends Controller {
-    protected $appName;
 
     public function __construct($appName, IRequest $request) {
         parent::__construct($appName, $request);
-        $this->appName = $appName;
-    }
-
-    /**
-     * @NoAdminRequired
-     * @NoCSRFRequired
-     */
-    public function index() {
-        // Load the HLS player scripts
-        Util::addScript($this->appName, 'player');
-        Util::addStyle($this->appName, 'icons');
-
-        $response = new TemplateResponse($this->appName, 'player');
-        
-        // Try to apply custom CSP that allows blob URLs for HLS playback
-        try {
-            $csp = new HlsContentSecurityPolicy();
-            $response->setContentSecurityPolicy($csp);
-        } catch (\Exception $e) {
-            // If CSP fails, continue without it for now
-            error_log('HLS CSP failed: ' . $e->getMessage());
-        }
-        
-        return $response;
     }
 
     /**
@@ -49,42 +21,80 @@ class PlayerController extends Controller {
      * @NoCSRFRequired
      */
     public function modal() {
-        // Simple test first - return basic HTML without template
         $filename = $_GET['filename'] ?? 'Unknown Video';
         $cachePath = $_GET['cachePath'] ?? '';
+        $manifestUrl = '/apps/files/ajax/download.php?dir=' . urlencode($cachePath) . '&files=playlist.m3u8';
         
-        // Build HTML content
-        $html = '<div style="padding: 20px; border: 2px solid red; background: #f0f0f0;">';
-        $html .= '<h3 style="color: red;">🎬 HLS Player Test - DEBUGGING</h3>';
-        $html .= '<p><strong>File:</strong> ' . htmlspecialchars($filename) . '</p>';
-        $html .= '<p><strong>Cache:</strong> ' . htmlspecialchars($cachePath) . '</p>';
-        $html .= '<p><strong>Manifest URL:</strong> /apps/files/ajax/download.php?dir=' . urlencode($cachePath) . '&files=playlist.m3u8</p>';
+        $html = '<!DOCTYPE html>
+<html>
+<head>
+    <link href="https://vjs.zencdn.net/8.5.2/video-js.css" rel="stylesheet">
+    <style>
+        body { margin: 0; padding: 20px; font-family: Arial, sans-serif; }
+        .player-container { max-width: 800px; margin: 0 auto; }
+        h2 { color: #333; margin-bottom: 20px; }
+        .video-js { width: 100%; height: 400px; }
+    </style>
+</head>
+<body>
+    <div class="player-container">
+        <h2>🎬 ' . htmlspecialchars($filename) . '</h2>
         
-        $html .= '<div style="border: 1px solid blue; padding: 10px; margin: 10px 0;">';
-        $html .= '<h4>Video Player:</h4>';
-        $html .= '<video controls style="width: 100%; height: 300px; background: #000; border: 2px solid green;">';
-        $html .= '<source src="/apps/files/ajax/download.php?dir=' . urlencode($cachePath) . '&files=playlist.m3u8" type="application/vnd.apple.mpegurl">';
-        $html .= 'Your browser does not support the video tag.';
-        $html .= '</video>';
-        $html .= '</div>';
+        <video
+            id="hls-player"
+            class="video-js vjs-default-skin"
+            controls
+            preload="auto"
+            data-setup="{}">
+            <source src="' . htmlspecialchars($manifestUrl) . '" type="application/x-mpegURL">
+            <p class="vjs-no-js">
+                To view this video please enable JavaScript, and consider upgrading to a web browser that
+                <a href="https://videojs.com/html5-video-support/" target="_blank">supports HTML5 video</a>.
+            </p>
+        </video>
         
-        $html .= '<div style="background: yellow; padding: 10px; margin: 10px 0;">';
-        $html .= '<h4>Debug Info:</h4>';
-        $html .= '<p>Modal loaded successfully!</p>';
-        $html .= '<p>Time: ' . date('Y-m-d H:i:s') . '</p>';
-        $html .= '</div>';
+        <p style="margin-top: 15px; color: #666; font-size: 14px;">
+            <strong>HLS Stream:</strong> ' . htmlspecialchars($cachePath) . '/playlist.m3u8
+        </p>
+    </div>
+
+    <script src="https://vjs.zencdn.net/8.5.2/video.min.js"></script>
+    <script>
+        console.log("🎬 Video.js HLS Player loaded");
         
-        $html .= '<script>';
-        $html .= 'console.log("🎬 Modal HTML loaded with debugging");';
-        $html .= 'console.log("Filename:", "' . addslashes($filename) . '");';
-        $html .= 'console.log("Cache path:", "' . addslashes($cachePath) . '");';
-        $html .= '</script>';
-        $html .= '</div>';
+        var player = videojs("hls-player", {
+            html5: {
+                hls: {
+                    enableLowInitialPlaylist: true,
+                    smoothQualityChange: true,
+                    overrideNative: true
+                }
+            }
+        });
         
-        // Create response with proper content type
-        $response = new \OCP\AppFramework\Http\Response($html);
-        $response->addHeader('Content-Type', 'text/html; charset=utf-8');
+        player.ready(function() {
+            console.log("✅ Video.js player ready");
+            player.src({
+                src: "' . addslashes($manifestUrl) . '",
+                type: "application/x-mpegURL"
+            });
+        });
         
-        return $response;
+        player.on("error", function(e) {
+            console.error("❌ Video.js error:", e);
+        });
+        
+        player.on("loadstart", function() {
+            console.log("📺 Loading HLS stream...");
+        });
+        
+        player.on("canplay", function() {
+            console.log("✅ HLS stream ready to play");
+        });
+    </script>
+</body>
+</html>';
+        
+        return new \OCP\AppFramework\Http\Response($html);
     }
 }

@@ -24,7 +24,6 @@
 return [
 	'routes' => [
 		['name' => 'page#index', 'url' => '/', 'verb' => 'GET'],
-		['name' => 'player#index', 'url' => '/player', 'verb' => 'GET'],
 		['name' => 'player#modal', 'url' => '/player/modal', 'verb' => 'GET'],
 		['name' => 'settings#setCacheLocations', 'url' => '/settings/cache-locations', 'verb' => 'POST'],
 		['name' => 'settings#getCacheLocations', 'url' => '/settings/cache-locations', 'verb' => 'GET'],
