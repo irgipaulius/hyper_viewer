@@ -88,7 +88,7 @@ class HlsCacheGenerationJob extends QueuedJob {
 			);
 
 			// Generate HLS cache
-			$this->generateHlsCache($videoLocalPath, $cacheOutputPath, $filename, $overwriteExisting);
+			$this->generateHlsCache($videoLocalPath, $cacheOutputPath, $filename, $overwriteExisting, $userId);
 
 			$this->logger->info('HLS cache generation completed', [
 				'jobId' => $jobId,
@@ -147,7 +147,7 @@ class HlsCacheGenerationJob extends QueuedJob {
 	/**
 	 * Generate HLS cache using FFmpeg
 	 */
-	private function generateHlsCache(string $videoLocalPath, string $cacheOutputPath, string $filename, bool $overwriteExisting): void {
+	private function generateHlsCache(string $videoLocalPath, string $cacheOutputPath, string $filename, bool $overwriteExisting, string $userId): void {
 		$this->logger->info('Generating HLS cache', [
 			'input' => $videoLocalPath,
 			'output' => $cacheOutputPath,
@@ -155,19 +155,21 @@ class HlsCacheGenerationJob extends QueuedJob {
 		]);
 
 		// Create output directory in Nextcloud
-		$userFolder = $this->rootFolder->getUserFolder($this->getCurrentUserId());
+		$userFolder = $this->rootFolder->getUserFolder($userId);
 		
 		try {
+			// Check if cache directory exists
 			if ($userFolder->nodeExists($cacheOutputPath)) {
-				if (!$overwriteExisting) {
-					$this->logger->info('HLS cache already exists, skipping', ['path' => $cacheOutputPath]);
-					return;
+				$this->logger->info('Cache directory already exists, using existing', ['path' => $cacheOutputPath]);
+				$cacheFolder = $userFolder->get($cacheOutputPath);
+				if (!($cacheFolder instanceof \OCP\Files\Folder)) {
+					throw new \Exception("Cache path exists but is not a folder");
 				}
-				// Remove existing cache
-				$userFolder->get($cacheOutputPath)->delete();
+			} else {
+				// Create new cache directory
+				$this->logger->info('Creating new cache directory', ['path' => $cacheOutputPath]);
+				$cacheFolder = $userFolder->newFolder($cacheOutputPath);
 			}
-			
-			$cacheFolder = $userFolder->newFolder($cacheOutputPath);
 		} catch (\Exception $e) {
 			throw new \Exception("Failed to create cache directory: " . $e->getMessage());
 		}
@@ -179,12 +181,50 @@ class HlsCacheGenerationJob extends QueuedJob {
 			throw new \Exception("Cannot access cache directory locally");
 		}
 
-		// Generate multiple bitrate HLS streams
-		$this->generateMultiBitrateHls($videoLocalPath, $cacheLocalPath, $filename);
+		// Generate simple HLS stream (single bitrate for now)
+		$this->generateSimpleHls($videoLocalPath, $cacheLocalPath, $filename);
 	}
 
 	/**
-	 * Generate multi-bitrate HLS using FFmpeg
+	 * Generate simple single-bitrate HLS using FFmpeg
+	 */
+	private function generateSimpleHls(string $inputPath, string $outputPath, string $filename): void {
+		$this->logger->info('Starting simple HLS generation', [
+			'input' => $inputPath,
+			'output' => $outputPath
+		]);
+
+		// Simple HLS command similar to Video Converter approach
+		$ffmpegCmd = '/usr/local/bin/ffmpeg -y -i ' . escapeshellarg($inputPath) . 
+			' -c:v libx264 -preset fast -c:a aac -b:a 128k' .
+			' -f hls -hls_time 6 -hls_playlist_type vod' .
+			' -hls_segment_filename ' . escapeshellarg($outputPath . '/segment_%03d.ts') .
+			' ' . escapeshellarg($outputPath . '/playlist.m3u8');
+
+		$this->logger->info('Executing FFmpeg command', ['cmd' => $ffmpegCmd]);
+
+		// Execute FFmpeg
+		$output = [];
+		$returnCode = 0;
+		exec($ffmpegCmd . ' 2>&1', $output, $returnCode);
+
+		if ($returnCode !== 0) {
+			$errorOutput = implode("\n", $output);
+			$this->logger->error('FFmpeg failed', [
+				'returnCode' => $returnCode,
+				'output' => $errorOutput,
+				'command' => $ffmpegCmd
+			]);
+			throw new \Exception("FFmpeg failed with return code $returnCode: $errorOutput");
+		}
+
+		$this->logger->info('Simple HLS generation completed successfully', [
+			'output' => implode("\n", array_slice($output, -3)) // Last 3 lines
+		]);
+	}
+
+	/**
+	 * Generate multi-bitrate HLS using FFmpeg (for future use)
 	 */
 	private function generateMultiBitrateHls(string $inputPath, string $outputPath, string $filename): void {
 		// Define bitrate variants
