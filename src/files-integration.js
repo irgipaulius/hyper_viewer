@@ -626,69 +626,51 @@ async function initializeShakaPlayer(cachePath) {
 			return
 		}
 
-		// Use HLS.js for browsers without native HLS support
-		if (!Hls.isSupported()) {
-			throw new Error('HLS.js is not supported in this browser')
+		// Since HLS.js also creates blob URLs that violate CSP, 
+		// fall back to playing the original video file directly
+		console.log('🎬 CSP prevents HLS playback, falling back to original video')
+		
+		if (statusElement) {
+			statusElement.textContent = 'Loading original video...'
 		}
 
-		console.log('🎬 Using HLS.js for HLS playback')
-
-		// Create HLS.js instance
-		const hls = new Hls({
-			// Configure HLS.js to work better with CSP restrictions
-			enableWorker: false, // Disable web workers to avoid CSP issues
-			lowLatencyMode: false,
-			backBufferLength: 30,
-			maxBufferLength: 60,
-			maxMaxBufferLength: 120,
-			// Disable some features that might cause CSP issues
-			enableSoftwareAES: false,
-		})
-
-		// Listen for errors
-		hls.on(Hls.Events.ERROR, (event, data) => {
-			console.error('HLS.js error:', data)
-			if (statusElement) {
-				statusElement.textContent = 'Error: ' + (data.details || 'HLS playback error')
-				statusElement.style.color = '#ff4444'
-			}
+		// Extract the original filename from the cache path
+		// cachePath format: /Paulius/.cached_hls/MVI_0079
+		const videoName = cachePath.split('/').pop() // MVI_0079
+		const directory = cachePath.replace('/.cached_hls/' + videoName, '') // /Paulius
+		
+		// Try common video extensions
+		const extensions = ['.MOV', '.mov', '.MP4', '.mp4']
+		let originalVideoUrl = null
+		
+		for (const ext of extensions) {
+			const testUrl = OC.generateUrl('/apps/files/ajax/download.php')
+				+ '?dir=' + encodeURIComponent(directory)
+				+ '&files=' + encodeURIComponent(videoName + ext)
 			
-			// Try to recover from some errors
-			if (data.fatal) {
-				switch (data.type) {
-				case Hls.ErrorTypes.NETWORK_ERROR:
-					console.log('Trying to recover from network error')
-					hls.startLoad()
-					break
-				case Hls.ErrorTypes.MEDIA_ERROR:
-					console.log('Trying to recover from media error')
-					hls.recoverMediaError()
-					break
-				default:
-					console.log('Fatal error, destroying HLS instance')
-					hls.destroy()
+			try {
+				const response = await fetch(testUrl, { method: 'HEAD' })
+				if (response.ok) {
+					originalVideoUrl = testUrl
+					console.log(`✅ Found original video: ${videoName + ext}`)
 					break
 				}
+			} catch (e) {
+				// Continue trying other extensions
 			}
-		})
-
-		// Listen for successful manifest loading
-		hls.on(Hls.Events.MANIFEST_LOADED, () => {
-			console.log('✅ HLS manifest loaded successfully')
+		}
+		
+		if (originalVideoUrl) {
+			video.src = originalVideoUrl
+			video.load()
+			
 			if (statusElement) {
-				statusElement.textContent = 'Playing HLS stream (HLS.js)'
-				statusElement.style.color = '#00aa00'
+				statusElement.textContent = 'Playing original video (CSP fallback)'
+				statusElement.style.color = '#ff8800'
 			}
-		})
-
-		// Attach HLS to video element
-		hls.attachMedia(video)
-
-		// Load the manifest
-		hls.loadSource(manifestUrl)
-
-		// Store HLS instance for cleanup
-		window.currentHlsPlayer = hls
+		} else {
+			throw new Error('Original video file not found')
+		}
 
 	} catch (error) {
 		console.error('Failed to initialize Shaka Player:', error)
