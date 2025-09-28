@@ -9,6 +9,7 @@ use OCP\Files\IRootFolder;
 use OCP\IUserManager;
 use Psr\Log\LoggerInterface;
 use OCP\Notification\IManager as INotificationManager;
+use OCP\AppFramework\Utility\ITimeFactory;
 
 class HlsCacheGenerationJob extends QueuedJob {
 
@@ -18,12 +19,13 @@ class HlsCacheGenerationJob extends QueuedJob {
 	private INotificationManager $notificationManager;
 
 	public function __construct(
+		ITimeFactory $timeFactory,
 		IRootFolder $rootFolder,
 		IUserManager $userManager,
 		LoggerInterface $logger,
 		INotificationManager $notificationManager
 	) {
-		parent::__construct();
+		parent::__construct($timeFactory);
 		$this->rootFolder = $rootFolder;
 		$this->userManager = $userManager;
 		$this->logger = $logger;
