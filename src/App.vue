@@ -1,13 +1,13 @@
 <template>
-	<Content :class="{'icon-loading': loading}" app-name="vueexample">
+	<Content :class="{'icon-loading': loading}" app-name="hyper_viewer">
 		<AppNavigation>
 			<AppNavigationNew v-if="!loading"
-				:text="t('vueexample', 'New XXXXXX')"
+				:text="t('hyper_viewer', 'New XXXXXX')"
 				:disabled="false"
 				button-id="new-vueexample-button"
 				button-class="icon-add"
 				@click="newButtonAction" />
-			<template id="app-vueexample-navigation" #list>
+			<template id="app-hyper_viewer-navigation" #list>
 				<AppNavigationItem icon="icon-user" title="This is a user">
 					<AppNavigationCounter slot="counter" :highlighted="true">
 						99+
@@ -135,7 +135,7 @@
 				<ActionLink icon="icon-external" title="Link" href="https://nextcloud.com" />
 			</template>
 
-			<AppSidebarTab id="vueexample" name="Vueexample" icon="icon-vueexample">
+			<AppSidebarTab id="hyper_viewer" name="Hyper Viewer" icon="icon-hyper_viewer">
 				this is the vueexample tab
 			</AppSidebarTab>
 			<AppSidebarTab id="activity" name="Activity" icon="icon-activity">

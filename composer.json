@@ -1,6 +1,6 @@
 {
-	"name": "skjnldsv/vueexample",
-	"description": "Lint config for skjnldsv/vueexample",
+	"name": "skjnldsv/hyper_viewer",
+	"description": "Lint config for skjnldsv/hyper_viewer",
 	"license": "MIT",
 	"config": {
 		"optimize-autoloader": true,

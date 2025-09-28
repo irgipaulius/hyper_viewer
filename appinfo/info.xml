@@ -1,24 +1,24 @@
 <?xml version="1.0"?>
 <info xmlns:xsi= "http://www.w3.org/2001/XMLSchema-instance"
       xsi:noNamespaceSchemaLocation="https://apps.nextcloud.com/schema/apps/info.xsd">
-    <id>vueexample</id>
-    <name>Vue example</name>
-    <summary>A vue example app</summary>
-    <description><![CDATA[test]]></description>
+    <id>hyper_viewer</id>
+    <name>Hyper Viewer</name>
+    <summary>Prototype HLS-capable video viewer</summary>
+    <description><![CDATA[Prototype Nextcloud app for HLS playback using Shaka Player.]]></description>
     <version>6.0.0</version>
     <licence>agpl</licence>
     <author mail="jus@bitgrid.net" >Julius Härtl</author>
 	<author mail="skjnldsv@protonmail.com">John Molakvoæ</author>
-    <namespace>VueExample</namespace>
+    <namespace>HyperViewer</namespace>
     <category>tools</category>
     <bugs>https://github.com</bugs>
     <dependencies>
-        <nextcloud min-version="19" max-version="22"/>
+        <nextcloud min-version="19" max-version="30"/>
     </dependencies>
     <navigations>
         <navigation>
-            <name>VueExample</name>
-            <route>vueexample.page.index</route>
+            <name>Hyper Viewer</name>
+            <route>hyper_viewer.page.index</route>
         </navigation>
     </navigations>
 </info>

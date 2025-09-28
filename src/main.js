@@ -26,13 +26,13 @@ import App from './App'
 
 // Adding translations to the whole app
 Vue.mixin({
-	methods: {
-		t,
-		n,
-	},
+    methods: {
+        t,
+        n,
+    },
 })
 
 export default new Vue({
-	el: '#content',
-	render: h => h(App),
+    el: '#vue-content',
+    render: h => h(App),
 })

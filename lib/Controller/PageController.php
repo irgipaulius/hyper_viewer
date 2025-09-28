@@ -23,7 +23,7 @@ declare(strict_types=1);
  *
  */
 
-namespace OCA\VueExample\Controller;
+namespace OCA\HyperViewer\Controller;
 
 use OCP\IRequest;
 use OCP\AppFramework\Http\TemplateResponse;
@@ -43,10 +43,10 @@ class PageController extends Controller {
 	 * @NoCSRFRequired
 	 */
 	public function index() {
-		Util::addScript($this->appName, 'vueexample-main');
+		Util::addScript($this->appName, 'hyper_viewer-main');
 		Util::addStyle($this->appName, 'icons');
 
-		$response = new TemplateResponse($this->appName, $this->appName . '-main');
+		$response = new TemplateResponse($this->appName, 'main');
 		return $response;
 	}
 }
