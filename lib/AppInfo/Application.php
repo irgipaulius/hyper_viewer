@@ -24,6 +24,6 @@ class Application extends App implements IBootstrap {
 	public function boot(IBootContext $context): void {
 		// Load files integration script globally
 		// This ensures it's available whenever the Files app loads
-		Util::addInitScript(self::APP_ID, 'files-integration');
+		Util::addScript(self::APP_ID, 'files-integration');
 	}
 }

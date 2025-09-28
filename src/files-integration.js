@@ -1,6 +1,6 @@
 /**
  * Files app integration for Hyper Viewer (Nextcloud 25 compatible)
- * Adds "Generate Cache" action to MOV files and automatic HLS detection
+ * Adds "Generate HLS Cache" action to MOV and MP4 files
  */
 
 console.log('🎬 Hyper Viewer Files integration loading...')
@@ -12,7 +12,7 @@ document.addEventListener('DOMContentLoaded', function() {
 })
 
 /**
- *
+ * Initialize files integration
  */
 function initializeFilesIntegration() {
 	console.log('🔧 Initializing Files integration...')
@@ -26,41 +26,33 @@ function initializeFilesIntegration() {
 
 	console.log('✅ Files app detected, registering actions...')
 
-	// Register "Generate Cache" action for MOV files
-	window.OCA.Files.fileActions.register(
-		'video/quicktime', // MIME type for MOV files
-		'Generate HLS Cache',
-		OC.PERMISSION_UPDATE,
-		function() {
-			// Icon - using a simple gear icon
-			return OC.imagePath('core', 'actions/settings-dark')
-		},
-		function(filename, context) {
-			console.log('🚀 Generate Cache action triggered for:', filename)
+	// Register "Generate HLS Cache" action for MOV files
+	OCA.Files.fileActions.registerAction({
+		name: 'generateHlsCacheMov',
+		displayName: t('hyper_viewer', 'Generate HLS Cache'),
+		mime: 'video/quicktime',
+		permissions: OC.PERMISSION_UPDATE,
+		iconClass: 'icon-category-multimedia',
+		actionHandler(filename, context) {
+			console.log('🚀 Generate HLS Cache action triggered for MOV:', filename)
 			console.log('📁 Context:', context)
-
-			// Show simple dialog for now
 			openCacheGenerationDialog(filename, context)
-		}
-	)
-
-	// Register "Generate Cache" action for MP4 files
-	window.OCA.Files.fileActions.register(
-		'video/mp4', // MIME type for MP4 files
-		'Generate HLS Cache',
-		OC.PERMISSION_UPDATE,
-		function() {
-			// Icon - using a simple gear icon
-			return OC.imagePath('core', 'actions/settings-dark')
 		},
-		function(filename, context) {
-			console.log('🚀 Generate Cache action triggered for:', filename)
-			console.log('📁 Context:', context)
+	})
 
-			// Show simple dialog for now
+	// Register "Generate HLS Cache" action for MP4 files
+	OCA.Files.fileActions.registerAction({
+		name: 'generateHlsCacheMp4',
+		displayName: t('hyper_viewer', 'Generate HLS Cache'),
+		mime: 'video/mp4',
+		permissions: OC.PERMISSION_UPDATE,
+		iconClass: 'icon-category-multimedia',
+		actionHandler(filename, context) {
+			console.log('🚀 Generate HLS Cache action triggered for MP4:', filename)
+			console.log('📁 Context:', context)
 			openCacheGenerationDialog(filename, context)
-		}
-	)
+		},
+	})
 
 	console.log('✅ Hyper Viewer Files integration registered!')
 }
