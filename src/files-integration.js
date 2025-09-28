@@ -498,94 +498,34 @@ async function playWithHls(filename, directory, context) {
 }
 
 /**
- * Load Shaka Player with HLS content
+ * Load HLS Player with relaxed CSP
  *
  * @param filename
  * @param cachePath
  * @param context
  */
 function loadShakaPlayer(filename, cachePath, context) {
-	console.log(`🎬 Loading Shaka Player for: ${filename}`)
+	console.log(`🎬 Loading HLS Player for: ${filename}`)
 	console.log(`📁 Cache path: ${cachePath}`)
 
-	// Create full-screen video player modal
-	const playerHtml = `
-		<div class="hyper-viewer-player">
-			<div class="player-header">
-				<h3>${filename}</h3>
-				<button class="close-player" onclick="closeShakaPlayer()">×</button>
-			</div>
-			<video id="shaka-video" controls autoplay style="width: 100%; height: 400px; background: #000;">
-				Your browser does not support the video tag.
-			</video>
-			<div class="player-info">
-				<p><strong>HLS Cache:</strong> ${cachePath}</p>
-				<p><strong>Status:</strong> <span id="player-status">Loading...</span></p>
-			</div>
-		</div>
-		
-		<style>
-		.hyper-viewer-player {
-			padding: 20px;
-			max-width: 800px;
-			margin: 0 auto;
-		}
-		.player-header {
-			display: flex;
-			justify-content: space-between;
-			align-items: center;
-			margin-bottom: 15px;
-		}
-		.player-header h3 {
-			margin: 0;
-			color: #333;
-		}
-		.close-player {
-			background: #ff4444;
-			color: white;
-			border: none;
-			border-radius: 50%;
-			width: 30px;
-			height: 30px;
-			cursor: pointer;
-			font-size: 18px;
-			line-height: 1;
-		}
-		.close-player:hover {
-			background: #cc0000;
-		}
-		.player-info {
-			margin-top: 15px;
-			padding: 10px;
-			background: #f5f5f5;
-			border-radius: 5px;
-			font-size: 14px;
-		}
-		.player-info p {
-			margin: 5px 0;
-		}
-		#player-status {
-			font-weight: bold;
-			color: #0082c9;
-		}
-		</style>
-	`
+	// Build the player URL with parameters
+	const playerUrl = OC.generateUrl('/apps/hyper_viewer/player') 
+		+ '?filename=' + encodeURIComponent(filename)
+		+ '&cachePath=' + encodeURIComponent(cachePath)
 
-	// Show player in modal
-	OC.dialogs.confirmHtml(
-		playerHtml,
-		`Play: ${filename}`,
-		function(confirmed) {
-			// Modal closed
-			console.log('🎬 Shaka Player modal closed')
-		},
-		true // modal
-	)
+	console.log(`🎬 Opening HLS player: ${playerUrl}`)
 
-	// Initialize Shaka Player after modal is shown
-	setTimeout(() => {
-		initializeShakaPlayer(cachePath)
-	}, 500)
+	// Open the player in a new window/tab with relaxed CSP
+	const playerWindow = window.open(playerUrl, 'hlsPlayer', 'width=1000,height=700,scrollbars=yes,resizable=yes')
+	
+	if (!playerWindow) {
+		// Fallback if popup blocked - redirect in same window
+		console.log('🎬 Popup blocked, redirecting in same window')
+		window.location.href = playerUrl
+	} else {
+		// Focus the new window
+		playerWindow.focus()
+	}
 }
 
 /**
@@ -626,51 +566,67 @@ async function initializeShakaPlayer(cachePath) {
 			return
 		}
 
-		// Since HLS.js also creates blob URLs that violate CSP, 
-		// fall back to playing the original video file directly
-		console.log('🎬 CSP prevents HLS playback, falling back to original video')
-		
-		if (statusElement) {
-			statusElement.textContent = 'Loading original video...'
+		// Use HLS.js with relaxed CSP (blob URLs allowed)
+		if (!Hls.isSupported()) {
+			throw new Error('HLS.js is not supported in this browser')
 		}
 
-		// Extract the original filename from the cache path
-		// cachePath format: /Paulius/.cached_hls/MVI_0079
-		const videoName = cachePath.split('/').pop() // MVI_0079
-		const directory = cachePath.replace('/.cached_hls/' + videoName, '') // /Paulius
-		
-		// Try common video extensions
-		const extensions = ['.MOV', '.mov', '.MP4', '.mp4']
-		let originalVideoUrl = null
-		
-		for (const ext of extensions) {
-			const testUrl = OC.generateUrl('/apps/files/ajax/download.php')
-				+ '?dir=' + encodeURIComponent(directory)
-				+ '&files=' + encodeURIComponent(videoName + ext)
+		console.log('🎬 Using HLS.js for HLS playback')
+
+		// Create HLS.js instance
+		const hls = new Hls({
+			debug: false,
+			enableWorker: true,
+			lowLatencyMode: false,
+			backBufferLength: 30,
+			maxBufferLength: 60,
+			maxMaxBufferLength: 120,
+		})
+
+		// Listen for errors
+		hls.on(Hls.Events.ERROR, (event, data) => {
+			console.error('HLS.js error:', data)
+			if (statusElement) {
+				statusElement.textContent = 'Error: ' + (data.details || 'HLS playback error')
+				statusElement.style.color = '#ff4444'
+			}
 			
-			try {
-				const response = await fetch(testUrl, { method: 'HEAD' })
-				if (response.ok) {
-					originalVideoUrl = testUrl
-					console.log(`✅ Found original video: ${videoName + ext}`)
+			// Try to recover from some errors
+			if (data.fatal) {
+				switch (data.type) {
+				case Hls.ErrorTypes.NETWORK_ERROR:
+					console.log('Trying to recover from network error')
+					hls.startLoad()
+					break
+				case Hls.ErrorTypes.MEDIA_ERROR:
+					console.log('Trying to recover from media error')
+					hls.recoverMediaError()
+					break
+				default:
+					console.log('Fatal error, destroying HLS instance')
+					hls.destroy()
 					break
 				}
-			} catch (e) {
-				// Continue trying other extensions
 			}
-		}
-		
-		if (originalVideoUrl) {
-			video.src = originalVideoUrl
-			video.load()
-			
+		})
+
+		// Listen for successful manifest loading
+		hls.on(Hls.Events.MANIFEST_LOADED, () => {
+			console.log('✅ HLS manifest loaded successfully')
 			if (statusElement) {
-				statusElement.textContent = 'Playing original video (CSP fallback)'
-				statusElement.style.color = '#ff8800'
+				statusElement.textContent = 'Playing HLS stream (HLS.js)'
+				statusElement.style.color = '#00aa00'
 			}
-		} else {
-			throw new Error('Original video file not found')
-		}
+		})
+
+		// Attach HLS to video element
+		hls.attachMedia(video)
+
+		// Load the manifest
+		hls.loadSource(manifestUrl)
+
+		// Store HLS instance for cleanup
+		window.currentHlsPlayer = hls
 
 	} catch (error) {
 		console.error('Failed to initialize Shaka Player:', error)
