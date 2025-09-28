@@ -498,33 +498,56 @@ async function playWithHls(filename, directory, context) {
 }
 
 /**
- * Load HLS Player with relaxed CSP
+ * Load HLS Player in modal with relaxed CSP
  *
  * @param filename
  * @param cachePath
  * @param context
  */
-function loadShakaPlayer(filename, cachePath, context) {
+async function loadShakaPlayer(filename, cachePath, context) {
 	console.log(`🎬 Loading HLS Player for: ${filename}`)
 	console.log(`📁 Cache path: ${cachePath}`)
 
-	// Build the player URL with parameters
-	const playerUrl = OC.generateUrl('/apps/hyper_viewer/player') 
+	// Build the modal player URL
+	const modalUrl = OC.generateUrl('/apps/hyper_viewer/player/modal') 
 		+ '?filename=' + encodeURIComponent(filename)
 		+ '&cachePath=' + encodeURIComponent(cachePath)
 
-	console.log(`🎬 Opening HLS player: ${playerUrl}`)
+	console.log(`🎬 Loading HLS player modal: ${modalUrl}`)
 
-	// Open the player in a new window/tab with relaxed CSP
-	const playerWindow = window.open(playerUrl, 'hlsPlayer', 'width=1000,height=700,scrollbars=yes,resizable=yes')
-	
-	if (!playerWindow) {
-		// Fallback if popup blocked - redirect in same window
-		console.log('🎬 Popup blocked, redirecting in same window')
-		window.location.href = playerUrl
-	} else {
-		// Focus the new window
-		playerWindow.focus()
+	try {
+		// Fetch the player HTML from our CSP-relaxed endpoint
+		const response = await fetch(modalUrl)
+		if (!response.ok) {
+			throw new Error(`Failed to load player: ${response.status}`)
+		}
+		
+		const playerHtml = await response.text()
+		
+		// Show the player in a modal
+		OC.dialogs.confirmHtml(
+			playerHtml,
+			`Play: ${filename}`,
+			function(confirmed) {
+				// Modal closed - cleanup HLS player if needed
+				console.log('🎬 HLS Player modal closed')
+				if (window.currentHlsPlayer) {
+					window.currentHlsPlayer.destroy()
+					window.currentHlsPlayer = null
+				}
+			},
+			true // modal
+		)
+
+		// Initialize the HLS player after modal is shown
+		setTimeout(() => {
+			// The player HTML should include its own initialization script
+			console.log('🎬 HLS Player modal loaded')
+		}, 500)
+
+	} catch (error) {
+		console.error('Failed to load HLS player modal:', error)
+		OC.dialogs.alert('Failed to load HLS player: ' + error.message, 'Error')
 	}
 }
 

@@ -27,7 +27,7 @@ class PlayerController extends Controller {
      */
     public function index() {
         // Load the HLS player scripts
-        Util::addScript($this->appName, 'files-integration');
+        Util::addScript($this->appName, 'player');
         Util::addStyle($this->appName, 'icons');
 
         $response = new TemplateResponse($this->appName, 'player');
@@ -45,6 +45,7 @@ class PlayerController extends Controller {
      */
     public function modal() {
         // Endpoint for modal HLS player (called via AJAX)
+        // Don't load any scripts - the modal template includes everything inline
         $response = new TemplateResponse($this->appName, 'player-modal', [], 'blank');
         
         // Apply custom CSP that allows blob URLs for HLS playback

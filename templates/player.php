@@ -1,5 +1,6 @@
 <?php
-script('hyper_viewer', 'files-integration');
+// Load the dedicated player script
+script('hyper_viewer', 'player');
 style('hyper_viewer', 'icons');
 
 // Get URL parameters
@@ -32,13 +33,15 @@ document.addEventListener('DOMContentLoaded', function() {
     if (cachePath) {
         console.log('🎬 Initializing HLS player with cache path:', cachePath);
         
-        // Call the HLS initialization function
-        if (typeof initializeShakaPlayer === 'function') {
-            initializeShakaPlayer(cachePath);
-        } else {
-            console.error('initializeShakaPlayer function not found');
-            document.getElementById('player-status').textContent = 'Error: Player not loaded';
-        }
+        // Wait a bit for the player script to load, then initialize
+        setTimeout(function() {
+            if (typeof initializeHlsPlayer === 'function') {
+                initializeHlsPlayer(cachePath);
+            } else {
+                console.error('initializeHlsPlayer function not found');
+                document.getElementById('player-status').textContent = 'Error: Player not loaded';
+            }
+        }, 500);
     } else {
         document.getElementById('player-status').textContent = 'Error: No cache path provided';
     }
