@@ -17,6 +17,8 @@ If you want to modify the frontend:
 3. 🚀 Build for production: `npm run build`
 4. 📤 Commit the updated `js/` files
 
+> NODE_OPTIONS="--openssl-legacy-provider" npm run build --fix 
+
 ## Server Deployment
 After `git pull` on your server (as root), run this command:
 ```bash

@@ -3,6 +3,8 @@
  * Adds "Generate HLS Cache" action to MOV and MP4 files
  */
 
+import shaka from 'shaka-player'
+
 console.log('🎬 Hyper Viewer Files integration loading...')
 
 // Wait for Files app to be ready
@@ -495,20 +497,99 @@ async function playWithHls(filename, directory, context) {
 	}
 }
 
-/**
- * Simple HLS action - just console log for now
- *
- * @param filename
- * @param cachePath
- * @param context
- */
 function loadShakaPlayer(filename, cachePath, context) {
-	console.log(`🎬 Play with HLS triggered for: ${filename}`)
-	console.log(`📁 Cache path: ${cachePath}`)
-	console.log(`🎯 Context:`, context)
-	
-	// TODO: Implement your own player here
-	console.log('🚀 Ready for you to implement the player!')
-}
+    console.log(`🎬 Play with HLS triggered for: ${filename}`)
+    console.log(`📁 Cache path: ${cachePath}`)
+    console.log('🎯 Context:', context)
 
-console.log('✅ Hyper Viewer Files integration loaded!')
+    // Create unique video ID to avoid conflicts
+    const videoId = `hyperVideo_${Date.now()}`
+    let shakaPlayer = null
+
+    // Create modal container
+    const modal = document.createElement('div')
+    modal.className = 'hyper-viewer-modal'
+    modal.innerHTML = `
+        <div class="hyper-viewer-backdrop"></div>
+        <div class="hyper-viewer-content">
+            <button class="hyper-viewer-close">×</button>
+            <video id="${videoId}" width="100%" height="auto" controls autoplay></video>
+        </div>
+        <style>
+            .hyper-viewer-modal {
+                position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+                z-index: 9999; display: flex; align-items: center; justify-content: center;
+            }
+            .hyper-viewer-backdrop {
+                position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+                background: rgba(0,0,0,0.7);
+            }
+            .hyper-viewer-content {
+                position: relative; background: #000; padding: 10px; border-radius: 8px;
+                width: 80%; max-width: 960px;
+            }
+            .hyper-viewer-close {
+                position: absolute; top: 5px; right: 10px; font-size: 20px;
+                background: transparent; border: none; color: white; cursor: pointer;
+            }
+        </style>
+    `
+    document.body.appendChild(modal)
+
+    // Get video element from modal
+    const video = modal.querySelector(`#${videoId}`)
+
+    // Close button with cleanup
+    modal.querySelector('.hyper-viewer-close').onclick = () => {
+        if (shakaPlayer) {
+            shakaPlayer.destroy()
+        }
+        modal.remove()
+    }
+
+    // Initialize Shaka Player
+    console.log('🔍 Checking Shaka Player availability...')
+    if (shaka) {
+        console.log('✅ Shaka Player library found, initializing...')
+        try {
+            console.log('🔧 Installing Shaka polyfills...')
+            shaka.polyfill.installAll()
+            
+            console.log('🎬 Creating Shaka Player instance...')
+            shakaPlayer = new shaka.Player(video)
+            console.log('✅ Shaka Player instance created successfully')
+
+            // Construct HLS manifest URL (cache path should point to playlist.m3u8)
+            const manifestUrl = cachePath.endsWith('playlist.m3u8') ? cachePath : `${cachePath}/playlist.m3u8`
+            console.log('📝 Constructed manifest URL:', manifestUrl)
+            
+            console.log('⏳ Loading HLS manifest...')
+            shakaPlayer.load(manifestUrl).then(() => {
+                console.log('✅ Shaka successfully loaded HLS video:', manifestUrl)
+                console.log('🎥 Video should now be playing')
+            }).catch(err => {
+                console.error('❌ Shaka load error:', err)
+                console.error('❌ Error details:', {
+                    code: err.code,
+                    category: err.category,
+                    severity: err.severity,
+                    message: err.message
+                })
+                OC.dialogs.alert(`Error loading HLS video: ${err.message}`, 'Playback Error')
+                console.log('🔄 Falling back to direct video src...')
+                video.src = cachePath
+            })
+        } catch (error) {
+            console.error('❌ Shaka initialization error:', error)
+            console.error('❌ Error stack:', error.stack)
+            console.log('🔄 Falling back to direct video src...')
+            // Fallback to direct video
+            video.src = cachePath
+        }
+    } else {
+        console.warn('⚠️ Shaka Player not available, using fallback')
+        console.log('🔄 Setting video src directly:', cachePath)
+        // Fallback raw video tag
+        video.src = cachePath
+    }
+}
