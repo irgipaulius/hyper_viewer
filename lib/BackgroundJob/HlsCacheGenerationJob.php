@@ -87,8 +87,9 @@ class HlsCacheGenerationJob extends QueuedJob {
 				$customPath
 			);
 
-			// Generate HLS cache
-			$this->generateHlsCache($videoLocalPath, $cacheOutputPath, $filename, $overwriteExisting, $userId);
+			// Generate HLS cache with adaptive bitrate ladder
+			$resolutions = $argument['resolutions'] ?? ['720p', '480p', '240p'];
+			$this->generateHlsCache($videoLocalPath, $cacheOutputPath, $filename, $overwriteExisting, $userId, $resolutions);
 
 			$this->logger->info('HLS cache generation completed', [
 				'jobId' => $jobId,
@@ -147,7 +148,7 @@ class HlsCacheGenerationJob extends QueuedJob {
 	/**
 	 * Generate HLS cache using FFmpeg
 	 */
-	private function generateHlsCache(string $videoLocalPath, string $cacheOutputPath, string $filename, bool $overwriteExisting, string $userId): void {
+	private function generateHlsCache(string $videoLocalPath, string $cacheOutputPath, string $filename, bool $overwriteExisting, string $userId, array $resolutions = ['720p', '480p', '240p']): void {
 		$this->logger->info('Generating HLS cache', [
 			'input' => $videoLocalPath,
 			'output' => $cacheOutputPath,
@@ -181,36 +182,85 @@ class HlsCacheGenerationJob extends QueuedJob {
 			throw new \Exception("Cannot access cache directory locally");
 		}
 
-		// Generate simple HLS stream (single bitrate for now)
-		$this->generateSimpleHls($videoLocalPath, $cacheLocalPath, $filename);
+		// Generate adaptive bitrate HLS ladder
+		$this->generateAdaptiveHls($videoLocalPath, $cacheLocalPath, $filename, $resolutions);
 	}
 
 	/**
-	 * Generate simple single-bitrate HLS using FFmpeg
+	 * Generate adaptive bitrate HLS ladder optimized for speed and storage
 	 */
-	private function generateSimpleHls(string $inputPath, string $outputPath, string $filename): void {
-		$this->logger->info('Starting simple HLS generation', [
+	private function generateAdaptiveHls(string $inputPath, string $outputPath, string $filename, array $resolutions): void {
+		$this->logger->info('Starting adaptive HLS generation', [
 			'input' => $inputPath,
-			'output' => $outputPath
+			'output' => $outputPath,
+			'resolutions' => $resolutions
 		]);
 
-		// Simple HLS command similar to Video Converter approach
-		$ffmpegCmd = '/usr/local/bin/ffmpeg -y -i ' . escapeshellarg($inputPath) . 
-			' -c:v libx264 -preset fast -c:a aac -b:a 128k' .
-			' -f hls -hls_time 6 -hls_playlist_type vod' .
-			' -hls_segment_filename ' . escapeshellarg($outputPath . '/segment_%03d.ts') .
-			' ' . escapeshellarg($outputPath . '/playlist.m3u8');
+		// Define optimized bitrate variants for speed and storage efficiency
+		$allVariants = [
+			'1080p' => ['resolution' => '1920x1080', 'bitrate' => '4000k', 'maxrate' => '4800k', 'bufsize' => '8000k', 'crf' => '23'],
+			'720p' => ['resolution' => '1280x720', 'bitrate' => '2000k', 'maxrate' => '2400k', 'bufsize' => '4000k', 'crf' => '24'],
+			'480p' => ['resolution' => '854x480', 'bitrate' => '800k', 'maxrate' => '1000k', 'bufsize' => '1600k', 'crf' => '26'],
+			'360p' => ['resolution' => '640x360', 'bitrate' => '500k', 'maxrate' => '600k', 'bufsize' => '1000k', 'crf' => '28'],
+			'240p' => ['resolution' => '426x240', 'bitrate' => '300k', 'maxrate' => '400k', 'bufsize' => '600k', 'crf' => '30']
+		];
 
-		$this->logger->info('Executing FFmpeg command', ['cmd' => $ffmpegCmd]);
+		// Filter variants based on user selection
+		$variants = [];
+		foreach ($resolutions as $res) {
+			if (isset($allVariants[$res])) {
+				$variants[$res] = $allVariants[$res];
+			}
+		}
 
-		// Execute FFmpeg
+		if (empty($variants)) {
+			throw new \Exception('No valid resolutions selected');
+		}
+
+		// Build optimized FFmpeg command for adaptive streaming
+		$ffmpegCmd = '/usr/local/bin/ffmpeg -y -i ' . escapeshellarg($inputPath);
+		
+		// Add video streams for each variant with CRF + maxrate for optimal quality/size
+		$streamIndex = 0;
+		foreach ($variants as $name => $variant) {
+			$ffmpegCmd .= sprintf(
+				' -map 0:v:0 -c:v:%d libx264 -preset superfast -crf %s -maxrate %s -bufsize %s -s:%d %s -profile:v:%d main',
+				$streamIndex, $variant['crf'], $variant['maxrate'], $variant['bufsize'], $streamIndex, $variant['resolution'], $streamIndex
+			);
+			$streamIndex++;
+		}
+
+		// Add single audio stream (AAC 128k)
+		$ffmpegCmd .= ' -map 0:a:0 -c:a aac -b:a 128k';
+
+		// HLS options optimized for adaptive streaming
+		$ffmpegCmd .= ' -f hls -hls_time 6 -hls_playlist_type vod -hls_flags independent_segments';
+		$ffmpegCmd .= ' -master_pl_name master.m3u8';
+		
+		// Build var_stream_map for adaptive streaming
+		$ffmpegCmd .= ' -var_stream_map "';
+		$streamMaps = [];
+		$streamIndex = 0;
+		foreach ($variants as $name => $variant) {
+			$streamMaps[] = "v:$streamIndex,a:0,name:$name";
+			$streamIndex++;
+		}
+		$ffmpegCmd .= implode(' ', $streamMaps) . '"';
+		
+		// Output pattern for variant playlists
+		$ffmpegCmd .= ' ' . escapeshellarg($outputPath . '/playlist_%v.m3u8');
+
+		$this->logger->info('Executing optimized FFmpeg command', ['cmd' => $ffmpegCmd]);
+
+		// Execute FFmpeg with extended timeout for multi-bitrate encoding
 		$output = [];
 		$returnCode = 0;
+		set_time_limit(1800); // 30 minutes timeout
 		exec($ffmpegCmd . ' 2>&1', $output, $returnCode);
 
 		if ($returnCode !== 0) {
 			$errorOutput = implode("\n", $output);
-			$this->logger->error('FFmpeg failed', [
+			$this->logger->error('FFmpeg adaptive HLS generation failed', [
 				'returnCode' => $returnCode,
 				'output' => $errorOutput,
 				'command' => $ffmpegCmd
@@ -218,82 +268,12 @@ class HlsCacheGenerationJob extends QueuedJob {
 			throw new \Exception("FFmpeg failed with return code $returnCode: $errorOutput");
 		}
 
-		$this->logger->info('Simple HLS generation completed successfully', [
-			'output' => implode("\n", array_slice($output, -3)) // Last 3 lines
+		$this->logger->info('Adaptive HLS generation completed successfully', [
+			'variants' => array_keys($variants),
+			'output' => implode("\n", array_slice($output, -5))
 		]);
 	}
 
-	/**
-	 * Generate multi-bitrate HLS using FFmpeg (for future use)
-	 */
-	private function generateMultiBitrateHls(string $inputPath, string $outputPath, string $filename): void {
-		// Define bitrate variants
-		$variants = [
-			['resolution' => '1920x1080', 'bitrate' => '5000k', 'name' => '1080p'],
-			['resolution' => '1280x720', 'bitrate' => '2500k', 'name' => '720p'],
-			['resolution' => '854x480', 'bitrate' => '1000k', 'name' => '480p'],
-			['resolution' => '640x360', 'bitrate' => '500k', 'name' => '360p']
-		];
-
-		$this->logger->info('Starting FFmpeg HLS generation', [
-			'input' => $inputPath,
-			'output' => $outputPath,
-			'variants' => count($variants)
-		]);
-
-		// Build FFmpeg command for multi-bitrate HLS
-		$ffmpegCmd = '/usr/local/bin/ffmpeg -i ' . escapeshellarg($inputPath);
-		
-		// Add video streams for each variant
-		foreach ($variants as $i => $variant) {
-			$ffmpegCmd .= sprintf(
-				' -map 0:v:0 -c:v:%d libx264 -b:v:%d %s -s:%d %s -profile:v:%d main -level:%d 3.1',
-				$i, $i, $variant['bitrate'], $i, $variant['resolution'], $i, $i
-			);
-		}
-
-		// Add audio stream (copy original)
-		$ffmpegCmd .= ' -map 0:a:0 -c:a aac -b:a 128k';
-
-		// HLS options
-		$ffmpegCmd .= ' -f hls -hls_time 6 -hls_playlist_type vod';
-		$ffmpegCmd .= ' -hls_segment_filename ' . escapeshellarg($outputPath . '/segment_%v_%03d.ts');
-		$ffmpegCmd .= ' -master_pl_name master.m3u8';
-		
-		// Variant playlist names
-		foreach ($variants as $i => $variant) {
-			$ffmpegCmd .= ' -hls_segment_filename ' . escapeshellarg($outputPath . '/segment_' . $variant['name'] . '_%03d.ts');
-		}
-		
-		$ffmpegCmd .= ' -var_stream_map "';
-		foreach ($variants as $i => $variant) {
-			if ($i > 0) $ffmpegCmd .= ' ';
-			$ffmpegCmd .= "v:$i,a:0,name:{$variant['name']}";
-		}
-		$ffmpegCmd .= '"';
-		
-		$ffmpegCmd .= ' ' . escapeshellarg($outputPath . '/playlist_%v.m3u8');
-
-		$this->logger->debug('FFmpeg command', ['cmd' => $ffmpegCmd]);
-
-		// Execute FFmpeg
-		$output = [];
-		$returnCode = 0;
-		exec($ffmpegCmd . ' 2>&1', $output, $returnCode);
-
-		if ($returnCode !== 0) {
-			$errorOutput = implode("\n", $output);
-			$this->logger->error('FFmpeg failed', [
-				'returnCode' => $returnCode,
-				'output' => $errorOutput
-			]);
-			throw new \Exception("FFmpeg failed with return code $returnCode: $errorOutput");
-		}
-
-		$this->logger->info('FFmpeg HLS generation completed successfully', [
-			'output' => implode("\n", array_slice($output, -5)) // Last 5 lines
-		]);
-	}
 
 	/**
 	 * Send completion notification to user

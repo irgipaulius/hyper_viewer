@@ -52,7 +52,7 @@ class CacheController extends Controller {
 		$cacheLocation = $this->request->getParam('cacheLocation', 'relative');
 		$customPath = $this->request->getParam('customPath', '');
 		$overwriteExisting = $this->request->getParam('overwriteExisting', false);
-		$notifyCompletion = $this->request->getParam('notifyCompletion', true);
+		$resolutions = $this->request->getParam('resolutions', ['720p', '480p', '240p']);
 
 		if (empty($files)) {
 			return new JSONResponse(['error' => 'No files provided'], 400);
@@ -61,7 +61,8 @@ class CacheController extends Controller {
 		$this->logger->info('HLS cache generation requested', [
 			'user' => $user->getUID(),
 			'files' => count($files),
-			'cacheLocation' => $cacheLocation
+			'cacheLocation' => $cacheLocation,
+			'resolutions' => $resolutions
 		]);
 
 		$jobId = uniqid('hls_cache_', true);
@@ -76,7 +77,7 @@ class CacheController extends Controller {
 				'cacheLocation' => $cacheLocation,
 				'customPath' => $customPath,
 				'overwriteExisting' => $overwriteExisting,
-				'notifyCompletion' => $notifyCompletion
+				'resolutions' => $resolutions
 			];
 			
 			$this->logger->info('Adding HLS cache generation job to queue', [
@@ -189,8 +190,12 @@ class CacheController extends Controller {
 
 		foreach ($cacheLocations as $cachePath) {
 			try {
-				if ($userFolder->nodeExists($cachePath . '/playlist.m3u8')) {
-					$this->logger->debug('Found HLS cache', ['path' => $cachePath]);
+				// Check for adaptive streaming master playlist first, fallback to single playlist
+				if ($userFolder->nodeExists($cachePath . '/master.m3u8')) {
+					$this->logger->debug('Found adaptive HLS cache', ['path' => $cachePath]);
+					return $cachePath;
+				} elseif ($userFolder->nodeExists($cachePath . '/playlist.m3u8')) {
+					$this->logger->debug('Found legacy HLS cache', ['path' => $cachePath]);
 					return $cachePath;
 				}
 			} catch (\Exception $e) {

@@ -148,94 +148,130 @@ function openCacheGenerationDialog(files) {
 	console.log('🔧 Opening cache generation dialog for files:', files.map(f => f.filename))
 
 	const fileList = files.map(f => f.filename).join(', ')
-	const isMultiple = files.length > 1
 
-	// Create modal HTML content
+	// Create modal HTML content with cleaner UI
 	const modalContent = `
 		<div class="hyper-viewer-cache-dialog">
-			<h3>${isMultiple ? 'Generate HLS Cache (Bulk)' : 'Generate HLS Cache'}</h3>
-			<p><strong>Files to process:</strong> ${fileList}</p>
+			<h3>Generate HLS Cache</h3>
+			<p class="file-list"><strong>Files:</strong> ${fileList}</p>
 			
-			<div class="cache-location-section">
-				<h4>Cache Location:</h4>
-				<div class="cache-options">
-					<label>
+			<div class="section">
+				<label class="section-title">Cache Location</label>
+				<div class="radio-group">
+					<label class="radio-option">
 						<input type="radio" name="cache_location" value="relative" checked>
-						<strong>Relative to video file</strong><br>
-						<small>Creates <code>.cached_hls/</code> folder next to each video file</small>
+						<span>Next to video files</span>
 					</label>
-					<br><br>
-					<label>
+					<label class="radio-option">
 						<input type="radio" name="cache_location" value="home">
-						<strong>User home directory</strong><br>
-						<small>Creates <code>~/.cached_hls/</code> in your home folder</small>
+						<span>Home directory</span>
 					</label>
-					<br><br>
-					<label>
+					<label class="radio-option">
 						<input type="radio" name="cache_location" value="custom">
-						<strong>Custom location</strong><br>
-						<input type="text" id="custom_path" placeholder="/mnt/cache/.cached_hls/" style="width: 100%; margin-top: 5px;" disabled>
+						<span>Custom path</span>
+						<input type="text" id="custom_path" placeholder="/mnt/cache/.cached_hls/" disabled>
 					</label>
 				</div>
 			</div>
 			
-			<div class="processing-options">
-				<h4>Processing Options:</h4>
-				<label>
-					<input type="checkbox" id="overwrite_existing" checked>
-					Overwrite existing cache files
-				</label>
-				<br>
-				<label>
-					<input type="checkbox" id="notify_completion" checked>
-					Notify when processing is complete
-				</label>
+			<div class="section">
+				<label class="section-title">Resolution Renditions</label>
+				<div class="checkbox-group">
+					<label class="checkbox-option">
+						<input type="checkbox" name="resolution" value="1080p">
+						<span>1080p (4000k) - Full HD</span>
+					</label>
+					<label class="checkbox-option">
+						<input type="checkbox" name="resolution" value="720p" checked>
+						<span>720p (2000k) - HD</span>
+					</label>
+					<label class="checkbox-option">
+						<input type="checkbox" name="resolution" value="480p" checked>
+						<span>480p (800k) - SD</span>
+					</label>
+					<label class="checkbox-option">
+						<input type="checkbox" name="resolution" value="360p">
+						<span>360p (500k) - Low</span>
+					</label>
+					<label class="checkbox-option">
+						<input type="checkbox" name="resolution" value="240p" checked>
+						<span>240p (300k) - Mobile</span>
+					</label>
+				</div>
 			</div>
 			
-			<div class="progress-section" style="display: none;">
-				<h4>Processing Progress:</h4>
-				<div class="progress-bar">
-					<div class="progress-fill" style="width: 0%;"></div>
-				</div>
-				<div class="progress-text">Preparing...</div>
+			<div class="section">
+				<label class="checkbox-option">
+					<input type="checkbox" id="overwrite_existing" checked>
+					<span>Overwrite existing cache</span>
+				</label>
 			</div>
 		</div>
 		
 		<style>
 		.hyper-viewer-cache-dialog {
 			padding: 20px;
-			max-width: 500px;
+			max-width: 450px;
+			font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 		}
-		.cache-options label {
-			display: block;
-			margin: 10px 0;
-			cursor: pointer;
+		.hyper-viewer-cache-dialog h3 {
+			margin: 0 0 15px 0;
+			color: #333;
+			font-size: 18px;
 		}
-		.cache-options input[type="radio"] {
-			margin-right: 8px;
-		}
-		.processing-options label {
-			display: block;
-			margin: 8px 0;
-			cursor: pointer;
-		}
-		.progress-bar {
-			width: 100%;
-			height: 20px;
-			background-color: #f0f0f0;
-			border-radius: 10px;
-			overflow: hidden;
-			margin: 10px 0;
-		}
-		.progress-fill {
-			height: 100%;
-			background-color: #0082c9;
-			transition: width 0.3s ease;
-		}
-		.progress-text {
-			text-align: center;
+		.file-list {
+			margin: 0 0 20px 0;
+			padding: 10px;
+			background: #f8f9fa;
+			border-radius: 6px;
 			font-size: 14px;
 			color: #666;
+		}
+		.section {
+			margin-bottom: 20px;
+		}
+		.section-title {
+			display: block;
+			font-weight: 600;
+			color: #333;
+			margin-bottom: 10px;
+			font-size: 14px;
+		}
+		.radio-group, .checkbox-group {
+			display: flex;
+			flex-direction: column;
+			gap: 8px;
+		}
+		.radio-option, .checkbox-option {
+			display: flex;
+			align-items: center;
+			cursor: pointer;
+			padding: 8px;
+			border-radius: 4px;
+			transition: background-color 0.2s;
+		}
+		.radio-option:hover, .checkbox-option:hover {
+			background-color: #f5f5f5;
+		}
+		.radio-option input, .checkbox-option input {
+			margin: 0 10px 0 0;
+		}
+		.radio-option span, .checkbox-option span {
+			font-size: 14px;
+			color: #333;
+		}
+		#custom_path {
+			margin-left: 24px;
+			margin-top: 5px;
+			width: calc(100% - 24px);
+			padding: 6px 8px;
+			border: 1px solid #ddd;
+			border-radius: 4px;
+			font-size: 13px;
+		}
+		#custom_path:disabled {
+			background-color: #f5f5f5;
+			color: #999;
 		}
 		</style>
 	`
@@ -283,13 +319,19 @@ async function startCacheGeneration(files) {
 	const cacheLocation = document.querySelector('input[name="cache_location"]:checked')?.value || 'relative'
 	const customPath = document.getElementById('custom_path')?.value || ''
 	const overwriteExisting = document.getElementById('overwrite_existing')?.checked || false
-	const notifyCompletion = document.getElementById('notify_completion')?.checked || true
+	
+	// Get selected resolutions
+	const selectedResolutions = Array.from(document.querySelectorAll('input[name="resolution"]:checked'))
+		.map(checkbox => checkbox.value)
+	
+	// Default to 720p, 480p, 240p if none selected
+	const resolutions = selectedResolutions.length > 0 ? selectedResolutions : ['720p', '480p', '240p']
 
 	const options = {
 		cacheLocation,
 		customPath,
 		overwriteExisting,
-		notifyCompletion,
+		resolutions,
 	}
 
 	console.log('Cache generation options:', options)
@@ -316,7 +358,7 @@ async function startCacheGeneration(files) {
 				cacheLocation: options.cacheLocation,
 				customPath: options.customPath,
 				overwriteExisting: options.overwriteExisting,
-				notifyCompletion: options.notifyCompletion,
+				resolutions: options.resolutions,
 			}),
 		})
 
@@ -331,7 +373,7 @@ async function startCacheGeneration(files) {
 			}
 
 			OC.dialogs.info(
-				`Cache generation started for ${files.length} file(s).\n\nLocation: ${getCacheLocationDescription(options)}\n\nProcessing will run in the background. ${notifyCompletion ? 'You will be notified when complete.' : ''}`,
+				`Cache generation started for ${files.length} file(s).\n\nLocation: ${getCacheLocationDescription(options)}\n\nResolutions: ${options.resolutions.join(', ')}\n\nProcessing will run in the background.`,
 				'HLS Cache Generation Started'
 			)
 		} else {
@@ -569,8 +611,9 @@ function loadShakaPlayer(filename, cachePath, context) {
             // Construct HLS manifest URL using our app's HLS serving endpoint
             // Convert cache path like "/Paulius/.cached_hls/MVI_0079" to proper URL
             const encodedCachePath = encodeURIComponent(cachePath)
-            const manifestUrl = `/apps/hyper_viewer/hls/${encodedCachePath}/playlist.m3u8`
-            console.log('📝 Constructed manifest URL:', manifestUrl)
+            // Try master.m3u8 first (adaptive streaming), fallback to playlist.m3u8 (legacy)
+            const manifestUrl = `/apps/hyper_viewer/hls/${encodedCachePath}/master.m3u8`
+            console.log('📝 Constructed adaptive manifest URL:', manifestUrl)
             
             console.log('⏳ Loading HLS manifest...')
             shakaPlayer.load(manifestUrl).then(() => {
@@ -610,16 +653,24 @@ function loadShakaPlayer(filename, cachePath, context) {
                     }
                 }, 500)
             }).catch(err => {
-                console.error('❌ Shaka load error:', err)
-                console.error('❌ Error details:', {
-                    code: err.code,
-                    category: err.category,
-                    severity: err.severity,
-                    message: err.message
+                console.error('❌ Shaka load error for master.m3u8:', err)
+                console.log('🔄 Trying fallback to playlist.m3u8...')
+                
+                // Try fallback to legacy single-bitrate playlist
+                const fallbackUrl = `/apps/hyper_viewer/hls/${encodedCachePath}/playlist.m3u8`
+                return shakaPlayer.load(fallbackUrl).then(() => {
+                    console.log('✅ Fallback playlist loaded successfully:', fallbackUrl)
+                }).catch(fallbackErr => {
+                    console.error('❌ Both master.m3u8 and playlist.m3u8 failed:', fallbackErr)
+                    console.error('❌ Error details:', {
+                        code: fallbackErr.code,
+                        category: fallbackErr.category,
+                        severity: fallbackErr.severity,
+                        message: fallbackErr.message
+                    })
+                    OC.dialogs.alert(`Error loading HLS video: ${fallbackErr.message}`, 'Playback Error')
+                    throw fallbackErr
                 })
-                OC.dialogs.alert(`Error loading HLS video: ${err.message}`, 'Playback Error')
-                console.log('🔄 Falling back to direct video src...')
-                video.src = cachePath
             })
         } catch (error) {
             console.error('❌ Shaka initialization error:', error)
