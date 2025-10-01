@@ -1030,6 +1030,10 @@ function startProgressPolling(filename, directory, modal) {
 	const baseFilename = filename.replace(/\.[^/.]+$/, '') // Remove extension
 	const cachePath = directory === '/' ? `/.cached_hls/${baseFilename}` : `${directory}/.cached_hls/${baseFilename}`
 	
+	console.log(`🔍 Starting progress polling for: ${filename}`)
+	console.log(`📁 Directory: ${directory}`)
+	console.log(`📂 Cache path: ${cachePath}`)
+	
 	let pollCount = 0
 	const maxPolls = 360 // 30 minutes max (polling every 5 seconds)
 	
@@ -1039,8 +1043,13 @@ function startProgressPolling(filename, directory, modal) {
 			console.log(`📊 Progress poll ${pollCount}/${maxPolls} for: ${filename}`)
 
 			const encodedCachePath = encodeURIComponent(cachePath)
-			const response = await fetch(`/apps/hyper_viewer/cache/progress/${encodedCachePath}`)
+			const progressUrl = OC.generateUrl(`/apps/hyper_viewer/cache/progress/${encodedCachePath}`)
+			console.log(`🌐 Polling URL: ${progressUrl}`)
+			
+			const response = await fetch(progressUrl)
 			const result = await response.json()
+			
+			console.log(`📈 Progress response:`, result)
 
 			if (result.success && result.progress) {
 				updateProgressModal(modal, result.progress)
@@ -1064,7 +1073,16 @@ function startProgressPolling(filename, directory, modal) {
 			}
 
 		} catch (error) {
-			console.error('Progress polling error:', error)
+			console.error('❌ Progress polling error:', error)
+			
+			// Update modal to show error state
+			if (modal.parentNode) {
+				const statusElement = modal.querySelector('.progress-status')
+				if (statusElement) {
+					statusElement.textContent = `Polling error: ${error.message}`
+				}
+			}
+			
 			if (pollCount < maxPolls && modal.parentNode) {
 				setTimeout(poll, 5000) // Retry on error
 			}
