@@ -567,14 +567,22 @@ function loadShakaPlayer(filename, cachePath, context) {
             shakaPlayer = new shaka.Player(video)
             
             console.log('🎨 Initializing Shaka UI...')
-            // Create a container div for the UI
-            const videoContainer = document.createElement('div')
-            videoContainer.className = 'shaka-video-container'
-            video.parentElement.insertBefore(videoContainer, video)
-            videoContainer.appendChild(video)
-            
-            shakaUI = new shaka.ui.Overlay(shakaPlayer, videoContainer, videoContainer)
-            console.log('✅ Shaka Player with UI created successfully')
+            // Wait for DOM to be ready, then create UI
+            setTimeout(() => {
+                try {
+                    // Create a container div for the UI
+                    const videoContainer = document.createElement('div')
+                    videoContainer.className = 'shaka-video-container'
+                    video.parentElement.insertBefore(videoContainer, video)
+                    videoContainer.appendChild(video)
+                    
+                    shakaUI = new shaka.ui.Overlay(shakaPlayer, videoContainer, videoContainer)
+                    console.log('✅ Shaka Player with UI created successfully')
+                } catch (uiError) {
+                    console.error('❌ Shaka UI creation failed:', uiError)
+                    console.log('🔄 Continuing with basic player (no custom UI)')
+                }
+            }, 100)
 
             // Construct HLS manifest URL (cache path should point to playlist.m3u8)
             const manifestUrl = cachePath.endsWith('playlist.m3u8') ? cachePath : `${cachePath}/playlist.m3u8`
