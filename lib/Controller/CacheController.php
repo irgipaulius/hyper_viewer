@@ -91,54 +91,6 @@ class CacheController extends Controller {
 		]);
 	}
 
-	/**
-	 * Check cache generation progress
-	 * 
-	 * @NoAdminRequired
-	 */
-	public function getProgress(): JSONResponse {
-		$jobId = $this->request->getParam('jobId');
-		
-		if (!$jobId) {
-			return new JSONResponse(['error' => 'Job ID required'], 400);
-		}
-
-		// For now, simulate completion after some time
-		// In a real implementation, you'd check job status from database
-		$this->logger->info('Progress check requested', ['jobId' => $jobId]);
-		
-		// Simulate job completion after 30 seconds
-		static $jobStartTimes = [];
-		if (!isset($jobStartTimes[$jobId])) {
-			$jobStartTimes[$jobId] = time();
-		}
-		
-		$elapsed = time() - $jobStartTimes[$jobId];
-		
-		if ($elapsed < 10) {
-			return new JSONResponse([
-				'jobId' => $jobId,
-				'progress' => 25,
-				'status' => 'processing',
-				'message' => 'Starting FFmpeg processing...'
-			]);
-		} elseif ($elapsed < 30) {
-			return new JSONResponse([
-				'jobId' => $jobId,
-				'progress' => 75,
-				'status' => 'processing',
-				'message' => 'Generating HLS segments...'
-			]);
-		} else {
-			// Assume completed after 30 seconds
-			return new JSONResponse([
-				'jobId' => $jobId,
-				'progress' => 100,
-				'status' => 'completed',
-				'message' => 'HLS cache generation completed!'
-			]);
-		}
-	}
 
 	/**
 	 * Get real-time progress for HLS generation
