@@ -584,8 +584,10 @@ function loadShakaPlayer(filename, cachePath, context) {
                 }
             }, 100)
 
-            // Construct HLS manifest URL (cache path should point to playlist.m3u8)
-            const manifestUrl = cachePath.endsWith('playlist.m3u8') ? cachePath : `${cachePath}/playlist.m3u8`
+            // Construct HLS manifest URL using our app's HLS serving endpoint
+            // Convert cache path like "/Paulius/.cached_hls/MVI_0079" to proper URL
+            const encodedCachePath = encodeURIComponent(cachePath)
+            const manifestUrl = `/apps/hyper_viewer/hls/${encodedCachePath}/playlist.m3u8`
             console.log('📝 Constructed manifest URL:', manifestUrl)
             
             console.log('⏳ Loading HLS manifest...')

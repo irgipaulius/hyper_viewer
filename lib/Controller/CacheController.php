@@ -6,6 +6,8 @@ namespace OCA\HyperViewer\Controller;
 
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http\JSONResponse;
+use OCP\AppFramework\Http\StreamResponse;
+use OCP\AppFramework\Http\Response;
 use OCP\IRequest;
 use OCP\Files\IRootFolder;
 use OCP\IUserSession;
@@ -198,5 +200,90 @@ class CacheController extends Controller {
 		}
 
 		return null;
+	}
+
+	/**
+	 * Serve HLS files (playlist.m3u8 and segments)
+	 * 
+	 * @NoAdminRequired
+	 * @NoCSRFRequired
+	 */
+	public function serveHlsFile(string $cachePath, string $filename): Response {
+		$user = $this->userSession->getUser();
+		if (!$user) {
+			return new Response('Unauthorized', 401);
+		}
+
+		try {
+			$userFolder = $this->rootFolder->getUserFolder($user->getUID());
+			
+			// Decode the cache path (it might be URL encoded)
+			$decodedCachePath = urldecode($cachePath);
+			$decodedFilename = urldecode($filename);
+			
+			// Construct the full path to the HLS file
+			$fullPath = $decodedCachePath . '/' . $decodedFilename;
+			
+			$this->logger->debug('Serving HLS file', [
+				'cachePath' => $decodedCachePath,
+				'filename' => $decodedFilename,
+				'fullPath' => $fullPath
+			]);
+
+			// Check if the file exists
+			if (!$userFolder->nodeExists($fullPath)) {
+				$this->logger->warning('HLS file not found', ['path' => $fullPath]);
+				return new Response('File not found', 404);
+			}
+
+			$file = $userFolder->get($fullPath);
+			
+			if (!$file instanceof \OCP\Files\File) {
+				return new Response('Not a file', 400);
+			}
+
+			// Determine content type based on file extension
+			$contentType = 'application/octet-stream';
+			$extension = pathinfo($decodedFilename, PATHINFO_EXTENSION);
+			
+			switch (strtolower($extension)) {
+				case 'm3u8':
+					$contentType = 'application/vnd.apple.mpegurl';
+					break;
+				case 'ts':
+					$contentType = 'video/mp2t';
+					break;
+				case 'mp4':
+					$contentType = 'video/mp4';
+					break;
+			}
+
+			// Create stream response
+			$response = new StreamResponse($file->fopen('r'));
+			$response->addHeader('Content-Type', $contentType);
+			$response->addHeader('Content-Length', (string)$file->getSize());
+			
+			// Add CORS headers for HLS playback
+			$response->addHeader('Access-Control-Allow-Origin', '*');
+			$response->addHeader('Access-Control-Allow-Methods', 'GET');
+			$response->addHeader('Access-Control-Allow-Headers', 'Range');
+			
+			// Add caching headers for segments
+			if ($extension === 'ts' || $extension === 'mp4') {
+				$response->addHeader('Cache-Control', 'public, max-age=31536000'); // 1 year
+			} else {
+				$response->addHeader('Cache-Control', 'public, max-age=300'); // 5 minutes for playlists
+			}
+
+			return $response;
+
+		} catch (\Exception $e) {
+			$this->logger->error('Error serving HLS file', [
+				'error' => $e->getMessage(),
+				'cachePath' => $cachePath,
+				'filename' => $filename
+			]);
+			return new Response('Internal server error', 500);
+		}
 	}
 }
