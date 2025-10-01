@@ -8,18 +8,6 @@ import 'shaka-player/dist/controls.css'
 
 console.log('🎬 Hyper Viewer Files integration loading...')
 
-// Try to modify CSP to allow blob URLs for media
-try {
-    // Add meta tag to allow blob URLs for media sources
-    const metaCSP = document.createElement('meta')
-    metaCSP.setAttribute('http-equiv', 'Content-Security-Policy')
-    metaCSP.setAttribute('content', "media-src 'self' blob: data:;")
-    document.head.appendChild(metaCSP)
-    console.log('✅ CSP meta tag added for blob media sources')
-} catch (error) {
-    console.warn('⚠️ Could not modify CSP via meta tag:', error)
-}
-
 // Wait for Files app to be ready
 document.addEventListener('DOMContentLoaded', function() {
 	// Wait a bit more for Files app to fully initialize
