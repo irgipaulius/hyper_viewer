@@ -3,7 +3,8 @@
  * Adds "Generate HLS Cache" action to MOV and MP4 files
  */
 
-import shaka from 'shaka-player'
+import shaka from 'shaka-player/dist/shaka-player.ui.js'
+import 'shaka-player/dist/controls.css'
 
 console.log('🎬 Hyper Viewer Files integration loading...')
 
@@ -505,6 +506,7 @@ function loadShakaPlayer(filename, cachePath, context) {
     // Create unique video ID to avoid conflicts
     const videoId = `hyperVideo_${Date.now()}`
     let shakaPlayer = null
+    let shakaUI = null
 
     // Create modal container
     const modal = document.createElement('div')
@@ -541,6 +543,9 @@ function loadShakaPlayer(filename, cachePath, context) {
 
     // Close button with cleanup
     modal.querySelector('.hyper-viewer-close').onclick = () => {
+        if (shakaUI) {
+            shakaUI.destroy()
+        }
         if (shakaPlayer) {
             shakaPlayer.destroy()
         }
@@ -555,9 +560,12 @@ function loadShakaPlayer(filename, cachePath, context) {
             console.log('🔧 Installing Shaka polyfills...')
             shaka.polyfill.installAll()
             
-            console.log('🎬 Creating Shaka Player instance...')
-            shakaPlayer = new shaka.Player(video)
-            console.log('✅ Shaka Player instance created successfully')
+            console.log('🎬 Creating Shaka Player with UI...')
+            shakaPlayer = new shaka.Player()
+            
+            console.log('🎨 Initializing Shaka UI...')
+            shakaUI = new shaka.ui.Overlay(shakaPlayer, video, video.parentElement)
+            console.log('✅ Shaka Player with UI created successfully')
 
             // Construct HLS manifest URL (cache path should point to playlist.m3u8)
             const manifestUrl = cachePath.endsWith('playlist.m3u8') ? cachePath : `${cachePath}/playlist.m3u8`
