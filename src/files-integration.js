@@ -515,7 +515,7 @@ function loadShakaPlayer(filename, cachePath, context) {
         <div class="hyper-viewer-backdrop"></div>
         <div class="hyper-viewer-content">
             <button class="hyper-viewer-close">×</button>
-            <video id="${videoId}" width="100%" height="auto" controls autoplay></video>
+            <video id="${videoId}" width="100%" height="auto" autoplay></video>
         </div>
         <style>
             .hyper-viewer-modal {
@@ -533,6 +533,9 @@ function loadShakaPlayer(filename, cachePath, context) {
             .hyper-viewer-close {
                 position: absolute; top: 5px; right: 10px; font-size: 20px;
                 background: transparent; border: none; color: white; cursor: pointer;
+            }
+            .shaka-video-container {
+                width: 100%; height: auto; position: relative;
             }
         </style>
     `
@@ -560,11 +563,17 @@ function loadShakaPlayer(filename, cachePath, context) {
             console.log('🔧 Installing Shaka polyfills...')
             shaka.polyfill.installAll()
             
-            console.log('🎬 Creating Shaka Player with UI...')
-            shakaPlayer = new shaka.Player()
+            console.log('🎬 Creating Shaka Player...')
+            shakaPlayer = new shaka.Player(video)
             
             console.log('🎨 Initializing Shaka UI...')
-            shakaUI = new shaka.ui.Overlay(shakaPlayer, video, video.parentElement)
+            // Create a container div for the UI
+            const videoContainer = document.createElement('div')
+            videoContainer.className = 'shaka-video-container'
+            video.parentElement.insertBefore(videoContainer, video)
+            videoContainer.appendChild(video)
+            
+            shakaUI = new shaka.ui.Overlay(shakaPlayer, videoContainer, videoContainer)
             console.log('✅ Shaka Player with UI created successfully')
 
             // Construct HLS manifest URL (cache path should point to playlist.m3u8)
