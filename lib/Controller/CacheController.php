@@ -156,7 +156,7 @@ class CacheController extends Controller {
 	}
 
 	/**
-	 * Parse FFmpeg progress output
+	 * Parse FFmpeg progress output from generation.log
 	 */
 	private function parseFFmpegProgress(string $logContent): array {
 		$lines = explode("\n", $logContent);
@@ -165,21 +165,45 @@ class CacheController extends Controller {
 			'fps' => 0,
 			'speed' => '0x',
 			'time' => '00:00:00',
-			'bitrate' => '0kbits/s',
+			'bitrate' => 'N/A',
 			'size' => '0kB',
+			'completed' => false,
 			'lastUpdate' => time()
 		];
 
-		// Parse the last progress line (FFmpeg outputs progress periodically)
+		// Look for the latest progress line with frame info
 		for ($i = count($lines) - 1; $i >= 0; $i--) {
 			$line = trim($lines[$i]);
-			if (preg_match('/frame=\s*(\d+).*fps=\s*([\d.]+).*speed=\s*([\d.]+x).*time=(\d{2}:\d{2}:\d{2}\.\d{2}).*bitrate=\s*([\d.]+kbits\/s).*size=\s*(\d+kB)/', $line, $matches)) {
-				$progress['frame'] = (int)$matches[1];
-				$progress['fps'] = (float)$matches[2];
-				$progress['speed'] = $matches[3];
-				$progress['time'] = $matches[4];
-				$progress['bitrate'] = $matches[5];
-				$progress['size'] = $matches[6];
+			
+			// Check for completion first
+			if (strpos($line, 'muxing overhead') !== false || 
+				strpos($line, 'kb/s:') !== false) {
+				$progress['completed'] = true;
+				$progress['progress'] = 100;
+				break;
+			}
+			
+			// Parse progress lines like: frame=  847 fps= 24 q=-1.0 Lq=-1.0 q=-1.0 q=-1.0 q=-1.0 size=N/A time=00:00:35.30 bitrate=N/A speed=0.987x
+			if (preg_match('/frame=\s*(\d+)/', $line, $frameMatch) && 
+				preg_match('/fps=\s*([\d.]+)/', $line, $fpsMatch) &&
+				preg_match('/time=(\d{2}:\d{2}:\d{2}\.\d+)/', $line, $timeMatch) &&
+				preg_match('/speed=\s*([\d.]+x)/', $line, $speedMatch)) {
+				
+				$progress['frame'] = (int)$frameMatch[1];
+				$progress['fps'] = (float)$fpsMatch[1];
+				$progress['speed'] = $speedMatch[1];
+				$progress['time'] = substr($timeMatch[1], 0, 8); // Trim to HH:MM:SS
+				
+				// Parse bitrate if available (not always N/A)
+				if (preg_match('/bitrate=\s*([\d.]+kbits\/s)/', $line, $bitrateMatch)) {
+					$progress['bitrate'] = $bitrateMatch[1];
+				}
+				
+				// Parse size if available (not always N/A)
+				if (preg_match('/size=\s*(\d+kB)/', $line, $sizeMatch)) {
+					$progress['size'] = $sizeMatch[1];
+				}
+				
 				break;
 			}
 		}

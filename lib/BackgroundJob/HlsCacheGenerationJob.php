@@ -332,7 +332,7 @@ class HlsCacheGenerationJob extends QueuedJob {
 			'output' => implode("\n", array_slice($output, -5))
 		]);
 
-		// Update progress file to indicate completion
+		// Update progress file to indicate completion (clear any error field)
 		$this->updateProgressFileCompletion($progressFile, true);
 	}
 
@@ -377,11 +377,50 @@ class HlsCacheGenerationJob extends QueuedJob {
 			$progressData['completed'] = $success;
 			$progressData['progress'] = $success ? 100 : $progressData['progress'];
 			$progressData['lastUpdate'] = time();
-			if (!$success && $error) {
-				$progressData['error'] = $error;
+			
+			if ($success) {
+				// Clear error on success
+				$progressData['error'] = null;
+			} else if ($error) {
+				// Sanitize error message - only include actual errors, not FFmpeg version info
+				$sanitizedError = $this->sanitizeErrorMessage($error);
+				$progressData['error'] = $sanitizedError;
 			}
+			
 			file_put_contents($progressFile, json_encode($progressData, JSON_PRETTY_PRINT));
 		}
+	}
+	
+	/**
+	 * Sanitize error message to remove FFmpeg version info and other noise
+	 */
+	private function sanitizeErrorMessage(string $error): string {
+		$lines = explode("\n", $error);
+		$errorLines = [];
+		
+		foreach ($lines as $line) {
+			$line = trim($line);
+			
+			// Skip FFmpeg version/build info
+			if (strpos($line, 'ffmpeg version') === 0 ||
+				strpos($line, 'built with') !== false ||
+				strpos($line, 'configuration:') !== false ||
+				strpos($line, 'lib') === 0 ||
+				empty($line)) {
+				continue;
+			}
+			
+			// Include actual error messages
+			if (strpos($line, 'Error') !== false ||
+				strpos($line, 'error') !== false ||
+				strpos($line, 'failed') !== false ||
+				strpos($line, 'Invalid') !== false ||
+				strpos($line, 'No such file') !== false) {
+				$errorLines[] = $line;
+			}
+		}
+		
+		return empty($errorLines) ? 'Unknown error occurred' : implode("\n", array_slice($errorLines, 0, 5));
 	}
 
 	/**

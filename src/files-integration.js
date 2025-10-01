@@ -3,122 +3,148 @@
  * Adds "Generate HLS Cache" action to MOV and MP4 files
  */
 
-import shaka from 'shaka-player/dist/shaka-player.ui.js'
-import 'shaka-player/dist/controls.css'
+import shaka from "shaka-player/dist/shaka-player.ui.js";
+import "shaka-player/dist/controls.css";
 
-console.log('🎬 Hyper Viewer Files integration loading...')
+console.log("🎬 Hyper Viewer Files integration loading...");
 
 // Wait for Files app to be ready
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener("DOMContentLoaded", function() {
 	// Wait a bit more for Files app to fully initialize
-	setTimeout(initializeFilesIntegration, 1000)
-})
+	setTimeout(initializeFilesIntegration, 1000);
+});
 
 /**
  * Initialize files integration
  */
 function initializeFilesIntegration() {
-	console.log('🔧 Initializing Files integration...')
+	console.log("🔧 Initializing Files integration...");
 
 	// Check if we're in the Files app
 	if (!window.OCA || !window.OCA.Files || !window.OCA.Files.fileActions) {
-		console.log('⚠️ Files app not available, retrying in 2 seconds...')
-		setTimeout(initializeFilesIntegration, 2000)
-		return
+		console.log("⚠️ Files app not available, retrying in 2 seconds...");
+		setTimeout(initializeFilesIntegration, 2000);
+		return;
 	}
 
-	console.log('✅ Files app detected, registering actions...')
+	console.log("✅ Files app detected, registering actions...");
 
 	// Register "Generate HLS Cache" action for MOV files
 	OCA.Files.fileActions.registerAction({
-		name: 'generateHlsCacheMov',
-		displayName: t('hyper_viewer', 'Generate HLS Cache'),
-		mime: 'video/quicktime',
+		name: "generateHlsCacheMov",
+		displayName: t("hyper_viewer", "Generate HLS Cache"),
+		mime: "video/quicktime",
 		permissions: OC.PERMISSION_UPDATE,
-		iconClass: 'icon-category-multimedia',
+		iconClass: "icon-category-multimedia",
 		actionHandler(filename, context) {
-			console.log('🚀 Generate HLS Cache action triggered for MOV:', filename)
-			console.log('📁 Context:', context)
-			openCacheGenerationDialog([{ filename, context }])
-		},
-	})
+			console.log(
+				"🚀 Generate HLS Cache action triggered for MOV:",
+				filename
+			);
+			console.log("📁 Context:", context);
+			openCacheGenerationDialog([{ filename, context }]);
+		}
+	});
 
 	// Register "Play with HLS" action for MOV files (higher priority)
 	OCA.Files.fileActions.registerAction({
-		name: 'playHlsMov',
-		displayName: t('hyper_viewer', 'Play with HLS'),
-		mime: 'video/quicktime',
+		name: "playHlsMov",
+		displayName: t("hyper_viewer", "Play with HLS"),
+		mime: "video/quicktime",
 		permissions: OC.PERMISSION_READ,
-		iconClass: 'icon-play',
+		iconClass: "icon-play",
 		async actionHandler(filename, context) {
-			console.log('🎬 Play with HLS triggered for MOV:', filename)
-			const directory = context?.dir || context?.fileList?.getCurrentDirectory() || '/'
-			await playWithHls(filename, directory, context)
-		},
-	})
+			console.log("🎬 Play with HLS triggered for MOV:", filename);
+			const directory =
+				context?.dir || context?.fileList?.getCurrentDirectory() || "/";
+			await playWithHls(filename, directory, context);
+		}
+	});
 
 	// Register "Generate HLS Cache" action for MP4 files
 	OCA.Files.fileActions.registerAction({
-		name: 'generateHlsCacheMp4',
-		displayName: t('hyper_viewer', 'Generate HLS Cache'),
-		mime: 'video/mp4',
+		name: "generateHlsCacheMp4",
+		displayName: t("hyper_viewer", "Generate HLS Cache"),
+		mime: "video/mp4",
 		permissions: OC.PERMISSION_UPDATE,
-		iconClass: 'icon-category-multimedia',
+		iconClass: "icon-category-multimedia",
 		actionHandler(filename, context) {
-			console.log('🚀 Generate HLS Cache action triggered for MP4:', filename)
-			console.log('📁 Context:', context)
-			openCacheGenerationDialog([{ filename, context }])
-		},
-	})
+			console.log(
+				"🚀 Generate HLS Cache action triggered for MP4:",
+				filename
+			);
+			console.log("📁 Context:", context);
+			openCacheGenerationDialog([{ filename, context }]);
+		}
+	});
 
 	// Register "Play with HLS" action for MP4 files (higher priority)
 	OCA.Files.fileActions.registerAction({
-		name: 'playHlsMp4',
-		displayName: t('hyper_viewer', 'Play with HLS'),
-		mime: 'video/mp4',
+		name: "playHlsMp4",
+		displayName: t("hyper_viewer", "Play with HLS"),
+		mime: "video/mp4",
 		permissions: OC.PERMISSION_READ,
-		iconClass: 'icon-play',
+		iconClass: "icon-play",
 		async actionHandler(filename, context) {
-			console.log('🎬 Play with HLS triggered for MP4:', filename)
-			const directory = context?.dir || context?.fileList?.getCurrentDirectory() || '/'
-			await playWithHls(filename, directory, context)
-		},
-	})
+			console.log("🎬 Play with HLS triggered for MP4:", filename);
+			const directory =
+				context?.dir || context?.fileList?.getCurrentDirectory() || "/";
+			await playWithHls(filename, directory, context);
+		}
+	});
 
 	// Register "Generate HLS Cache" action for directories
 	OCA.Files.fileActions.registerAction({
-		name: 'generateHlsCacheDirectory',
-		displayName: t('hyper_viewer', 'Generate HLS Cache (Directory)'),
-		mime: 'httpd/unix-directory',
+		name: "generateHlsCacheDirectory",
+		displayName: t("hyper_viewer", "Generate HLS Cache (Directory)"),
+		mime: "httpd/unix-directory",
 		permissions: OC.PERMISSION_UPDATE,
-		iconClass: 'icon-category-multimedia',
+		iconClass: "icon-category-multimedia",
 		actionHandler(filename, context) {
-			console.log('🚀 Generate HLS Cache action triggered for directory:', filename)
-			console.log('📁 Context:', context)
-			openDirectoryCacheGenerationDialog(filename, context)
-		},
-	})
+			console.log(
+				"🚀 Generate HLS Cache action triggered for directory:",
+				filename
+			);
+			console.log("📁 Context:", context);
+			openDirectoryCacheGenerationDialog(filename, context);
+		}
+	});
 
 	// Register bulk action for multiple file selection
-	if (OCA.Files && OCA.Files.fileActions && OCA.Files.fileActions.registerAction) {
+	if (
+		OCA.Files &&
+		OCA.Files.fileActions &&
+		OCA.Files.fileActions.registerAction
+	) {
 		// Add to bulk actions menu (appears when multiple files are selected)
-		document.addEventListener('DOMContentLoaded', function() {
+		document.addEventListener("DOMContentLoaded", function() {
 			// Wait for Files app to be fully loaded
 			setTimeout(function() {
 				if (window.FileActions && window.FileActions.register) {
 					// Register bulk action
-					window.FileActions.register('all', 'Generate HLS Cache (Bulk)', OC.PERMISSION_UPDATE, function() {
-						return OC.imagePath('core', 'actions/category-multimedia')
-					}, function(filename) {
-						console.log('🚀 Bulk HLS Cache generation triggered')
-						handleBulkCacheGeneration()
-					})
+					window.FileActions.register(
+						"all",
+						"Generate HLS Cache (Bulk)",
+						OC.PERMISSION_UPDATE,
+						function() {
+							return OC.imagePath(
+								"core",
+								"actions/category-multimedia"
+							);
+						},
+						function(filename) {
+							console.log(
+								"🚀 Bulk HLS Cache generation triggered"
+							);
+							handleBulkCacheGeneration();
+						}
+					);
 				}
-			}, 2000)
-		})
+			}, 2000);
+		});
 	}
 
-	console.log('✅ Hyper Viewer Files integration registered!')
+	console.log("✅ Hyper Viewer Files integration registered!");
 }
 
 /**
@@ -126,31 +152,40 @@ function initializeFilesIntegration() {
  */
 function handleBulkCacheGeneration() {
 	// Get selected files from Files app
-	const selectedFiles = []
+	const selectedFiles = [];
 
 	if (window.FileList && window.FileList.getSelectedFiles) {
-		const selected = window.FileList.getSelectedFiles()
+		const selected = window.FileList.getSelectedFiles();
 		selected.forEach(file => {
 			// Filter for video files only
-			if (file.mimetype === 'video/quicktime' || file.mimetype === 'video/mp4') {
+			if (
+				file.mimetype === "video/quicktime" ||
+				file.mimetype === "video/mp4"
+			) {
 				selectedFiles.push({
 					filename: file.name,
 					context: {
 						dir: window.FileList.getCurrentDirectory(),
-						fileInfoModel: file,
-					},
-				})
+						fileInfoModel: file
+					}
+				});
 			}
-		})
+		});
 	}
 
 	if (selectedFiles.length === 0) {
-		OC.dialogs.alert('No video files selected. Please select MOV or MP4 files.', 'Generate HLS Cache')
-		return
+		OC.dialogs.alert(
+			"No video files selected. Please select MOV or MP4 files.",
+			"Generate HLS Cache"
+		);
+		return;
 	}
 
-	console.log('🎬 Bulk processing files:', selectedFiles.map(f => f.filename))
-	openCacheGenerationDialog(selectedFiles)
+	console.log(
+		"🎬 Bulk processing files:",
+		selectedFiles.map(f => f.filename)
+	);
+	openCacheGenerationDialog(selectedFiles);
 }
 
 /**
@@ -159,9 +194,12 @@ function handleBulkCacheGeneration() {
  * @param files Array of file objects with filename and context
  */
 function openCacheGenerationDialog(files) {
-	console.log('🔧 Opening cache generation dialog for files:', files.map(f => f.filename))
+	console.log(
+		"🔧 Opening cache generation dialog for files:",
+		files.map(f => f.filename)
+	);
 
-	const fileList = files.map(f => f.filename).join(', ')
+	const fileList = files.map(f => f.filename).join(", ");
 
 	// Create modal HTML content with cleaner UI
 	const modalContent = `
@@ -192,24 +230,20 @@ function openCacheGenerationDialog(files) {
 				<label class="section-title">Resolution Renditions</label>
 				<div class="checkbox-group">
 					<label class="checkbox-option">
-						<input type="checkbox" name="resolution" value="1080p">
-						<span>1080p (4000k) - Full HD</span>
-					</label>
-					<label class="checkbox-option">
 						<input type="checkbox" name="resolution" value="720p" checked>
-						<span>720p (2000k) - HD</span>
+						<span>720p - HD</span>
 					</label>
 					<label class="checkbox-option">
 						<input type="checkbox" name="resolution" value="480p" checked>
-						<span>480p (800k) - SD</span>
+						<span>480p - SD</span>
 					</label>
 					<label class="checkbox-option">
 						<input type="checkbox" name="resolution" value="360p">
-						<span>360p (500k) - Low</span>
+						<span>360p - Low</span>
 					</label>
 					<label class="checkbox-option">
 						<input type="checkbox" name="resolution" value="240p" checked>
-						<span>240p (300k) - Mobile</span>
+						<span>240p - Mobile</span>
 					</label>
 				</div>
 			</div>
@@ -288,37 +322,41 @@ function openCacheGenerationDialog(files) {
 			color: #999;
 		}
 		</style>
-	`
+	`;
 
 	// Show modal dialog
 	OC.dialogs.confirmHtml(
 		modalContent,
-		'Generate HLS Cache',
+		"Generate HLS Cache",
 		function(confirmed) {
 			if (confirmed) {
-				startCacheGeneration(files)
+				startCacheGeneration(files);
 			}
 		},
 		true // modal
-	)
+	);
 
 	// Add event listeners after dialog is shown
 	setTimeout(() => {
 		// Handle custom location radio button
-		const customRadio = document.querySelector('input[name="cache_location"][value="custom"]')
-		const customPath = document.getElementById('custom_path')
+		const customRadio = document.querySelector(
+			'input[name="cache_location"][value="custom"]'
+		);
+		const customPath = document.getElementById("custom_path");
 
 		if (customRadio && customPath) {
-			document.querySelectorAll('input[name="cache_location"]').forEach(radio => {
-				radio.addEventListener('change', function() {
-					customPath.disabled = this.value !== 'custom'
-					if (this.value === 'custom') {
-						customPath.focus()
-					}
-				})
-			})
+			document
+				.querySelectorAll('input[name="cache_location"]')
+				.forEach(radio => {
+					radio.addEventListener("change", function() {
+						customPath.disabled = this.value !== "custom";
+						if (this.value === "custom") {
+							customPath.focus();
+						}
+					});
+				});
 		}
-	}, 100)
+	}, 100);
 }
 
 /**
@@ -328,22 +366,32 @@ function openCacheGenerationDialog(files) {
  * @param context Directory context from Files app
  */
 async function openDirectoryCacheGenerationDialog(directoryName, context) {
-	console.log('🔧 Opening directory cache generation dialog for:', directoryName)
+	console.log(
+		"🔧 Opening directory cache generation dialog for:",
+		directoryName
+	);
 
-	const directory = context?.dir || context?.fileList?.getCurrentDirectory() || '/'
-	const fullPath = directory === '/' ? `/${directoryName}` : `${directory}/${directoryName}`
+	const directory =
+		context?.dir || context?.fileList?.getCurrentDirectory() || "/";
+	const fullPath =
+		directory === "/"
+			? `/${directoryName}`
+			: `${directory}/${directoryName}`;
 
 	// Discover video files in directory
-	console.log('🔍 Discovering video files in directory:', fullPath)
-	const videoFiles = await discoverVideoFilesInDirectory(fullPath)
-	
+	console.log("🔍 Discovering video files in directory:", fullPath);
+	const videoFiles = await discoverVideoFilesInDirectory(fullPath);
+
 	if (videoFiles.length === 0) {
-		OC.dialogs.alert('No video files (MOV/MP4) found in this directory.', 'No Videos Found')
-		return
+		OC.dialogs.alert(
+			"No video files (MOV/MP4) found in this directory.",
+			"No Videos Found"
+		);
+		return;
 	}
 
-	const fileList = videoFiles.map(f => f.filename).join(', ')
-	const fileCount = videoFiles.length
+	const fileList = videoFiles.map(f => f.filename).join(", ");
+	const fileCount = videoFiles.length;
 
 	// Create modal HTML content for directory processing
 	const modalContent = `
@@ -486,37 +534,41 @@ async function openDirectoryCacheGenerationDialog(directoryName, context) {
 			color: #999;
 		}
 		</style>
-	`
+	`;
 
 	// Show modal dialog
 	OC.dialogs.confirmHtml(
 		modalContent,
-		'Generate HLS Cache (Directory)',
+		"Generate HLS Cache (Directory)",
 		function(confirmed) {
 			if (confirmed) {
-				startDirectoryCacheGeneration(videoFiles, fullPath)
+				startDirectoryCacheGeneration(videoFiles, fullPath);
 			}
 		},
 		true // modal
-	)
+	);
 
 	// Add event listeners after dialog is shown
 	setTimeout(() => {
 		// Handle custom location radio button
-		const customRadio = document.querySelector('input[name="cache_location"][value="custom"]')
-		const customPath = document.getElementById('custom_path')
+		const customRadio = document.querySelector(
+			'input[name="cache_location"][value="custom"]'
+		);
+		const customPath = document.getElementById("custom_path");
 
 		if (customRadio && customPath) {
-			document.querySelectorAll('input[name="cache_location"]').forEach(radio => {
-				radio.addEventListener('change', function() {
-					customPath.disabled = this.value !== 'custom'
-					if (this.value === 'custom') {
-						customPath.focus()
-					}
-				})
-			})
+			document
+				.querySelectorAll('input[name="cache_location"]')
+				.forEach(radio => {
+					radio.addEventListener("change", function() {
+						customPath.disabled = this.value !== "custom";
+						if (this.value === "custom") {
+							customPath.focus();
+						}
+					});
+				});
 		}
-	}, 100)
+	}, 100);
 }
 
 /**
@@ -527,28 +579,34 @@ async function openDirectoryCacheGenerationDialog(directoryName, context) {
  */
 async function discoverVideoFilesInDirectory(directoryPath) {
 	try {
-		const response = await fetch(OC.generateUrl('/apps/hyper_viewer/cache/discover-videos'), {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-				requesttoken: OC.requestToken,
-			},
-			body: JSON.stringify({
-				directory: directoryPath
-			}),
-		})
+		const response = await fetch(
+			OC.generateUrl("/apps/hyper_viewer/cache/discover-videos"),
+			{
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					requesttoken: OC.requestToken
+				},
+				body: JSON.stringify({
+					directory: directoryPath
+				})
+			}
+		);
 
-		const result = await response.json()
-		
+		const result = await response.json();
+
 		if (result.success) {
-			return result.files || []
+			return result.files || [];
 		} else {
-			throw new Error(result.error || 'Failed to discover video files')
+			throw new Error(result.error || "Failed to discover video files");
 		}
 	} catch (error) {
-		console.error('Failed to discover video files:', error)
-		OC.dialogs.alert(`Failed to scan directory: ${error.message}`, 'Discovery Error')
-		return []
+		console.error("Failed to discover video files:", error);
+		OC.dialogs.alert(
+			`Failed to scan directory: ${error.message}`,
+			"Discovery Error"
+		);
+		return [];
 	}
 }
 
@@ -559,20 +617,28 @@ async function discoverVideoFilesInDirectory(directoryPath) {
  * @param directoryPath Full path to the directory
  */
 async function startDirectoryCacheGeneration(videoFiles, directoryPath) {
-	console.log('Starting directory HLS cache generation for:', directoryPath)
+	console.log("Starting directory HLS cache generation for:", directoryPath);
 
 	// Get selected options (same as regular dialog)
-	const cacheLocation = document.querySelector('input[name="cache_location"]:checked')?.value || 'relative'
-	const customPath = document.getElementById('custom_path')?.value || ''
-	const overwriteExisting = document.getElementById('overwrite_existing')?.checked || false
-	const enableAutoGeneration = document.getElementById('enable_auto_generation')?.checked || false
-	
+	const cacheLocation =
+		document.querySelector('input[name="cache_location"]:checked')?.value ||
+		"relative";
+	const customPath = document.getElementById("custom_path")?.value || "";
+	const overwriteExisting =
+		document.getElementById("overwrite_existing")?.checked || false;
+	const enableAutoGeneration =
+		document.getElementById("enable_auto_generation")?.checked || false;
+
 	// Get selected resolutions
-	const selectedResolutions = Array.from(document.querySelectorAll('input[name="resolution"]:checked'))
-		.map(checkbox => checkbox.value)
-	
+	const selectedResolutions = Array.from(
+		document.querySelectorAll('input[name="resolution"]:checked')
+	).map(checkbox => checkbox.value);
+
 	// Default to 720p, 480p, 240p if none selected
-	const resolutions = selectedResolutions.length > 0 ? selectedResolutions : ['720p', '480p', '240p']
+	const resolutions =
+		selectedResolutions.length > 0
+			? selectedResolutions
+			: ["720p", "480p", "240p"];
 
 	const options = {
 		cacheLocation,
@@ -581,22 +647,24 @@ async function startDirectoryCacheGeneration(videoFiles, directoryPath) {
 		resolutions,
 		enableAutoGeneration,
 		directoryPath
-	}
+	};
 
-	console.log('Directory cache generation options:', options)
+	console.log("Directory cache generation options:", options);
 
 	try {
 		// Start cache generation for all discovered files
-		await startCacheGeneration(videoFiles)
+		await startCacheGeneration(videoFiles);
 
 		// If auto-generation is enabled, register the directory for monitoring
 		if (enableAutoGeneration) {
-			await registerDirectoryForAutoGeneration(directoryPath, options)
+			await registerDirectoryForAutoGeneration(directoryPath, options);
 		}
-
 	} catch (error) {
-		console.error('Failed to start directory cache generation:', error)
-		OC.dialogs.alert(`Failed to start directory processing: ${error.message}`, 'Processing Error')
+		console.error("Failed to start directory cache generation:", error);
+		OC.dialogs.alert(
+			`Failed to start directory processing: ${error.message}`,
+			"Processing Error"
+		);
 	}
 }
 
@@ -608,32 +676,44 @@ async function startDirectoryCacheGeneration(videoFiles, directoryPath) {
  */
 async function registerDirectoryForAutoGeneration(directoryPath, options) {
 	try {
-		const response = await fetch(OC.generateUrl('/apps/hyper_viewer/cache/register-auto-generation'), {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-				requesttoken: OC.requestToken,
-			},
-			body: JSON.stringify({
-				directory: directoryPath,
-				options
-			}),
-		})
+		const response = await fetch(
+			OC.generateUrl("/apps/hyper_viewer/cache/register-auto-generation"),
+			{
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					requesttoken: OC.requestToken
+				},
+				body: JSON.stringify({
+					directory: directoryPath,
+					options
+				})
+			}
+		);
 
-		const result = await response.json()
-		
+		const result = await response.json();
+
 		if (result.success) {
-			console.log('Directory registered for auto-generation:', directoryPath)
+			console.log(
+				"Directory registered for auto-generation:",
+				directoryPath
+			);
 			OC.dialogs.info(
 				`Directory "${directoryPath}" has been registered for automatic HLS generation.\n\nNew video files added to this directory will automatically have HLS cache generated.`,
-				'Auto-Generation Enabled'
-			)
+				"Auto-Generation Enabled"
+			);
 		} else {
-			throw new Error(result.error || 'Failed to register directory')
+			throw new Error(result.error || "Failed to register directory");
 		}
 	} catch (error) {
-		console.error('Failed to register directory for auto-generation:', error)
-		OC.dialogs.alert(`Failed to enable auto-generation: ${error.message}`, 'Auto-Generation Error')
+		console.error(
+			"Failed to register directory for auto-generation:",
+			error
+		);
+		OC.dialogs.alert(
+			`Failed to enable auto-generation: ${error.message}`,
+			"Auto-Generation Error"
+		);
 	}
 }
 
@@ -643,87 +723,111 @@ async function registerDirectoryForAutoGeneration(directoryPath, options) {
  * @param files Array of file objects
  */
 async function startCacheGeneration(files) {
-	console.log('Starting HLS cache generation for:', files.map(f => f.filename))
+	console.log(
+		"Starting HLS cache generation for:",
+		files.map(f => f.filename)
+	);
 
 	// Get selected options
-	const cacheLocation = document.querySelector('input[name="cache_location"]:checked')?.value || 'relative'
-	const customPath = document.getElementById('custom_path')?.value || ''
-	const overwriteExisting = document.getElementById('overwrite_existing')?.checked || false
-	
+	const cacheLocation =
+		document.querySelector('input[name="cache_location"]:checked')?.value ||
+		"relative";
+	const customPath = document.getElementById("custom_path")?.value || "";
+	const overwriteExisting =
+		document.getElementById("overwrite_existing")?.checked || false;
+
 	// Get selected resolutions
-	const selectedResolutions = Array.from(document.querySelectorAll('input[name="resolution"]:checked'))
-		.map(checkbox => checkbox.value)
-	
+	const selectedResolutions = Array.from(
+		document.querySelectorAll('input[name="resolution"]:checked')
+	).map(checkbox => checkbox.value);
+
 	// Default to 720p, 480p, 240p if none selected
-	const resolutions = selectedResolutions.length > 0 ? selectedResolutions : ['720p', '480p', '240p']
+	const resolutions =
+		selectedResolutions.length > 0
+			? selectedResolutions
+			: ["720p", "480p", "240p"];
 
 	const options = {
 		cacheLocation,
 		customPath,
 		overwriteExisting,
-		resolutions,
-	}
+		resolutions
+	};
 
-	console.log('Cache generation options:', options)
+	console.log("Cache generation options:", options);
 
 	// Prepare files data for backend
 	const filesData = files.map(file => ({
 		filename: file.filename,
-		directory: file.context?.dir || file.context?.fileList?.getCurrentDirectory() || '/',
-	}))
+		directory:
+			file.context?.dir ||
+			file.context?.fileList?.getCurrentDirectory() ||
+			"/"
+	}));
 
 	try {
 		// Show appropriate progress interface
 		if (files.length === 1) {
 			// Single file: show sophisticated real-time progress modal
-			const file = files[0]
-			const directory = file.context?.dir || file.context?.fileList?.getCurrentDirectory() || '/'
-			showProgressModal(file.filename, directory)
+			const file = files[0];
+			const directory =
+				file.context?.dir ||
+				file.context?.fileList?.getCurrentDirectory() ||
+				"/";
+			showProgressModal(file.filename, directory);
 		} else {
 			// Multiple files: show simple progress dialog
-			showProgressDialog(files.length)
+			showProgressDialog(files.length);
 		}
 
 		// Send to backend for processing
-		const response = await fetch(OC.generateUrl('/apps/hyper_viewer/cache/generate'), {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-				requesttoken: OC.requestToken,
-			},
-			body: JSON.stringify({
-				files: filesData,
-				cacheLocation: options.cacheLocation,
-				customPath: options.customPath,
-				overwriteExisting: options.overwriteExisting,
-				resolutions: options.resolutions,
-			}),
-		})
+		const response = await fetch(
+			OC.generateUrl("/apps/hyper_viewer/cache/generate"),
+			{
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					requesttoken: OC.requestToken
+				},
+				body: JSON.stringify({
+					files: filesData,
+					cacheLocation: options.cacheLocation,
+					customPath: options.customPath,
+					overwriteExisting: options.overwriteExisting,
+					resolutions: options.resolutions
+				})
+			}
+		);
 
-		const result = await response.json()
+		const result = await response.json();
 
 		if (result.success) {
-			console.log('HLS cache generation started successfully', result)
+			console.log("HLS cache generation started successfully", result);
 
 			// Start progress tracking
 			if (result.jobId) {
-				console.log(`📈 Tracking progress for job: ${result.jobId}`)
+				console.log(`📈 Tracking progress for job: ${result.jobId}`);
 			}
 
 			OC.dialogs.info(
-				`Cache generation started for ${files.length} file(s).\n\nLocation: ${getCacheLocationDescription(options)}\n\nResolutions: ${options.resolutions.join(', ')}\n\nProcessing will run in the background.`,
-				'HLS Cache Generation Started'
-			)
+				`Cache generation started for ${
+					files.length
+				} file(s).\n\nLocation: ${getCacheLocationDescription(
+					options
+				)}\n\nResolutions: ${options.resolutions.join(
+					", "
+				)}\n\nProcessing will run in the background.`,
+				"HLS Cache Generation Started"
+			);
 		} else {
-			throw new Error(result.error || 'Unknown error occurred')
+			throw new Error(result.error || "Unknown error occurred");
 		}
-
 	} catch (error) {
-		console.error('Failed to start HLS cache generation:', error)
+		console.error("Failed to start HLS cache generation:", error);
 		OC.dialogs.alert(
 			`Failed to start cache generation: ${error.message}`,
-			'Error'
-		)
+			"Error"
+		);
 	}
 }
 
@@ -735,14 +839,14 @@ async function startCacheGeneration(files) {
  */
 function getCacheLocationDescription(options) {
 	switch (options.cacheLocation) {
-	case 'relative':
-		return 'Next to each video file (.cached_hls/)'
-	case 'home':
-		return 'User home directory (~/.cached_hls/)'
-	case 'custom':
-		return options.customPath || 'Custom location'
-	default:
-		return 'Unknown location'
+		case "relative":
+			return "Next to each video file (.cached_hls/)";
+		case "home":
+			return "User home directory (~/.cached_hls/)";
+		case "custom":
+			return options.customPath || "Custom location";
+		default:
+			return "Unknown location";
 	}
 }
 
@@ -752,21 +856,23 @@ function getCacheLocationDescription(options) {
  * @param fileCount
  */
 function showProgressDialog(fileCount) {
-	console.log(`📊 Starting progress tracking for ${fileCount} files`)
-	
+	console.log(`📊 Starting progress tracking for ${fileCount} files`);
+
 	// Create progress modal
-	const modal = document.createElement('div')
-	modal.className = 'hyper-viewer-progress-modal'
+	const modal = document.createElement("div");
+	modal.className = "hyper-viewer-progress-modal";
 	modal.style.cssText = `
 		position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 10000;
 		background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center;
 		padding: 20px; box-sizing: border-box;
-	`
-	
+	`;
+
 	modal.innerHTML = `
 		<div style="background: #1a1a1a; border-radius: 12px; padding: 24px; max-width: 500px; width: 100%; color: white;">
 			<h3 style="margin: 0 0 16px 0; color: #fff;">HLS Generation Progress</h3>
-			<p style="margin: 0 0 20px 0; color: #ccc;">Processing ${fileCount} file${fileCount > 1 ? 's' : ''}...</p>
+			<p style="margin: 0 0 20px 0; color: #ccc;">Processing ${fileCount} file${
+		fileCount > 1 ? "s" : ""
+	}...</p>
 			<div style="background: #333; border-radius: 8px; height: 8px; overflow: hidden; margin-bottom: 16px;">
 				<div class="progress-bar" style="background: linear-gradient(90deg, #4a9eff, #0066cc); height: 100%; width: 0%; transition: width 0.3s ease;"></div>
 			</div>
@@ -775,35 +881,35 @@ function showProgressDialog(fileCount) {
 				margin-top: 20px; padding: 8px 16px; background: #333; border: none; color: white; 
 				border-radius: 6px; cursor: pointer; float: right;">Close</button>
 		</div>
-	`
-	
-	document.body.appendChild(modal)
-	
+	`;
+
+	document.body.appendChild(modal);
+
 	// Auto-close after 30 seconds if still showing
 	setTimeout(() => {
 		if (modal.parentNode) {
-			modal.remove()
+			modal.remove();
 		}
-	}, 30000)
+	}, 30000);
 }
 
 /**
  * Show progress modal for HLS generation
  */
 function showProgressModal(filename, directory) {
-	console.log(`📈 Showing progress modal for: ${filename}`)
+	console.log(`📈 Showing progress modal for: ${filename}`);
 
 	// Create unique modal ID
-	const modalId = `progressModal_${Date.now()}`
-	
+	const modalId = `progressModal_${Date.now()}`;
+
 	// Create modal container
-	const modal = document.createElement('div')
-	modal.id = modalId
-	modal.className = 'hyper-viewer-progress-modal'
-	modal.setAttribute('role', 'dialog')
-	modal.setAttribute('aria-modal', 'true')
-	modal.setAttribute('aria-labelledby', 'progress-title')
-	
+	const modal = document.createElement("div");
+	modal.id = modalId;
+	modal.className = "hyper-viewer-progress-modal";
+	modal.setAttribute("role", "dialog");
+	modal.setAttribute("aria-modal", "true");
+	modal.setAttribute("aria-labelledby", "progress-title");
+
 	modal.innerHTML = `
 		<div class="hyper-viewer-overlay"></div>
 		<div class="hyper-viewer-progress-container">
@@ -992,176 +1098,194 @@ function showProgressModal(filename, directory) {
 				color: #ff6b6b;
 			}
 		</style>
-	`
-	
+	`;
+
 	// Add modal to DOM
-	document.body.appendChild(modal)
-	
+	document.body.appendChild(modal);
+
 	// Prevent body scroll
-	document.body.style.overflow = 'hidden'
-	
+	document.body.style.overflow = "hidden";
+
 	// Show modal with animation
 	requestAnimationFrame(() => {
-		modal.classList.add('show')
-	})
+		modal.classList.add("show");
+	});
 
 	// Close functionality
 	const closeModal = () => {
-		modal.classList.remove('show')
+		modal.classList.remove("show");
 		setTimeout(() => {
-			document.body.style.overflow = ''
+			document.body.style.overflow = "";
 			if (modal.parentNode) {
-				modal.parentNode.removeChild(modal)
+				modal.parentNode.removeChild(modal);
 			}
-		}, 300)
-	}
+		}, 300);
+	};
 
-	modal.querySelector('.hyper-viewer-close').addEventListener('click', closeModal)
-	modal.querySelector('.hyper-viewer-overlay').addEventListener('click', closeModal)
+	modal
+		.querySelector(".hyper-viewer-close")
+		.addEventListener("click", closeModal);
+	modal
+		.querySelector(".hyper-viewer-overlay")
+		.addEventListener("click", closeModal);
 
 	// Start progress polling
-	startProgressPolling(filename, directory, modal)
+	startProgressPolling(filename, directory, modal);
 }
 
 /**
  * Start polling for progress updates
  */
 function startProgressPolling(filename, directory, modal) {
-	const baseFilename = filename.replace(/\.[^/.]+$/, '') // Remove extension
-	const cachePath = directory === '/' ? `/.cached_hls/${baseFilename}` : `${directory}/.cached_hls/${baseFilename}`
-	
-	console.log(`🔍 Starting progress polling for: ${filename}`)
-	console.log(`📁 Directory: ${directory}`)
-	console.log(`📂 Cache path: ${cachePath}`)
-	
-	let pollCount = 0
-	const maxPolls = 360 // 30 minutes max (polling every 5 seconds)
-	
+	const baseFilename = filename.replace(/\.[^/.]+$/, ""); // Remove extension
+	const cachePath =
+		directory === "/"
+			? `/.cached_hls/${baseFilename}`
+			: `${directory}/.cached_hls/${baseFilename}`;
+
+	console.log(`🔍 Starting progress polling for: ${filename}`);
+	console.log(`📁 Directory: ${directory}`);
+	console.log(`📂 Cache path: ${cachePath}`);
+
+	let pollCount = 0;
+	const maxPolls = 360; // 30 minutes max (polling every 5 seconds)
+
 	// Start countdown timer for cron processing
-	startCronCountdown(modal)
-	
+	startCronCountdown(modal);
+
 	const poll = async () => {
 		try {
-			pollCount++
-			console.log(`📊 Progress poll ${pollCount}/${maxPolls} for: ${filename}`)
+			pollCount++;
+			console.log(
+				`📊 Progress poll ${pollCount}/${maxPolls} for: ${filename}`
+			);
 
-			const encodedCachePath = encodeURIComponent(cachePath)
-			const progressUrl = OC.generateUrl(`/apps/hyper_viewer/cache/progress/${encodedCachePath}`)
-			console.log(`🌐 Polling URL: ${progressUrl}`)
-			
-			const response = await fetch(progressUrl)
-			const result = await response.json()
-			
-			console.log(`📈 Progress response:`, result)
+			const encodedCachePath = encodeURIComponent(cachePath);
+			const progressUrl = OC.generateUrl(
+				`/apps/hyper_viewer/cache/progress/${encodedCachePath}`
+			);
+			console.log(`🌐 Polling URL: ${progressUrl}`);
+
+			const response = await fetch(progressUrl);
+			const result = await response.json();
+
+			console.log(`📈 Progress response:`, result);
 
 			if (result.success && result.progress) {
-				updateProgressModal(modal, result.progress)
-				
-				if (result.progress.status === 'completed') {
-					console.log(`✅ HLS generation completed for: ${filename}`)
+				updateProgressModal(modal, result.progress);
+
+				if (result.progress.status === "completed") {
+					console.log(`✅ HLS generation completed for: ${filename}`);
 					setTimeout(() => {
-						modal.querySelector('.hyper-viewer-close').click()
-					}, 2000) // Auto-close after 2 seconds
-					return
-				} else if (result.progress.status === 'failed') {
-					console.error(`❌ HLS generation failed for: ${filename}`)
-					updateProgressModal(modal, { ...result.progress, status: 'Error: Generation failed' })
-					return
+						modal.querySelector(".hyper-viewer-close").click();
+					}, 2000); // Auto-close after 2 seconds
+					return;
+				} else if (result.progress.status === "failed") {
+					console.error(`❌ HLS generation failed for: ${filename}`);
+					updateProgressModal(modal, {
+						...result.progress,
+						status: "Error: Generation failed"
+					});
+					return;
 				}
 			}
 
 			// Continue polling if not completed and within limits
 			if (pollCount < maxPolls && modal.parentNode) {
-				setTimeout(poll, 5000) // Poll every 5 seconds
+				setTimeout(poll, 5000); // Poll every 5 seconds
 			}
-
 		} catch (error) {
-			console.error('❌ Progress polling error:', error)
-			
+			console.error("❌ Progress polling error:", error);
+
 			// Update modal to show error state
 			if (modal.parentNode) {
-				const statusElement = modal.querySelector('.progress-status')
+				const statusElement = modal.querySelector(".progress-status");
 				if (statusElement) {
-					statusElement.textContent = `Polling error: ${error.message}`
+					statusElement.textContent = `Polling error: ${error.message}`;
 				}
 			}
-			
+
 			if (pollCount < maxPolls && modal.parentNode) {
-				setTimeout(poll, 5000) // Retry on error
+				setTimeout(poll, 5000); // Retry on error
 			}
 		}
-	}
+	};
 
 	// Start polling after a short delay
-	setTimeout(poll, 2000)
+	setTimeout(poll, 2000);
 }
 
 /**
  * Start countdown timer showing time until next cron execution
  */
 function startCronCountdown(modal) {
-	const statusElement = modal.querySelector('.progress-status')
-	if (!statusElement) return
-	
+	const statusElement = modal.querySelector(".progress-status");
+	if (!statusElement) return;
+
 	const updateCountdown = () => {
-		const now = new Date()
-		const minutes = now.getMinutes()
-		const seconds = now.getSeconds()
-		
+		const now = new Date();
+		const minutes = now.getMinutes();
+		const seconds = now.getSeconds();
+
 		// Calculate seconds until next 5-minute mark (0, 5, 10, 15, etc.)
-		const nextCronMinute = Math.ceil(minutes / 5) * 5
-		const minutesUntilCron = (nextCronMinute - minutes) % 5
-		const secondsUntilCron = minutesUntilCron * 60 - seconds
-		
+		const nextCronMinute = Math.ceil(minutes / 5) * 5;
+		const minutesUntilCron = (nextCronMinute - minutes) % 5;
+		const secondsUntilCron = minutesUntilCron * 60 - seconds;
+
 		if (secondsUntilCron > 0) {
-			const mins = Math.floor(secondsUntilCron / 60)
-			const secs = secondsUntilCron % 60
-			statusElement.textContent = `Waiting for processing to start... ${mins}:${secs.toString().padStart(2, '0')}`
-			setTimeout(updateCountdown, 1000)
+			const mins = Math.floor(secondsUntilCron / 60);
+			const secs = secondsUntilCron % 60;
+			statusElement.textContent = `Waiting for processing to start... ${mins}:${secs
+				.toString()
+				.padStart(2, "0")}`;
+			setTimeout(updateCountdown, 1000);
 		} else {
-			statusElement.textContent = 'Processing should start soon...'
+			statusElement.textContent = "Processing should start soon...";
 		}
-	}
-	
-	updateCountdown()
+	};
+
+	updateCountdown();
 }
 
 /**
  * Update progress modal with latest data
  */
 function updateProgressModal(modal, progress) {
-	const progressBar = modal.querySelector('.progress-bar-fill')
-	const progressPercentage = modal.querySelector('.progress-percentage')
-	const progressStatus = modal.querySelector('.progress-status')
-	const progressSpeed = modal.querySelector('.progress-speed')
-	const progressTime = modal.querySelector('.progress-time')
-	const progressFps = modal.querySelector('.progress-fps')
-	const spinner = modal.querySelector('.progress-spinner')
+	const progressBar = modal.querySelector(".progress-bar-fill");
+	const progressPercentage = modal.querySelector(".progress-percentage");
+	const progressStatus = modal.querySelector(".progress-status");
+	const progressSpeed = modal.querySelector(".progress-speed");
+	const progressTime = modal.querySelector(".progress-time");
+	const progressFps = modal.querySelector(".progress-fps");
+	const spinner = modal.querySelector(".progress-spinner");
 
 	// Calculate progress percentage (rough estimate based on time)
-	let percentage = progress.progress || 0
-	if (progress.time && progress.time !== '00:00:00') {
+	let percentage = progress.progress || 0;
+	if (progress.time && progress.time !== "00:00:00") {
 		// Rough estimation - this could be improved with video duration
-		const timeMatch = progress.time.match(/(\d{2}):(\d{2}):(\d{2})/)
+		const timeMatch = progress.time.match(/(\d{2}):(\d{2}):(\d{2})/);
 		if (timeMatch) {
-			const totalSeconds = parseInt(timeMatch[1]) * 3600 + parseInt(timeMatch[2]) * 60 + parseInt(timeMatch[3])
+			const totalSeconds =
+				parseInt(timeMatch[1]) * 3600 +
+				parseInt(timeMatch[2]) * 60 +
+				parseInt(timeMatch[3]);
 			// Assume average video is 3 minutes (180 seconds) for rough percentage
-			percentage = Math.min(Math.round((totalSeconds / 180) * 100), 99)
+			percentage = Math.min(Math.round((totalSeconds / 180) * 100), 99);
 		}
 	}
 
-	if (progress.status === 'completed') {
-		percentage = 100
-		spinner.style.display = 'none'
+	if (progress.status === "completed") {
+		percentage = 100;
+		spinner.style.display = "none";
 	}
 
 	// Update UI elements
-	progressBar.style.width = `${percentage}%`
-	progressPercentage.textContent = `${percentage}%`
-	progressStatus.textContent = progress.status || 'Processing...'
-	progressSpeed.textContent = `Speed: ${progress.speed || '0x'}`
-	progressTime.textContent = `Time: ${progress.time || '00:00:00'}`
-	progressFps.textContent = `FPS: ${progress.fps || 0}`
+	progressBar.style.width = `${percentage}%`;
+	progressPercentage.textContent = `${percentage}%`;
+	progressStatus.textContent = progress.status || "Processing...";
+	progressSpeed.textContent = `Speed: ${progress.speed || "0x"}`;
+	progressTime.textContent = `Time: ${progress.time || "00:00:00"}`;
+	progressFps.textContent = `FPS: ${progress.fps || 0}`;
 }
 
 /**
@@ -1172,24 +1296,26 @@ function updateProgressModal(modal, progress) {
  */
 async function checkHlsCache(filename, directory) {
 	try {
-		const response = await fetch(OC.generateUrl('/apps/hyper_viewer/cache/check'), {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-				requesttoken: OC.requestToken,
-			},
-			body: JSON.stringify({
-				filename,
-				directory,
-			}),
-		})
+		const response = await fetch(
+			OC.generateUrl("/apps/hyper_viewer/cache/check"),
+			{
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					requesttoken: OC.requestToken
+				},
+				body: JSON.stringify({
+					filename,
+					directory
+				})
+			}
+		);
 
-		const result = await response.json()
-		return result.exists ? result.cachePath : null
-
+		const result = await response.json();
+		return result.exists ? result.cachePath : null;
 	} catch (error) {
-		console.error('Failed to check HLS cache:', error)
-		return null
+		console.error("Failed to check HLS cache:", error);
+		return null;
 	}
 }
 
@@ -1201,35 +1327,38 @@ async function checkHlsCache(filename, directory) {
  * @param context
  */
 async function playWithHls(filename, directory, context) {
-	console.log(`🎬 Checking HLS cache for: ${filename}`)
+	console.log(`🎬 Checking HLS cache for: ${filename}`);
 
 	try {
 		// Check if HLS cache exists
-		const cachePath = await checkHlsCache(filename, directory)
+		const cachePath = await checkHlsCache(filename, directory);
 
 		if (cachePath) {
-			console.log(`✅ HLS cache found at: ${cachePath}`)
+			console.log(`✅ HLS cache found at: ${cachePath}`);
 			// Load Shaka Player with HLS
-			loadShakaPlayer(filename, cachePath, context)
+			loadShakaPlayer(filename, cachePath, context);
 		} else {
-			console.log(`❌ No HLS cache found for: ${filename}`)
+			console.log(`❌ No HLS cache found for: ${filename}`);
 			// Fallback to regular video player or show message
 			OC.dialogs.confirm(
 				`No HLS cache found for "${filename}".\n\nWould you like to generate HLS cache now?`,
-				'HLS Cache Not Found',
+				"HLS Cache Not Found",
 				function(confirmed) {
 					if (confirmed) {
-						openCacheGenerationDialog([{ filename, context }])
+						openCacheGenerationDialog([{ filename, context }]);
 					} else {
 						// Let default video player handle it
-						console.log('🎥 Falling back to default video player')
+						console.log("🎥 Falling back to default video player");
 					}
 				}
-			)
+			);
 		}
 	} catch (error) {
-		console.error('Error checking HLS cache:', error)
-		OC.dialogs.alert('Failed to check HLS cache. Using default video player.', 'Error')
+		console.error("Error checking HLS cache:", error);
+		OC.dialogs.alert(
+			"Failed to check HLS cache. Using default video player.",
+			"Error"
+		);
 	}
 }
 
@@ -1240,17 +1369,17 @@ async function playWithHls(filename, directory, context) {
  * @param {object} context - File context
  */
 function loadShakaPlayer(filename, cachePath, context) {
-    const videoId = `hyperVideo_${Date.now()}`
-    
-    // Create simple modal
-    const modal = document.createElement('div')
-    modal.style.cssText = `
+	const videoId = `hyperVideo_${Date.now()}`;
+
+	// Create simple modal
+	const modal = document.createElement("div");
+	modal.style.cssText = `
         position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 10000;
         background: rgba(0,0,0,0.9); display: flex; align-items: center; justify-content: center;
         padding: 20px; box-sizing: border-box;
-    `
-    
-    modal.innerHTML = `
+    `;
+
+	modal.innerHTML = `
         <video id="${videoId}" autoplay style="
             width: min(90vw, 1200px); height: min(80vh, 675px); 
             object-fit: contain; background: #000; border-radius: 8px;
@@ -1259,48 +1388,52 @@ function loadShakaPlayer(filename, cachePath, context) {
             position: absolute; top: 20px; right: 20px; background: rgba(0,0,0,0.7); 
             border: none; color: white; width: 40px; height: 40px; border-radius: 50%; 
             font-size: 18px; cursor: pointer; z-index: 10001;">✕</button>
-    `
-    
-    const closeModal = () => {
-        modal.remove()
-        document.body.style.overflow = ''
-        document.removeEventListener('keydown', handleKeydown)
-    }
-    
-    const handleKeydown = (e) => {
-        if (e.key === 'Escape' || e.key === 'Backspace') {
-            closeModal()
-        }
-    }
-    
-    modal.onclick = (e) => {
-        if (e.target === modal) {
-            closeModal()
-        }
-    }
-    
-    document.body.appendChild(modal)
-    document.body.style.overflow = 'hidden'
-    document.addEventListener('keydown', handleKeydown)
-    
-    const video = document.getElementById(videoId)
-    
-    // Add close button event listener
-    modal.querySelector('.close-btn').addEventListener('click', closeModal)
-    
-    // Initialize Shaka Player
-    shaka.polyfill.installAll()
-    
-    if (shaka.Player.isBrowserSupported()) {
-        const player = new shaka.Player(video)
-        const ui = new shaka.ui.Overlay(player, video.parentElement, video) // eslint-disable-line no-unused-vars
-        
-        // Build manifest URL
-        const encodedCachePath = encodeURIComponent(cachePath)
-        const masterUrl = `${OC.generateUrl('/apps/hyper_viewer/hls')}/${encodedCachePath}/master.m3u8`
-        const playlistUrl = `${OC.generateUrl('/apps/hyper_viewer/hls')}/${encodedCachePath}/playlist.m3u8`
-        
-        // Try master.m3u8 first, fallback to playlist.m3u8
-        player.load(masterUrl).catch(() => player.load(playlistUrl))
-    }
+    `;
+
+	const closeModal = () => {
+		modal.remove();
+		document.body.style.overflow = "";
+		document.removeEventListener("keydown", handleKeydown);
+	};
+
+	const handleKeydown = e => {
+		if (e.key === "Escape" || e.key === "Backspace") {
+			closeModal();
+		}
+	};
+
+	modal.onclick = e => {
+		if (e.target === modal) {
+			closeModal();
+		}
+	};
+
+	document.body.appendChild(modal);
+	document.body.style.overflow = "hidden";
+	document.addEventListener("keydown", handleKeydown);
+
+	const video = document.getElementById(videoId);
+
+	// Add close button event listener
+	modal.querySelector(".close-btn").addEventListener("click", closeModal);
+
+	// Initialize Shaka Player
+	shaka.polyfill.installAll();
+
+	if (shaka.Player.isBrowserSupported()) {
+		const player = new shaka.Player(video);
+		const ui = new shaka.ui.Overlay(player, video.parentElement, video); // eslint-disable-line no-unused-vars
+
+		// Build manifest URL
+		const encodedCachePath = encodeURIComponent(cachePath);
+		const masterUrl = `${OC.generateUrl(
+			"/apps/hyper_viewer/hls"
+		)}/${encodedCachePath}/master.m3u8`;
+		const playlistUrl = `${OC.generateUrl(
+			"/apps/hyper_viewer/hls"
+		)}/${encodedCachePath}/playlist.m3u8`;
+
+		// Try master.m3u8 first, fallback to playlist.m3u8
+		player.load(masterUrl).catch(() => player.load(playlistUrl));
+	}
 }
