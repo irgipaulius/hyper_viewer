@@ -29,6 +29,7 @@ use OCP\IRequest;
 use OCP\AppFramework\Http\TemplateResponse;
 use OCP\AppFramework\Controller;
 use OCP\Util;
+use OCP\AppFramework\Http\ContentSecurityPolicy;
 
 class PageController extends Controller {
 	protected $appName;
@@ -47,6 +48,31 @@ class PageController extends Controller {
 		Util::addStyle($this->appName, 'icons');
 
 		$response = new TemplateResponse($this->appName, 'main');
+		
+		// Set CSP policy to allow blob URLs for media (needed for Shaka Player)
+		$csp = new ContentSecurityPolicy();
+		$csp->addAllowedMediaDomain('blob:');
+		$response->setContentSecurityPolicy($csp);
+		
+		return $response;
+	}
+
+	/**
+	 * Files integration endpoint with relaxed CSP for blob URLs
+	 * 
+	 * @NoAdminRequired
+	 * @NoCSRFRequired
+	 */
+	public function filesIntegration() {
+		// Load files integration script
+		Util::addInitScript($this->appName, 'files-integration');
+		
+		// Create response with relaxed CSP for media blob URLs
+		$response = new TemplateResponse($this->appName, 'empty');
+		$csp = new ContentSecurityPolicy();
+		$csp->addAllowedMediaDomain('blob:');
+		$response->setContentSecurityPolicy($csp);
+		
 		return $response;
 	}
 
