@@ -1182,7 +1182,9 @@ function loadShakaPlayer(filename, cachePath, context) {
     const video = document.getElementById(videoId)
     
     // Initialize Shaka Player
-    if (window.shaka) {
+    shaka.polyfill.installAll()
+    
+    if (shaka.Player.isBrowserSupported()) {
         const player = new shaka.Player(video)
         const ui = new shaka.ui.Overlay(player, video.parentElement, video) // eslint-disable-line no-unused-vars
         
