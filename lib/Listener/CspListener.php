@@ -3,13 +3,12 @@ declare(strict_types=1);
 
 namespace OCA\HyperViewer\Listener;
 
-use OCP\AppFramework\Http\ContentSecurityPolicy;
+use OCP\AppFramework\Http\EmptyContentSecurityPolicy;
 use OCP\AppFramework\Http\Events\AddContentSecurityPolicyEvent;
 use OCP\EventDispatcher\IEventListener;
 
 /**
- * Appends blob: allowances so MSE players (Shaka) can attach blob media/worker URLs.
- * This runs for pages rendered by other apps too (e.g. Files / Viewer).
+ * Append blob: support for MSE / Shaka
  */
 class CspListener implements IEventListener {
 	public function handle($event): void {
@@ -17,25 +16,27 @@ class CspListener implements IEventListener {
 			return;
 		}
 
-		$policy = new ContentSecurityPolicy();
+		$policy = new EmptyContentSecurityPolicy();
 
-		// Let <video> use blob: sources (MSE)
+		// ✅ Explicitly allow blob: for media
 		$policy->addAllowedMediaDomain("'self'");
 		$policy->addAllowedMediaDomain("blob:");
 
-		// Allow scripts/workers from blob: (Shaka’s MSE bits)
+		// ✅ Scripts (for Shaka workers)
 		$policy->addAllowedScriptDomain("'self'");
 		$policy->addAllowedScriptDomain("blob:");
 
+		// ✅ Workers
 		$policy->addAllowedWorkerSrcDomain("'self'");
 		$policy->addAllowedWorkerSrcDomain("blob:");
 
-		// Older engines sometimes key off child-src for workers
+		// Some NC versions also need child-src
 		if (method_exists($policy, 'addAllowedChildSrcDomain')) {
 			$policy->addAllowedChildSrcDomain("'self'");
 			$policy->addAllowedChildSrcDomain("blob:");
 		}
 
+		// Important: append to event
 		$event->addPolicy($policy);
 	}
 }
