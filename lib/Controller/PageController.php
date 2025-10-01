@@ -29,7 +29,7 @@ use OCP\IRequest;
 use OCP\AppFramework\Http\TemplateResponse;
 use OCP\AppFramework\Controller;
 use OCP\Util;
-use OCP\AppFramework\Http\ContentSecurityPolicy;
+use OCP\AppFramework\Http\EmptyContentSecurityPolicy;
 
 class PageController extends Controller {
 	protected $appName;
@@ -50,7 +50,7 @@ class PageController extends Controller {
 		$response = new TemplateResponse($this->appName, 'main');
 	
 		// Relax CSP for Shaka Player
-		$csp = new ContentSecurityPolicy();
+		$csp = new EmptyContentSecurityPolicy();
 
 		// Media: allow both self (default files) AND blob (MSE)
 		$csp->addAllowedMediaDomain("'self'");
@@ -82,8 +82,8 @@ class PageController extends Controller {
 		$response = new TemplateResponse($this->appName, 'empty');
 	
 		// Relax CSP for Shaka Player
-		$csp = new ContentSecurityPolicy();
-		
+		$csp = new EmptyContentSecurityPolicy();
+
 		// Media: allow both self (default files) AND blob (MSE)
 		$csp->addAllowedMediaDomain("'self'");
 		$csp->addAllowedMediaDomain('blob:');
