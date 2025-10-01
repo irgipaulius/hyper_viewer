@@ -519,40 +519,64 @@ class HlsCacheGenerationJob extends QueuedJob {
 		$progressData = json_decode(file_get_contents($progressFile), true) ?: [];
 		$updated = false;
 		
-		// Parse FFmpeg progress output
-		if (preg_match('/frame=\s*(\d+)/', $output, $matches)) {
-			$progressData['frame'] = (int)$matches[1];
-			$updated = true;
-		}
+		// Split output into lines for better parsing
+		$lines = explode("\n", $output);
 		
-		if (preg_match('/fps=\s*([\d.]+)/', $output, $matches)) {
-			$progressData['fps'] = (float)$matches[1];
-			$updated = true;
-		}
-		
-		if (preg_match('/speed=\s*([\d.]+x)/', $output, $matches)) {
-			$progressData['speed'] = $matches[1];
-			$updated = true;
-		}
-		
-		if (preg_match('/time=(\d{2}:\d{2}:\d{2}\.\d{2})/', $output, $matches)) {
-			$progressData['time'] = $matches[1];
-			$updated = true;
-		}
-		
-		if (preg_match('/bitrate=\s*([\d.]+kbits\/s)/', $output, $matches)) {
-			$progressData['bitrate'] = $matches[1];
-			$updated = true;
-		}
-		
-		if (preg_match('/size=\s*(\d+kB)/', $output, $matches)) {
-			$progressData['size'] = $matches[1];
-			$updated = true;
+		foreach ($lines as $line) {
+			$line = trim($line);
+			
+			// Parse frame count
+			if (preg_match('/^frame=(\d+)$/', $line, $matches)) {
+				$progressData['frame'] = (int)$matches[1];
+				$updated = true;
+			}
+			
+			// Parse FPS
+			if (preg_match('/^fps=([\d.]+)$/', $line, $matches)) {
+				$progressData['fps'] = (float)$matches[1];
+				$updated = true;
+			}
+			
+			// Parse speed
+			if (preg_match('/^speed=([\d.]+x)$/', $line, $matches)) {
+				$progressData['speed'] = $matches[1];
+				$updated = true;
+			}
+			
+			// Parse time (out_time format)
+			if (preg_match('/^out_time=(\d{2}:\d{2}:\d{2}\.\d+)$/', $line, $matches)) {
+				$progressData['time'] = substr($matches[1], 0, 8); // Trim to HH:MM:SS
+				$updated = true;
+			}
+			
+			// Parse bitrate (if available)
+			if (preg_match('/^bitrate=([\d.]+kbits\/s)$/', $line, $matches)) {
+				$progressData['bitrate'] = $matches[1];
+				$updated = true;
+			}
+			
+			// Parse total size (if available)
+			if (preg_match('/^total_size=(\d+)$/', $line, $matches)) {
+				$sizeKB = round((int)$matches[1] / 1024);
+				$progressData['size'] = $sizeKB . 'kB';
+				$updated = true;
+			}
+			
+			// Check for completion
+			if (preg_match('/^progress=end$/', $line)) {
+				$progressData['status'] = 'completed';
+				$progressData['completed'] = true;
+				$progressData['progress'] = 100;
+				$updated = true;
+				$this->logger->info('FFmpeg progress detected completion');
+			}
 		}
 		
 		if ($updated) {
 			$progressData['lastUpdate'] = time();
-			$progressData['status'] = 'processing';
+			if (!isset($progressData['status']) || $progressData['status'] !== 'completed') {
+				$progressData['status'] = 'processing';
+			}
 			file_put_contents($progressFile, json_encode($progressData, JSON_PRETTY_PRINT));
 		}
 	}

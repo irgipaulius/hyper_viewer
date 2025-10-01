@@ -1037,6 +1037,9 @@ function startProgressPolling(filename, directory, modal) {
 	let pollCount = 0
 	const maxPolls = 360 // 30 minutes max (polling every 5 seconds)
 	
+	// Start countdown timer for cron processing
+	startCronCountdown(modal)
+	
 	const poll = async () => {
 		try {
 			pollCount++
@@ -1091,6 +1094,36 @@ function startProgressPolling(filename, directory, modal) {
 
 	// Start polling after a short delay
 	setTimeout(poll, 2000)
+}
+
+/**
+ * Start countdown timer showing time until next cron execution
+ */
+function startCronCountdown(modal) {
+	const statusElement = modal.querySelector('.progress-status')
+	if (!statusElement) return
+	
+	const updateCountdown = () => {
+		const now = new Date()
+		const minutes = now.getMinutes()
+		const seconds = now.getSeconds()
+		
+		// Calculate seconds until next 5-minute mark (0, 5, 10, 15, etc.)
+		const nextCronMinute = Math.ceil(minutes / 5) * 5
+		const minutesUntilCron = (nextCronMinute - minutes) % 5
+		const secondsUntilCron = minutesUntilCron * 60 - seconds
+		
+		if (secondsUntilCron > 0) {
+			const mins = Math.floor(secondsUntilCron / 60)
+			const secs = secondsUntilCron % 60
+			statusElement.textContent = `Waiting for processing to start... ${mins}:${secs.toString().padStart(2, '0')}`
+			setTimeout(updateCountdown, 1000)
+		} else {
+			statusElement.textContent = 'Processing should start soon...'
+		}
+	}
+	
+	updateCountdown()
 }
 
 /**
@@ -1222,10 +1255,10 @@ function loadShakaPlayer(filename, cachePath, context) {
             width: min(90vw, 1200px); height: min(80vh, 675px); 
             object-fit: contain; background: #000; border-radius: 8px;
         "></video>
-        <button onclick="this.parentElement.onclick({target: this.parentElement})" style="
+        <button class="close-btn" style="
             position: absolute; top: 20px; right: 20px; background: rgba(0,0,0,0.7); 
             border: none; color: white; width: 40px; height: 40px; border-radius: 50%; 
-            font-size: 18px; cursor: pointer; z-index: 1;">✕</button>
+            font-size: 18px; cursor: pointer; z-index: 10001;">✕</button>
     `
     
     const closeModal = () => {
@@ -1252,14 +1285,8 @@ function loadShakaPlayer(filename, cachePath, context) {
     
     const video = document.getElementById(videoId)
     
-    // Prevent video clicks from bubbling up to modal, but allow UI elements
-    video.addEventListener('click', (e) => {
-        // Only stop propagation if clicking directly on the video element
-        // This allows Shaka Player UI controls to work normally
-        if (e.target === video) {
-            e.stopPropagation()
-        }
-    })
+    // Add close button event listener
+    modal.querySelector('.close-btn').addEventListener('click', closeModal)
     
     // Initialize Shaka Player
     shaka.polyfill.installAll()
