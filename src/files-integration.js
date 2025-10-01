@@ -1252,10 +1252,14 @@ function loadShakaPlayer(filename, cachePath, context) {
     
     const video = document.getElementById(videoId)
     
-    // Prevent video clicks from bubbling up to modal
-    video.onclick = (e) => {
-        e.stopPropagation()
-    }
+    // Prevent video clicks from bubbling up to modal, but allow UI elements
+    video.addEventListener('click', (e) => {
+        // Only stop propagation if clicking directly on the video element
+        // This allows Shaka Player UI controls to work normally
+        if (e.target === video) {
+            e.stopPropagation()
+        }
+    })
     
     // Initialize Shaka Player
     shaka.polyfill.installAll()
