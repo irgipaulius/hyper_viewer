@@ -208,6 +208,160 @@ class CacheController extends Controller {
 	}
 
 	/**
+	 * Discover video files recursively in a directory
+	 * 
+	 * @NoAdminRequired
+	 */
+	public function discoverVideos(): JSONResponse {
+		$user = $this->userSession->getUser();
+		if (!$user) {
+			return new JSONResponse(['error' => 'User not authenticated'], 401);
+		}
+
+		$directory = $this->request->getParam('directory');
+		if (!$directory) {
+			return new JSONResponse(['error' => 'Directory path required'], 400);
+		}
+
+		try {
+			$userFolder = $this->rootFolder->getUserFolder($user->getUID());
+			$videoFiles = $this->scanDirectoryForVideos($userFolder, $directory);
+
+			$this->logger->info('Video discovery completed', [
+				'directory' => $directory,
+				'filesFound' => count($videoFiles)
+			]);
+
+			return new JSONResponse([
+				'success' => true,
+				'files' => $videoFiles,
+				'directory' => $directory
+			]);
+
+		} catch (\Exception $e) {
+			$this->logger->error('Video discovery failed', [
+				'directory' => $directory,
+				'error' => $e->getMessage()
+			]);
+			return new JSONResponse(['error' => $e->getMessage()], 500);
+		}
+	}
+
+	/**
+	 * Register directory for automatic HLS generation
+	 * 
+	 * @NoAdminRequired
+	 */
+	public function registerAutoGeneration(): JSONResponse {
+		$user = $this->userSession->getUser();
+		if (!$user) {
+			return new JSONResponse(['error' => 'User not authenticated'], 401);
+		}
+
+		$directory = $this->request->getParam('directory');
+		$options = $this->request->getParam('options', []);
+
+		if (!$directory) {
+			return new JSONResponse(['error' => 'Directory path required'], 400);
+		}
+
+		try {
+			// Store auto-generation settings in app config
+			$autoGenSettings = [
+				'userId' => $user->getUID(),
+				'directory' => $directory,
+				'cacheLocation' => $options['cacheLocation'] ?? 'relative',
+				'customPath' => $options['customPath'] ?? '',
+				'overwriteExisting' => $options['overwriteExisting'] ?? false,
+				'resolutions' => $options['resolutions'] ?? ['720p', '480p', '240p'],
+				'enabled' => true,
+				'createdAt' => time()
+			];
+
+			// Use a simple key-value storage for now (could be moved to database later)
+			$configKey = 'auto_gen_' . md5($user->getUID() . '_' . $directory);
+			\OC::$server->getConfig()->setAppValue('hyper_viewer', $configKey, json_encode($autoGenSettings));
+
+			$this->logger->info('Directory registered for auto-generation', [
+				'userId' => $user->getUID(),
+				'directory' => $directory,
+				'options' => $options
+			]);
+
+			return new JSONResponse([
+				'success' => true,
+				'message' => 'Directory registered for auto-generation',
+				'directory' => $directory
+			]);
+
+		} catch (\Exception $e) {
+			$this->logger->error('Auto-generation registration failed', [
+				'directory' => $directory,
+				'error' => $e->getMessage()
+			]);
+			return new JSONResponse(['error' => $e->getMessage()], 500);
+		}
+	}
+
+	/**
+	 * Recursively scan directory for video files
+	 */
+	private function scanDirectoryForVideos($userFolder, string $directoryPath): array {
+		$videoFiles = [];
+		$supportedMimes = ['video/quicktime', 'video/mp4'];
+
+		try {
+			if (!$userFolder->nodeExists($directoryPath)) {
+				throw new \Exception("Directory not found: $directoryPath");
+			}
+
+			$directory = $userFolder->get($directoryPath);
+			if (!($directory instanceof \OCP\Files\Folder)) {
+				throw new \Exception("Path is not a directory: $directoryPath");
+			}
+
+			$this->scanFolderRecursively($directory, $directoryPath, $supportedMimes, $videoFiles);
+
+		} catch (\Exception $e) {
+			$this->logger->error('Directory scanning failed', [
+				'directory' => $directoryPath,
+				'error' => $e->getMessage()
+			]);
+			throw $e;
+		}
+
+		return $videoFiles;
+	}
+
+	/**
+	 * Recursively scan folder for video files
+	 */
+	private function scanFolderRecursively($folder, string $basePath, array $supportedMimes, array &$videoFiles): void {
+		foreach ($folder->getDirectoryListing() as $node) {
+			if ($node instanceof \OCP\Files\File) {
+				$mimeType = $node->getMimeType();
+				if (in_array($mimeType, $supportedMimes)) {
+					$relativePath = $basePath === '/' ? '/' : $basePath;
+					$videoFiles[] = [
+						'filename' => $node->getName(),
+						'directory' => $relativePath,
+						'size' => $node->getSize(),
+						'mimeType' => $mimeType,
+						'fullPath' => $relativePath . '/' . $node->getName()
+					];
+				}
+			} elseif ($node instanceof \OCP\Files\Folder) {
+				// Skip hidden directories and cache directories
+				$folderName = $node->getName();
+				if (!str_starts_with($folderName, '.')) {
+					$subPath = $basePath === '/' ? '/' . $folderName : $basePath . '/' . $folderName;
+					$this->scanFolderRecursively($node, $subPath, $supportedMimes, $videoFiles);
+				}
+			}
+		}
+	}
+
+	/**
 	 * Serve HLS files (playlist.m3u8 and segments)
 	 * 
 	 * @NoAdminRequired

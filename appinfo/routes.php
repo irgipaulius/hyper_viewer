@@ -30,6 +30,8 @@ return [
 		['name' => 'cache#generateCache', 'url' => '/cache/generate', 'verb' => 'POST'],
 		['name' => 'cache#getProgress', 'url' => '/cache/progress', 'verb' => 'POST'],
 		['name' => 'cache#checkCache', 'url' => '/cache/check', 'verb' => 'POST'],
+		['name' => 'cache#discoverVideos', 'url' => '/cache/discover-videos', 'verb' => 'POST'],
+		['name' => 'cache#registerAutoGeneration', 'url' => '/cache/register-auto-generation', 'verb' => 'POST'],
 		['name' => 'cache#serveHlsFile', 'url' => '/hls/{cachePath}/{filename}', 'verb' => 'GET', 'requirements' => ['cachePath' => '.+', 'filename' => '.+']],
 	]
 ];

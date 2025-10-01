@@ -85,6 +85,20 @@ function initializeFilesIntegration() {
 		},
 	})
 
+	// Register "Generate HLS Cache" action for directories
+	OCA.Files.fileActions.registerAction({
+		name: 'generateHlsCacheDirectory',
+		displayName: t('hyper_viewer', 'Generate HLS Cache (Directory)'),
+		mime: 'httpd/unix-directory',
+		permissions: OC.PERMISSION_UPDATE,
+		iconClass: 'icon-category-multimedia',
+		actionHandler(filename, context) {
+			console.log('🚀 Generate HLS Cache action triggered for directory:', filename)
+			console.log('📁 Context:', context)
+			openDirectoryCacheGenerationDialog(filename, context)
+		},
+	})
+
 	// Register bulk action for multiple file selection
 	if (OCA.Files && OCA.Files.fileActions && OCA.Files.fileActions.registerAction) {
 		// Add to bulk actions menu (appears when multiple files are selected)
@@ -305,6 +319,322 @@ function openCacheGenerationDialog(files) {
 			})
 		}
 	}, 100)
+}
+
+/**
+ * Open directory cache generation dialog with recursive scanning and auto-generation options
+ *
+ * @param directoryName Name of the directory
+ * @param context Directory context from Files app
+ */
+async function openDirectoryCacheGenerationDialog(directoryName, context) {
+	console.log('🔧 Opening directory cache generation dialog for:', directoryName)
+
+	const directory = context?.dir || context?.fileList?.getCurrentDirectory() || '/'
+	const fullPath = directory === '/' ? `/${directoryName}` : `${directory}/${directoryName}`
+
+	// Discover video files in directory
+	console.log('🔍 Discovering video files in directory:', fullPath)
+	const videoFiles = await discoverVideoFilesInDirectory(fullPath)
+	
+	if (videoFiles.length === 0) {
+		OC.dialogs.alert('No video files (MOV/MP4) found in this directory.', 'No Videos Found')
+		return
+	}
+
+	const fileList = videoFiles.map(f => f.filename).join(', ')
+	const fileCount = videoFiles.length
+
+	// Create modal HTML content for directory processing
+	const modalContent = `
+		<div class="hyper-viewer-cache-dialog">
+			<h3>Generate HLS Cache (Directory)</h3>
+			<p class="directory-info"><strong>Directory:</strong> ${fullPath}</p>
+			<p class="file-list"><strong>Found ${fileCount} video files:</strong><br>${fileList}</p>
+			
+			<div class="section">
+				<label class="section-title">Cache Location</label>
+				<div class="radio-group">
+					<label class="radio-option">
+						<input type="radio" name="cache_location" value="relative" checked>
+						<span>Next to video files</span>
+					</label>
+					<label class="radio-option">
+						<input type="radio" name="cache_location" value="home">
+						<span>Home directory</span>
+					</label>
+					<label class="radio-option">
+						<input type="radio" name="cache_location" value="custom">
+						<span>Custom path</span>
+						<input type="text" id="custom_path" placeholder="/mnt/cache/.cached_hls/" disabled>
+					</label>
+				</div>
+			</div>
+			
+			<div class="section">
+				<label class="section-title">Resolution Renditions</label>
+				<div class="checkbox-group">
+					<label class="checkbox-option">
+						<input type="checkbox" name="resolution" value="1080p">
+						<span>1080p (4000k) - Full HD</span>
+					</label>
+					<label class="checkbox-option">
+						<input type="checkbox" name="resolution" value="720p" checked>
+						<span>720p (2000k) - HD</span>
+					</label>
+					<label class="checkbox-option">
+						<input type="checkbox" name="resolution" value="480p" checked>
+						<span>480p (800k) - SD</span>
+					</label>
+					<label class="checkbox-option">
+						<input type="checkbox" name="resolution" value="360p">
+						<span>360p (500k) - Low</span>
+					</label>
+					<label class="checkbox-option">
+						<input type="checkbox" name="resolution" value="240p" checked>
+						<span>240p (300k) - Mobile</span>
+					</label>
+				</div>
+			</div>
+			
+			<div class="section">
+				<label class="checkbox-option">
+					<input type="checkbox" id="overwrite_existing" checked>
+					<span>Overwrite existing cache</span>
+				</label>
+				<label class="checkbox-option">
+					<input type="checkbox" id="enable_auto_generation">
+					<span>Enable auto-generation for new videos in this directory</span>
+				</label>
+			</div>
+		</div>
+		
+		<style>
+		.hyper-viewer-cache-dialog {
+			padding: 20px;
+			max-width: 500px;
+			font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+		}
+		.hyper-viewer-cache-dialog h3 {
+			margin: 0 0 15px 0;
+			color: #333;
+			font-size: 18px;
+		}
+		.directory-info {
+			margin: 0 0 10px 0;
+			padding: 8px;
+			background: #e3f2fd;
+			border-radius: 6px;
+			font-size: 14px;
+			color: #1976d2;
+			font-weight: 500;
+		}
+		.file-list {
+			margin: 0 0 20px 0;
+			padding: 10px;
+			background: #f8f9fa;
+			border-radius: 6px;
+			font-size: 13px;
+			color: #666;
+			max-height: 120px;
+			overflow-y: auto;
+		}
+		.section {
+			margin-bottom: 20px;
+		}
+		.section-title {
+			display: block;
+			font-weight: 600;
+			color: #333;
+			margin-bottom: 10px;
+			font-size: 14px;
+		}
+		.radio-group, .checkbox-group {
+			display: flex;
+			flex-direction: column;
+			gap: 8px;
+		}
+		.radio-option, .checkbox-option {
+			display: flex;
+			align-items: center;
+			cursor: pointer;
+			padding: 8px;
+			border-radius: 4px;
+			transition: background-color 0.2s;
+		}
+		.radio-option:hover, .checkbox-option:hover {
+			background-color: #f5f5f5;
+		}
+		.radio-option input, .checkbox-option input {
+			margin: 0 10px 0 0;
+		}
+		.radio-option span, .checkbox-option span {
+			font-size: 14px;
+			color: #333;
+		}
+		#custom_path {
+			margin-left: 24px;
+			margin-top: 5px;
+			width: calc(100% - 24px);
+			padding: 6px 8px;
+			border: 1px solid #ddd;
+			border-radius: 4px;
+			font-size: 13px;
+		}
+		#custom_path:disabled {
+			background-color: #f5f5f5;
+			color: #999;
+		}
+		</style>
+	`
+
+	// Show modal dialog
+	OC.dialogs.confirmHtml(
+		modalContent,
+		'Generate HLS Cache (Directory)',
+		function(confirmed) {
+			if (confirmed) {
+				startDirectoryCacheGeneration(videoFiles, fullPath)
+			}
+		},
+		true // modal
+	)
+
+	// Add event listeners after dialog is shown
+	setTimeout(() => {
+		// Handle custom location radio button
+		const customRadio = document.querySelector('input[name="cache_location"][value="custom"]')
+		const customPath = document.getElementById('custom_path')
+
+		if (customRadio && customPath) {
+			document.querySelectorAll('input[name="cache_location"]').forEach(radio => {
+				radio.addEventListener('change', function() {
+					customPath.disabled = this.value !== 'custom'
+					if (this.value === 'custom') {
+						customPath.focus()
+					}
+				})
+			})
+		}
+	}, 100)
+}
+
+/**
+ * Discover video files recursively in a directory
+ *
+ * @param directoryPath Path to the directory to scan
+ * @return Array of video file objects
+ */
+async function discoverVideoFilesInDirectory(directoryPath) {
+	try {
+		const response = await fetch(OC.generateUrl('/apps/hyper_viewer/cache/discover-videos'), {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				requesttoken: OC.requestToken,
+			},
+			body: JSON.stringify({
+				directory: directoryPath
+			}),
+		})
+
+		const result = await response.json()
+		
+		if (result.success) {
+			return result.files || []
+		} else {
+			throw new Error(result.error || 'Failed to discover video files')
+		}
+	} catch (error) {
+		console.error('Failed to discover video files:', error)
+		OC.dialogs.alert(`Failed to scan directory: ${error.message}`, 'Discovery Error')
+		return []
+	}
+}
+
+/**
+ * Start directory cache generation process
+ *
+ * @param videoFiles Array of video file objects
+ * @param directoryPath Full path to the directory
+ */
+async function startDirectoryCacheGeneration(videoFiles, directoryPath) {
+	console.log('Starting directory HLS cache generation for:', directoryPath)
+
+	// Get selected options (same as regular dialog)
+	const cacheLocation = document.querySelector('input[name="cache_location"]:checked')?.value || 'relative'
+	const customPath = document.getElementById('custom_path')?.value || ''
+	const overwriteExisting = document.getElementById('overwrite_existing')?.checked || false
+	const enableAutoGeneration = document.getElementById('enable_auto_generation')?.checked || false
+	
+	// Get selected resolutions
+	const selectedResolutions = Array.from(document.querySelectorAll('input[name="resolution"]:checked'))
+		.map(checkbox => checkbox.value)
+	
+	// Default to 720p, 480p, 240p if none selected
+	const resolutions = selectedResolutions.length > 0 ? selectedResolutions : ['720p', '480p', '240p']
+
+	const options = {
+		cacheLocation,
+		customPath,
+		overwriteExisting,
+		resolutions,
+		enableAutoGeneration,
+		directoryPath
+	}
+
+	console.log('Directory cache generation options:', options)
+
+	try {
+		// Start cache generation for all discovered files
+		await startCacheGeneration(videoFiles)
+
+		// If auto-generation is enabled, register the directory for monitoring
+		if (enableAutoGeneration) {
+			await registerDirectoryForAutoGeneration(directoryPath, options)
+		}
+
+	} catch (error) {
+		console.error('Failed to start directory cache generation:', error)
+		OC.dialogs.alert(`Failed to start directory processing: ${error.message}`, 'Processing Error')
+	}
+}
+
+/**
+ * Register directory for automatic HLS generation monitoring
+ *
+ * @param directoryPath Path to monitor
+ * @param options Generation options to use for new files
+ */
+async function registerDirectoryForAutoGeneration(directoryPath, options) {
+	try {
+		const response = await fetch(OC.generateUrl('/apps/hyper_viewer/cache/register-auto-generation'), {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				requesttoken: OC.requestToken,
+			},
+			body: JSON.stringify({
+				directory: directoryPath,
+				options
+			}),
+		})
+
+		const result = await response.json()
+		
+		if (result.success) {
+			console.log('Directory registered for auto-generation:', directoryPath)
+			OC.dialogs.info(
+				`Directory "${directoryPath}" has been registered for automatic HLS generation.\n\nNew video files added to this directory will automatically have HLS cache generated.`,
+				'Auto-Generation Enabled'
+			)
+		} else {
+			throw new Error(result.error || 'Failed to register directory')
+		}
+	} catch (error) {
+		console.error('Failed to register directory for auto-generation:', error)
+		OC.dialogs.alert(`Failed to enable auto-generation: ${error.message}`, 'Auto-Generation Error')
+	}
 }
 
 /**

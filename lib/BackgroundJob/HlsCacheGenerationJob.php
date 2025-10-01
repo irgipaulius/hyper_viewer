@@ -217,35 +217,36 @@ class HlsCacheGenerationJob extends QueuedJob {
 			throw new \Exception('No valid resolutions selected');
 		}
 
-		// Build optimized FFmpeg command for adaptive streaming
+		// Build optimized FFmpeg command for adaptive streaming using a more reliable approach
 		$ffmpegCmd = '/usr/local/bin/ffmpeg -y -i ' . escapeshellarg($inputPath);
 		
-		// Add video streams for each variant with CRF + maxrate for optimal quality/size
+		// Map input streams and create output streams for each variant
 		$streamIndex = 0;
 		foreach ($variants as $name => $variant) {
+			// Map video stream for this variant
 			$ffmpegCmd .= sprintf(
 				' -map 0:v:0 -c:v:%d libx264 -preset superfast -crf %s -maxrate %s -bufsize %s -s:%d %s -profile:v:%d main',
 				$streamIndex, $variant['crf'], $variant['maxrate'], $variant['bufsize'], $streamIndex, $variant['resolution'], $streamIndex
 			);
+			
+			// Map audio stream for this variant (each variant gets its own audio copy)
+			$ffmpegCmd .= sprintf(' -map 0:a:0 -c:a:%d aac -b:a:%d 128k', $streamIndex, $streamIndex);
 			$streamIndex++;
 		}
-
-		// Add single audio stream (AAC 128k)
-		$ffmpegCmd .= ' -map 0:a:0 -c:a aac -b:a 128k';
 
 		// HLS options optimized for adaptive streaming
 		$ffmpegCmd .= ' -f hls -hls_time 6 -hls_playlist_type vod -hls_flags independent_segments';
 		$ffmpegCmd .= ' -master_pl_name master.m3u8';
 		
-		// Build var_stream_map for adaptive streaming
+		// Build var_stream_map for adaptive streaming - each variant has its own video and audio
 		$ffmpegCmd .= ' -var_stream_map "';
 		$streamMaps = [];
 		$streamIndex = 0;
 		foreach ($variants as $name => $variant) {
-			$streamMaps[] = "v:$streamIndex,a:0,name:$name";
+			$streamMaps[] = "v:$streamIndex,a:$streamIndex,name:$name";
 			$streamIndex++;
 		}
-		$ffmpegCmd .= implode(' ', $streamMaps) . '"';
+		$ffmpegCmd .= implode(' ', $streamMaps) . '\"';
 		
 		// Output pattern for variant playlists
 		$ffmpegCmd .= ' ' . escapeshellarg($outputPath . '/playlist_%v.m3u8');
