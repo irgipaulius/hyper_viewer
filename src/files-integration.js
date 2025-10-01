@@ -1143,385 +1143,55 @@ async function playWithHls(filename, directory, context) {
 	}
 }
 
+/**
+ * Load Shaka Player in a modal
+ * @param {string} filename - Video filename
+ * @param {string} cachePath - HLS cache path
+ * @param {object} context - File context
+ */
 function loadShakaPlayer(filename, cachePath, context) {
-    console.log(`🎬 Play with HLS triggered for: ${filename}`)
-    console.log(`📁 Cache path: ${cachePath}`)
-    console.log('🎯 Context:', context)
-
-    // Create unique video ID to avoid conflicts
     const videoId = `hyperVideo_${Date.now()}`
-    let shakaPlayer = null
-    let shakaUI = null
-
-    // Create modal with proper structure and styling
-    const modal = document.createElement('div')
-    modal.className = 'hyper-viewer-modal'
-    modal.setAttribute('role', 'dialog')
-    modal.setAttribute('aria-modal', 'true')
-    modal.setAttribute('aria-labelledby', 'modal-title')
     
-    modal.innerHTML = `
-        <div class="hyper-viewer-overlay"></div>
-        <div class="hyper-viewer-container">
-            <div class="hyper-viewer-header">
-                <h3 id="modal-title" class="hyper-viewer-title">${filename}</h3>
-                <button class="hyper-viewer-close" aria-label="Close video player">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <line x1="18" y1="6" x2="6" y2="18"></line>
-                        <line x1="6" y1="6" x2="18" y2="18"></line>
-                    </svg>
-                </button>
-            </div>
-            <div class="hyper-viewer-video-wrapper">
-                <video id="${videoId}" class="hyper-viewer-video" controls preload="metadata"></video>
-            </div>
-        </div>
-        
-        <style>
-            .hyper-viewer-modal {
-                position: fixed;
-                top: 0;
-                left: 0;
-                right: 0;
-                bottom: 0;
-                z-index: 10000;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                padding: 20px;
-                box-sizing: border-box;
-                opacity: 0;
-                visibility: hidden;
-                transition: opacity 0.3s ease, visibility 0.3s ease;
-            }
-            
-            .hyper-viewer-modal.show {
-                opacity: 1;
-                visibility: visible;
-            }
-            
-            .hyper-viewer-overlay {
-                position: absolute;
-                top: 0;
-                left: 0;
-                right: 0;
-                bottom: 0;
-                background: rgba(0, 0, 0, 0.85);
-                backdrop-filter: blur(4px);
-                cursor: pointer;
-            }
-            
-            .hyper-viewer-container {
-                position: relative;
-                background: #1a1a1a;
-                border-radius: 12px;
-                box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-                max-width: 90vw;
-                max-height: 90vh;
-                width: 100%;
-                max-width: 1200px;
-                display: flex;
-                flex-direction: column;
-                overflow: hidden;
-                transform: scale(0.95);
-                transition: transform 0.3s ease;
-            }
-            
-            .hyper-viewer-modal.show .hyper-viewer-container {
-                transform: scale(1);
-            }
-            
-            .hyper-viewer-header {
-                display: flex;
-                align-items: center;
-                justify-content: space-between;
-                padding: 16px 20px;
-                background: #2a2a2a;
-                border-bottom: 1px solid #3a3a3a;
-            }
-            
-            .hyper-viewer-title {
-                margin: 0;
-                color: #ffffff;
-                font-size: 16px;
-                font-weight: 600;
-                truncate: ellipsis;
-                overflow: hidden;
-                white-space: nowrap;
-                max-width: calc(100% - 60px);
-            }
-            
-            .hyper-viewer-close {
-                background: transparent;
-                border: none;
-                color: #ffffff;
-                cursor: pointer;
-                padding: 8px;
-                border-radius: 6px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                transition: background-color 0.2s ease, color 0.2s ease;
-                flex-shrink: 0;
-            }
-            
-            .hyper-viewer-close:hover {
-                background: rgba(255, 255, 255, 0.1);
-                color: #ff6b6b;
-            }
-            
-            .hyper-viewer-close:focus {
-                outline: 2px solid #4a9eff;
-                outline-offset: 2px;
-            }
-            
-            .hyper-viewer-video-wrapper {
-                position: relative;
-                background: #000;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                min-height: 300px;
-                flex: 1;
-            }
-            
-            .hyper-viewer-video {
-                width: 100%;
-                height: auto;
-                max-height: calc(90vh - 80px);
-                display: block;
-                outline: none;
-            }
-            
-            /* Responsive design */
-            @media (max-width: 768px) {
-                .hyper-viewer-modal {
-                    padding: 10px;
-                }
-                
-                .hyper-viewer-container {
-                    max-width: 100%;
-                    max-height: 100%;
-                }
-                
-                .hyper-viewer-header {
-                    padding: 12px 16px;
-                }
-                
-                .hyper-viewer-title {
-                    font-size: 14px;
-                }
-                
-                .hyper-viewer-video {
-                    max-height: calc(100vh - 60px);
-                }
-            }
-            
-            /* Loading state */
-            .hyper-viewer-video-wrapper::before {
-                content: '';
-                position: absolute;
-                top: 50%;
-                left: 50%;
-                transform: translate(-50%, -50%);
-                width: 40px;
-                height: 40px;
-                border: 3px solid rgba(255, 255, 255, 0.3);
-                border-top: 3px solid #4a9eff;
-                border-radius: 50%;
-                animation: spin 1s linear infinite;
-                z-index: 1;
-                pointer-events: none;
-            }
-            
-            .hyper-viewer-video.loaded ~ .hyper-viewer-video-wrapper::before,
-            .hyper-viewer-video-wrapper:has(.hyper-viewer-video.loaded)::before {
-                opacity: 0;
-                visibility: hidden;
-            }
-            
-            @keyframes spin {
-                0% { transform: translate(-50%, -50%) rotate(0deg); }
-                100% { transform: translate(-50%, -50%) rotate(360deg); }
-            }
-        </style>
+    // Create simple modal
+    const modal = document.createElement('div')
+    modal.style.cssText = `
+        position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 10000;
+        background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center;
     `
     
-    // Add modal to DOM
-    document.body.appendChild(modal)
+    modal.innerHTML = `
+        <div style="background: #000; border-radius: 8px; max-width: 90vw; max-height: 90vh; position: relative;">
+            <button onclick="this.closest('.modal').remove(); document.body.style.overflow=''" 
+                    style="position: absolute; top: 10px; right: 10px; background: rgba(255,255,255,0.2); 
+                           border: none; color: white; padding: 8px; border-radius: 4px; cursor: pointer; z-index: 1;">✕</button>
+            <video id="${videoId}" controls style="width: 100%; height: auto; max-height: 80vh; display: block;"></video>
+        </div>
+    `
     
-    // Prevent body scroll when modal is open
+    modal.className = 'modal'
+    modal.onclick = (e) => {
+        if (e.target === modal) {
+            modal.remove()
+            document.body.style.overflow = ''
+        }
+    }
+    
+    document.body.appendChild(modal)
     document.body.style.overflow = 'hidden'
     
-    // Show modal with animation
-    requestAnimationFrame(() => {
-        modal.classList.add('show')
-    })
-
-    // Get video element from modal
-    const video = modal.querySelector(`#${videoId}`)
-
-    // Close modal function with proper cleanup
-    const closeModal = () => {
-        console.log('🔒 Closing video modal...')
-        
-        // Animate out
-        modal.classList.remove('show')
-        
-        // Cleanup after animation
-        setTimeout(() => {
-            // Cleanup Shaka Player
-            if (shakaUI) {
-                try {
-                    shakaUI.destroy()
-                } catch (e) {
-                    console.warn('Error destroying Shaka UI:', e)
-                }
-            }
-            if (shakaPlayer) {
-                try {
-                    shakaPlayer.destroy()
-                } catch (e) {
-                    console.warn('Error destroying Shaka Player:', e)
-                }
-            }
-            
-            // Restore body scroll
-            document.body.style.overflow = ''
-            
-            // Remove modal from DOM
-            if (modal.parentNode) {
-                modal.parentNode.removeChild(modal)
-            }
-            
-            console.log('✅ Video modal closed and cleaned up')
-        }, 300) // Match transition duration
-    }
-
-    // Close button event
-    modal.querySelector('.hyper-viewer-close').addEventListener('click', closeModal)
+    const video = document.getElementById(videoId)
     
-    // Close on overlay click (background)
-    modal.querySelector('.hyper-viewer-overlay').addEventListener('click', closeModal)
-    
-    // Close on Escape key
-    const handleKeyDown = (e) => {
-        if (e.key === 'Escape') {
-            closeModal()
-            document.removeEventListener('keydown', handleKeyDown)
-        }
-    }
-    document.addEventListener('keydown', handleKeyDown)
-    
-    // Prevent clicks on video container from closing modal
-    modal.querySelector('.hyper-viewer-container').addEventListener('click', (e) => {
-        e.stopPropagation()
-    })
-
     // Initialize Shaka Player
-    console.log('🔍 Checking Shaka Player availability...')
-    if (shaka) {
-        console.log('✅ Shaka Player library found, initializing...')
-        try {
-            console.log('🔧 Installing Shaka polyfills...')
-            shaka.polyfill.installAll()
-            
-            console.log('🎬 Creating Shaka Player...')
-            shakaPlayer = new shaka.Player(video)
-            
-            // Construct HLS manifest URL using our app's HLS serving endpoint
-            // Convert cache path like "/Paulius/.cached_hls/MVI_0079" to proper URL
-            const encodedCachePath = encodeURIComponent(cachePath)
-            // Try master.m3u8 first (adaptive streaming), fallback to playlist.m3u8 (legacy)
-            const manifestUrl = `/apps/hyper_viewer/hls/${encodedCachePath}/master.m3u8`
-            console.log('📝 Constructed adaptive manifest URL:', manifestUrl)
-            
-            console.log('⏳ Loading HLS manifest...')
-            
-            // Add loading state
-            video.addEventListener('loadstart', () => {
-                console.log('📥 Video loading started...')
-            })
-            
-            video.addEventListener('canplay', () => {
-                console.log('▶️ Video can start playing')
-                video.classList.add('loaded')
-            })
-            
-            video.addEventListener('error', (e) => {
-                console.error('❌ Video error:', e)
-            })
-            
-            shakaPlayer.load(manifestUrl).then(() => {
-                console.log('✅ Shaka successfully loaded HLS video:', manifestUrl)
-                console.log('🎥 Video should now be playing')
-                
-                // Mark video as loaded to hide loading spinner
-                video.classList.add('loaded')
-                
-                // Initialize UI after video loads successfully
-                console.log('🎨 Initializing Shaka UI after video load...')
-                setTimeout(() => {
-                    try {
-                        // Create a container div for the UI
-                        const videoContainer = document.createElement('div')
-                        videoContainer.className = 'shaka-video-container'
-                        video.parentElement.insertBefore(videoContainer, video)
-                        videoContainer.appendChild(video)
-                        
-                        // Initialize UI with minimal configuration
-                        shakaUI = new shaka.ui.Overlay(shakaPlayer, videoContainer, video)
-                        
-                        // Configure UI after creation
-                        const config = {
-                            controlPanelElements: [
-                                'play_pause',
-                                'time_and_duration',
-                                'mute',
-                                'volume',
-                                'fullscreen'
-                            ]
-                        }
-                        shakaUI.configure(config)
-                        console.log('✅ Shaka Player with UI created successfully')
-                    } catch (uiError) {
-                        console.error('❌ Shaka UI creation failed:', uiError)
-                        console.log('🔄 Continuing with basic player (no custom UI)')
-                        // Add basic video controls as fallback
-                        video.controls = true
-                    }
-                }, 500)
-            }).catch(err => {
-                console.error('❌ Shaka load error for master.m3u8:', err)
-                console.log('🔄 Trying fallback to playlist.m3u8...')
-                
-                // Try fallback to legacy single-bitrate playlist
-                const fallbackUrl = `/apps/hyper_viewer/hls/${encodedCachePath}/playlist.m3u8`
-                return shakaPlayer.load(fallbackUrl).then(() => {
-                    console.log('✅ Fallback playlist loaded successfully:', fallbackUrl)
-                }).catch(fallbackErr => {
-                    console.error('❌ Both master.m3u8 and playlist.m3u8 failed:', fallbackErr)
-                    console.error('❌ Error details:', {
-                        code: fallbackErr.code,
-                        category: fallbackErr.category,
-                        severity: fallbackErr.severity,
-                        message: fallbackErr.message
-                    })
-                    OC.dialogs.alert(`Error loading HLS video: ${fallbackErr.message}`, 'Playback Error')
-                    throw fallbackErr
-                })
-            })
-        } catch (error) {
-            console.error('❌ Shaka initialization error:', error)
-            console.error('❌ Error stack:', error.stack)
-            console.log('🔄 Falling back to direct video src...')
-            // Fallback to direct video
-            video.src = cachePath
-        }
-    } else {
-        console.warn('⚠️ Shaka Player not available, using fallback')
-        console.log('🔄 Setting video src directly:', cachePath)
-        // Fallback raw video tag
-        video.src = cachePath
+    if (window.shaka) {
+        const player = new shaka.Player(video)
+        const ui = new shaka.ui.Overlay(player, video.parentElement, video) // eslint-disable-line no-unused-vars
+        
+        // Build manifest URL
+        const baseUrl = `/apps/hyper_viewer/hls/${encodeURIComponent(cachePath)}`
+        const masterUrl = `${baseUrl}/master.m3u8`
+        const playlistUrl = `${baseUrl}/playlist.m3u8`
+        
+        // Try master.m3u8 first, fallback to playlist.m3u8
+        player.load(masterUrl).catch(() => player.load(playlistUrl))
     }
 }
