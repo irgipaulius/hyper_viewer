@@ -1156,25 +1156,16 @@ function loadShakaPlayer(filename, cachePath, context) {
     const modal = document.createElement('div')
     modal.style.cssText = `
         position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 10000;
-        background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center;
+        background: rgba(0,0,0,0.9); display: flex; align-items: center; justify-content: center;
+        padding: 20px; box-sizing: border-box;
     `
     
-    modal.innerHTML = `
-        <div style="background: #000; border-radius: 8px; max-width: 90vw; max-height: 90vh; position: relative;">
-            <button onclick="this.closest('.modal').remove(); document.body.style.overflow=''" 
-                    style="position: absolute; top: 10px; right: 10px; background: rgba(255,255,255,0.2); 
-                           border: none; color: white; padding: 8px; border-radius: 4px; cursor: pointer; z-index: 1;">✕</button>
-            <video id="${videoId}" controls style="width: 100%; height: auto; max-height: 80vh; display: block;"></video>
-        </div>
-    `
+    modal.innerHTML = `<video id="${videoId}" style="
+        width: min(90vw, 1200px); height: min(80vh, 675px); 
+        object-fit: contain; background: #000; border-radius: 8px;
+    "></video>`
     
-    modal.className = 'modal'
-    modal.onclick = (e) => {
-        if (e.target === modal) {
-            modal.remove()
-            document.body.style.overflow = ''
-        }
-    }
+    modal.onclick = () => { modal.remove(); document.body.style.overflow = '' }
     
     document.body.appendChild(modal)
     document.body.style.overflow = 'hidden'
