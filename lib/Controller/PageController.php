@@ -51,9 +51,19 @@ class PageController extends Controller {
 	
 		// Relax CSP for Shaka Player
 		$csp = new ContentSecurityPolicy();
+
+		// Media: allow both self (default files) AND blob (MSE)
+		$csp->addAllowedMediaDomain("'self'");
 		$csp->addAllowedMediaDomain('blob:');
+
+		// Scripts: allow self and blob workers
+		$csp->addAllowedScriptDomain("'self'");
 		$csp->addAllowedScriptDomain('blob:');
+
+		// Workers (MSE demuxers run in workers)
+		$csp->addAllowedWorkerSrcDomain("'self'");
 		$csp->addAllowedWorkerSrcDomain('blob:');
+
 		$response->setContentSecurityPolicy($csp);
 	
 		return $response;
@@ -73,9 +83,19 @@ class PageController extends Controller {
 	
 		// Relax CSP for Shaka Player
 		$csp = new ContentSecurityPolicy();
+		
+		// Media: allow both self (default files) AND blob (MSE)
+		$csp->addAllowedMediaDomain("'self'");
 		$csp->addAllowedMediaDomain('blob:');
+
+		// Scripts: allow self and blob workers
+		$csp->addAllowedScriptDomain("'self'");
 		$csp->addAllowedScriptDomain('blob:');
+
+		// Workers (MSE demuxers run in workers)
+		$csp->addAllowedWorkerSrcDomain("'self'");
 		$csp->addAllowedWorkerSrcDomain('blob:');
+
 		$response->setContentSecurityPolicy($csp);
 	
 		return $response;
