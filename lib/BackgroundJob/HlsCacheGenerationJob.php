@@ -182,8 +182,18 @@ class HlsCacheGenerationJob extends QueuedJob {
 			throw new \Exception("Cannot access cache directory locally");
 		}
 
-		// Generate adaptive bitrate HLS ladder
-		$this->generateAdaptiveHls($videoLocalPath, $cacheLocalPath, $filename, $resolutions);
+		// Generate adaptive bitrate HLS ladder with fallback
+		try {
+			$this->generateAdaptiveHls($videoLocalPath, $cacheLocalPath, $filename, $resolutions);
+		} catch (\Exception $e) {
+			$this->logger->warning('Adaptive HLS generation failed, falling back to single bitrate', [
+				'error' => $e->getMessage(),
+				'filename' => $filename
+			]);
+			
+			// Fallback to single bitrate (720p)
+			$this->generateSingleHls($videoLocalPath, $cacheLocalPath, $filename);
+		}
 	}
 
 	/**
@@ -217,36 +227,36 @@ class HlsCacheGenerationJob extends QueuedJob {
 			throw new \Exception('No valid resolutions selected');
 		}
 
-		// Build optimized FFmpeg command for adaptive streaming using a more reliable approach
+		// Build optimized FFmpeg command for adaptive streaming (fixed version)
 		$ffmpegCmd = '/usr/local/bin/ffmpeg -y -i ' . escapeshellarg($inputPath);
 		
-		// Map input streams and create output streams for each variant
+		// Map video streams for each variant (using proper -s:v:N syntax)
 		$streamIndex = 0;
 		foreach ($variants as $name => $variant) {
-			// Map video stream for this variant
 			$ffmpegCmd .= sprintf(
-				' -map 0:v:0 -c:v:%d libx264 -preset superfast -crf %s -maxrate %s -bufsize %s -s:%d %s -profile:v:%d main',
+				' -map 0:v:0 -c:v:%d libx264 -preset superfast -crf %s -maxrate %s -bufsize %s -s:v:%d %s -profile:v:%d main',
 				$streamIndex, $variant['crf'], $variant['maxrate'], $variant['bufsize'], $streamIndex, $variant['resolution'], $streamIndex
 			);
-			
-			// Map audio stream for this variant (each variant gets its own audio copy)
-			$ffmpegCmd .= sprintf(' -map 0:a:0 -c:a:%d aac -b:a:%d 128k', $streamIndex, $streamIndex);
 			$streamIndex++;
 		}
+
+		// Map single audio stream (shared across all variants - more efficient)
+		$ffmpegCmd .= ' -map 0:a:0 -c:a aac -b:a 128k';
 
 		// HLS options optimized for adaptive streaming
 		$ffmpegCmd .= ' -f hls -hls_time 6 -hls_playlist_type vod -hls_flags independent_segments';
 		$ffmpegCmd .= ' -master_pl_name master.m3u8';
 		
-		// Build var_stream_map for adaptive streaming - each variant has its own video and audio
-		$ffmpegCmd .= ' -var_stream_map "';
+		// Build var_stream_map - all variants share the single audio stream (a:0)
 		$streamMaps = [];
 		$streamIndex = 0;
 		foreach ($variants as $name => $variant) {
-			$streamMaps[] = "v:$streamIndex,a:$streamIndex,name:$name";
+			$streamMaps[] = "v:$streamIndex,a:0,name:$name";
 			$streamIndex++;
 		}
-		$ffmpegCmd .= implode(' ', $streamMaps) . '\"';
+		$varStreamMap = implode(' ', $streamMaps);
+		// Don't use escapeshellarg here - it adds extra quotes that break the command
+		$ffmpegCmd .= ' -var_stream_map "' . $varStreamMap . '"';
 		
 		// Output pattern for variant playlists
 		$ffmpegCmd .= ' ' . escapeshellarg($outputPath . '/playlist_%v.m3u8');
@@ -257,6 +267,15 @@ class HlsCacheGenerationJob extends QueuedJob {
 		$output = [];
 		$returnCode = 0;
 		set_time_limit(1800); // 30 minutes timeout
+		
+		// Log the exact command being executed
+		$this->logger->info('Executing FFmpeg command', [
+			'command' => $ffmpegCmd,
+			'inputPath' => $inputPath,
+			'outputPath' => $outputPath,
+			'variants' => array_keys($variants)
+		]);
+		
 		exec($ffmpegCmd . ' 2>&1', $output, $returnCode);
 
 		if ($returnCode !== 0) {
@@ -264,17 +283,52 @@ class HlsCacheGenerationJob extends QueuedJob {
 			$this->logger->error('FFmpeg adaptive HLS generation failed', [
 				'returnCode' => $returnCode,
 				'output' => $errorOutput,
-				'command' => $ffmpegCmd
+				'outputLines' => count($output),
+				'command' => $ffmpegCmd,
+				'commandLength' => strlen($ffmpegCmd)
 			]);
 			throw new \Exception("FFmpeg failed with return code $returnCode: $errorOutput");
 		}
 
 		$this->logger->info('Adaptive HLS generation completed successfully', [
-			'variants' => array_keys($variants),
 			'output' => implode("\n", array_slice($output, -5))
 		]);
 	}
 
+	/**
+	 * Generate single bitrate HLS as fallback (720p)
+	 */
+	private function generateSingleHls(string $inputPath, string $outputPath, string $filename): void {
+		$this->logger->info('Starting single bitrate HLS generation (fallback)', [
+			'input' => $inputPath,
+			'output' => $outputPath
+		]);
+
+		// Simple single-bitrate HLS command (720p)
+		$ffmpegCmd = '/usr/local/bin/ffmpeg -y -i ' . escapeshellarg($inputPath) .
+			' -c:v libx264 -preset superfast -crf 24 -maxrate 2400k -bufsize 4000k -s 1280x720' .
+			' -c:a aac -b:a 128k' .
+			' -f hls -hls_time 6 -hls_playlist_type vod -hls_flags independent_segments' .
+			' ' . escapeshellarg($outputPath . '/playlist.m3u8');
+
+		$this->logger->info('Executing single HLS FFmpeg command', ['cmd' => $ffmpegCmd]);
+
+		$output = [];
+		$returnCode = 0;
+		exec($ffmpegCmd . ' 2>&1', $output, $returnCode);
+
+		if ($returnCode !== 0) {
+			$errorOutput = implode("\n", $output);
+			$this->logger->error('Single HLS generation also failed', [
+				'returnCode' => $returnCode,
+				'output' => $errorOutput,
+				'command' => $ffmpegCmd
+			]);
+			throw new \Exception("Single HLS generation failed with return code $returnCode: $errorOutput");
+		}
+
+		$this->logger->info('Single HLS generation completed successfully');
+	}
 
 	/**
 	 * Send completion notification to user
