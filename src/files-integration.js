@@ -697,10 +697,9 @@ async function startCacheGeneration(files) {
 		if (result.success) {
 			console.log('HLS cache generation started successfully', result)
 
-			// Start progress tracking with modal
-			if (result.jobId && files.length === 1) {
-				// For single files, show progress modal
-				showProgressModal(files[0].filename, files[0].directory)
+			// Start progress tracking
+			if (result.jobId) {
+				console.log(`📈 Tracking progress for job: ${result.jobId}`)
 			}
 
 			OC.dialogs.info(

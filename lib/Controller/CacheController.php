@@ -54,10 +54,6 @@ class CacheController extends Controller {
 		$overwriteExisting = $this->request->getParam('overwriteExisting', false);
 		$resolutions = $this->request->getParam('resolutions', ['720p', '480p', '240p']);
 
-		if (empty($files)) {
-			return new JSONResponse(['error' => 'No files provided'], 400);
-		}
-
 		$this->logger->info('HLS cache generation requested', [
 			'user' => $user->getUID(),
 			'files' => count($files),
@@ -87,7 +83,6 @@ class CacheController extends Controller {
 			
 			$this->jobList->add(HlsCacheGenerationJob::class, $jobData);
 		}
-
 		return new JSONResponse([
 			'success' => true,
 			'jobId' => $jobId,
