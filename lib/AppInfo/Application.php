@@ -9,38 +9,23 @@ use OCP\AppFramework\Bootstrap\IBootContext;
 use OCP\AppFramework\Bootstrap\IBootstrap;
 use OCP\AppFramework\Bootstrap\IRegistrationContext;
 use OCP\Util;
-use OCP\AppFramework\Http\EmptyContentSecurityPolicy;
+use OCA\HyperViewer\BackgroundJob\HlsCacheGenerationJob;
+use OCP\AppFramework\Http\ContentSecurityPolicy;
 
 class Application extends App implements IBootstrap {
-    public const APP_ID = 'hyper_viewer';
+	public const APP_ID = 'hyper_viewer';
 
-    public function __construct() {
-        parent::__construct(self::APP_ID);
-    }
+	public function __construct() {
+		parent::__construct(self::APP_ID);
+	}
 
-    public function register(IRegistrationContext $context): void {
-        // Register any services or background jobs here if needed
-    }
+	public function register(IRegistrationContext $context): void {
+		// Register any services here if needed
+	}
 
-    public function boot(IBootContext $context): void {
-        // ✅ Global CSP relaxation for Shaka / MSE blob URLs
-        $csp = new EmptyContentSecurityPolicy();
-
-        // Allow media blobs for MSE (video streaming)
-        $csp->addAllowedMediaDomain("'self'");
-        $csp->addAllowedMediaDomain("blob:");
-
-        // Allow JS workers from blob:
-        $csp->addAllowedScriptDomain("'self'");
-        $csp->addAllowedScriptDomain("blob:");
-
-        $csp->addAllowedWorkerSrcDomain("'self'");
-        $csp->addAllowedWorkerSrcDomain("blob:");
-
-        // Register CSP globally (affects Files app too)
-        $context->registerContentSecurityPolicy($csp);
-
-        // ✅ Ensure Files integration JS is always loaded
-        Util::addScript(self::APP_ID, 'files-integration');
-    }
+	public function boot(IBootContext $context): void {
+		// Load files integration script globally
+		// This ensures it's available whenever the Files app loads
+		Util::addScript(self::APP_ID, 'files-integration');
+	}
 }
