@@ -673,8 +673,16 @@ async function startCacheGeneration(files) {
 	}))
 
 	try {
-		// Show progress dialog
-		showProgressDialog(files.length)
+		// Show appropriate progress interface
+		if (files.length === 1) {
+			// Single file: show sophisticated real-time progress modal
+			const file = files[0]
+			const directory = file.context?.dir || file.context?.fileList?.getCurrentDirectory() || '/'
+			showProgressModal(file.filename, directory)
+		} else {
+			// Multiple files: show simple progress dialog
+			showProgressDialog(files.length)
+		}
 
 		// Send to backend for processing
 		const response = await fetch(OC.generateUrl('/apps/hyper_viewer/cache/generate'), {
@@ -744,8 +752,39 @@ function getCacheLocationDescription(options) {
  * @param fileCount
  */
 function showProgressDialog(fileCount) {
-	// TODO: Implement progress dialog
 	console.log(`📊 Starting progress tracking for ${fileCount} files`)
+	
+	// Create progress modal
+	const modal = document.createElement('div')
+	modal.className = 'hyper-viewer-progress-modal'
+	modal.style.cssText = `
+		position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 10000;
+		background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center;
+		padding: 20px; box-sizing: border-box;
+	`
+	
+	modal.innerHTML = `
+		<div style="background: #1a1a1a; border-radius: 12px; padding: 24px; max-width: 500px; width: 100%; color: white;">
+			<h3 style="margin: 0 0 16px 0; color: #fff;">HLS Generation Progress</h3>
+			<p style="margin: 0 0 20px 0; color: #ccc;">Processing ${fileCount} file${fileCount > 1 ? 's' : ''}...</p>
+			<div style="background: #333; border-radius: 8px; height: 8px; overflow: hidden; margin-bottom: 16px;">
+				<div class="progress-bar" style="background: linear-gradient(90deg, #4a9eff, #0066cc); height: 100%; width: 0%; transition: width 0.3s ease;"></div>
+			</div>
+			<div class="progress-text" style="font-size: 14px; color: #999; text-align: center;">Starting...</div>
+			<button onclick="this.closest('.hyper-viewer-progress-modal').remove()" style="
+				margin-top: 20px; padding: 8px 16px; background: #333; border: none; color: white; 
+				border-radius: 6px; cursor: pointer; float: right;">Close</button>
+		</div>
+	`
+	
+	document.body.appendChild(modal)
+	
+	// Auto-close after 30 seconds if still showing
+	setTimeout(() => {
+		if (modal.parentNode) {
+			modal.remove()
+		}
+	}, 30000)
 }
 
 /**

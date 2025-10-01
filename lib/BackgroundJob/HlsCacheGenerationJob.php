@@ -208,7 +208,7 @@ class HlsCacheGenerationJob extends QueuedJob {
 
 		// Define optimized bitrate variants with resolution-specific presets
 		$allVariants = [
-			'1080p' => ['resolution' => '1920x1080', 'bitrate' => '6000k', 'maxrate' => '8000k', 'bufsize' => '12000k', 'crf' => '20', 'preset' => 'fast'],
+			'1080p' => ['resolution' => '1920x1080', 'bitrate' => '8000k', 'maxrate' => '12000k', 'bufsize' => '16000k', 'crf' => '18', 'preset' => 'medium', 'profile' => 'high', 'level' => '4.1', 'tune' => 'film'],
 			'720p' => ['resolution' => '1280x720', 'bitrate' => '3000k', 'maxrate' => '3600k', 'bufsize' => '6000k', 'crf' => '23', 'preset' => 'superfast'],
 			'480p' => ['resolution' => '854x480', 'bitrate' => '800k', 'maxrate' => '1000k', 'bufsize' => '1600k', 'crf' => '26', 'preset' => 'superfast'],
 			'360p' => ['resolution' => '640x360', 'bitrate' => '500k', 'maxrate' => '600k', 'bufsize' => '1000k', 'crf' => '28', 'preset' => 'superfast'],
@@ -234,10 +234,33 @@ class HlsCacheGenerationJob extends QueuedJob {
 		$streamIndex = 0;
 		foreach ($variants as $name => $variant) {
 			// Map video stream for this variant
-			$ffmpegCmd .= sprintf(
-				' -map 0:v:0 -c:v:%d libx264 -preset %s -crf %s -maxrate %s -bufsize %s -s:v:%d %s -profile:v:%d main',
-				$streamIndex, $variant['preset'], $variant['crf'], $variant['maxrate'], $variant['bufsize'], $streamIndex, $variant['resolution'], $streamIndex
+			$videoCmd = sprintf(
+				' -map 0:v:0 -c:v:%d libx264 -preset %s -crf %s -maxrate %s -bufsize %s -s:v:%d %s',
+				$streamIndex, $variant['preset'], $variant['crf'], $variant['maxrate'], $variant['bufsize'], $streamIndex, $variant['resolution']
 			);
+			
+			// Add profile (use 'high' for 1080p, 'main' for others)
+			$profile = isset($variant['profile']) ? $variant['profile'] : 'main';
+			$videoCmd .= sprintf(' -profile:v:%d %s', $streamIndex, $profile);
+			
+			// Add level for 1080p (better compatibility and quality)
+			if (isset($variant['level'])) {
+				$videoCmd .= sprintf(' -level:v:%d %s', $streamIndex, $variant['level']);
+			}
+			
+			// Add tune for 1080p (optimizes for film content)
+			if (isset($variant['tune'])) {
+				$videoCmd .= sprintf(' -tune:%d %s', $streamIndex, $variant['tune']);
+			}
+			
+			// Add additional quality flags for 1080p
+			if ($name === '1080p') {
+				$videoCmd .= sprintf(' -refs:%d 6 -me_method:%d hex -subq:%d 8 -trellis:%d 2 -bf:%d 3 -b_strategy:%d 2 -coder:%d 1', 
+					$streamIndex, $streamIndex, $streamIndex, $streamIndex, $streamIndex, $streamIndex, $streamIndex);
+			}
+			
+			$ffmpegCmd .= $videoCmd;
+			
 			// Map audio stream for this variant (each variant needs its own audio for FFmpeg 4.4.x)
 			$ffmpegCmd .= sprintf(' -map 0:a:0 -c:a:%d aac -b:a:%d 128k', $streamIndex, $streamIndex);
 			$streamIndex++;
