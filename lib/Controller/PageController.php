@@ -46,16 +46,19 @@ class PageController extends Controller {
 	public function index() {
 		Util::addScript($this->appName, 'hyper_viewer-main');
 		Util::addStyle($this->appName, 'icons');
-
+	
 		$response = new TemplateResponse($this->appName, 'main');
-		
-		// Set CSP policy to allow blob URLs for media (needed for Shaka Player)
+	
+		// Relax CSP for Shaka Player
 		$csp = new ContentSecurityPolicy();
 		$csp->addAllowedMediaDomain('blob:');
+		$csp->addAllowedScriptDomain('blob:');
+		$csp->addAllowedWorkerSrcDomain('blob:');
 		$response->setContentSecurityPolicy($csp);
-		
+	
 		return $response;
 	}
+	
 
 	/**
 	 * Files integration endpoint with relaxed CSP for blob URLs
@@ -64,18 +67,19 @@ class PageController extends Controller {
 	 * @NoCSRFRequired
 	 */
 	public function filesIntegration() {
-		// Load files integration script
 		Util::addInitScript($this->appName, 'files-integration');
-		
-		// Create response with relaxed CSP for media blob URLs
+	
 		$response = new TemplateResponse($this->appName, 'empty');
+	
+		// Relax CSP for Shaka Player
 		$csp = new ContentSecurityPolicy();
 		$csp->addAllowedMediaDomain('blob:');
+		$csp->addAllowedScriptDomain('blob:');
+		$csp->addAllowedWorkerSrcDomain('blob:');
 		$response->setContentSecurityPolicy($csp);
-		
+	
 		return $response;
 	}
-
 	/**
 	 * Load files integration script globally
 	 * This will be called automatically by Nextcloud when the Files app loads
