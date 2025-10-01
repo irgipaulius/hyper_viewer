@@ -566,24 +566,6 @@ function loadShakaPlayer(filename, cachePath, context) {
             console.log('🎬 Creating Shaka Player...')
             shakaPlayer = new shaka.Player(video)
             
-            console.log('🎨 Initializing Shaka UI...')
-            // Wait for DOM to be ready, then create UI
-            setTimeout(() => {
-                try {
-                    // Create a container div for the UI
-                    const videoContainer = document.createElement('div')
-                    videoContainer.className = 'shaka-video-container'
-                    video.parentElement.insertBefore(videoContainer, video)
-                    videoContainer.appendChild(video)
-                    
-                    shakaUI = new shaka.ui.Overlay(shakaPlayer, videoContainer, videoContainer)
-                    console.log('✅ Shaka Player with UI created successfully')
-                } catch (uiError) {
-                    console.error('❌ Shaka UI creation failed:', uiError)
-                    console.log('🔄 Continuing with basic player (no custom UI)')
-                }
-            }, 100)
-
             // Construct HLS manifest URL using our app's HLS serving endpoint
             // Convert cache path like "/Paulius/.cached_hls/MVI_0079" to proper URL
             const encodedCachePath = encodeURIComponent(cachePath)
@@ -594,6 +576,39 @@ function loadShakaPlayer(filename, cachePath, context) {
             shakaPlayer.load(manifestUrl).then(() => {
                 console.log('✅ Shaka successfully loaded HLS video:', manifestUrl)
                 console.log('🎥 Video should now be playing')
+                
+                // Initialize UI after video loads successfully
+                console.log('🎨 Initializing Shaka UI after video load...')
+                setTimeout(() => {
+                    try {
+                        // Create a container div for the UI
+                        const videoContainer = document.createElement('div')
+                        videoContainer.className = 'shaka-video-container'
+                        video.parentElement.insertBefore(videoContainer, video)
+                        videoContainer.appendChild(video)
+                        
+                        // Initialize UI with minimal configuration
+                        shakaUI = new shaka.ui.Overlay(shakaPlayer, videoContainer, video)
+                        
+                        // Configure UI after creation
+                        const config = {
+                            controlPanelElements: [
+                                'play_pause',
+                                'time_and_duration',
+                                'mute',
+                                'volume',
+                                'fullscreen'
+                            ]
+                        }
+                        shakaUI.configure(config)
+                        console.log('✅ Shaka Player with UI created successfully')
+                    } catch (uiError) {
+                        console.error('❌ Shaka UI creation failed:', uiError)
+                        console.log('🔄 Continuing with basic player (no custom UI)')
+                        // Add basic video controls as fallback
+                        video.controls = true
+                    }
+                }, 500)
             }).catch(err => {
                 console.error('❌ Shaka load error:', err)
                 console.error('❌ Error details:', {
