@@ -1187,9 +1187,9 @@ function loadShakaPlayer(filename, cachePath, context) {
         const ui = new shaka.ui.Overlay(player, video.parentElement, video) // eslint-disable-line no-unused-vars
         
         // Build manifest URL
-        const baseUrl = `/apps/hyper_viewer/hls/${encodeURIComponent(cachePath)}`
-        const masterUrl = `${baseUrl}/master.m3u8`
-        const playlistUrl = `${baseUrl}/playlist.m3u8`
+        const encodedCachePath = encodeURIComponent(cachePath)
+        const masterUrl = `${OC.generateUrl('/apps/hyper_viewer/hls')}/${encodedCachePath}/master.m3u8`
+        const playlistUrl = `${OC.generateUrl('/apps/hyper_viewer/hls')}/${encodedCachePath}/playlist.m3u8`
         
         // Try master.m3u8 first, fallback to playlist.m3u8
         player.load(masterUrl).catch(() => player.load(playlistUrl))
