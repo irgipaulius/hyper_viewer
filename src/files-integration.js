@@ -1160,17 +1160,45 @@ function loadShakaPlayer(filename, cachePath, context) {
         padding: 20px; box-sizing: border-box;
     `
     
-    modal.innerHTML = `<video id="${videoId}" style="
-        width: min(90vw, 1200px); height: min(80vh, 675px); 
-        object-fit: contain; background: #000; border-radius: 8px;
-    "></video>`
+    modal.innerHTML = `
+        <video id="${videoId}" autoplay style="
+            width: min(90vw, 1200px); height: min(80vh, 675px); 
+            object-fit: contain; background: #000; border-radius: 8px;
+        "></video>
+        <button onclick="this.parentElement.onclick({target: this.parentElement})" style="
+            position: absolute; top: 20px; right: 20px; background: rgba(0,0,0,0.7); 
+            border: none; color: white; width: 40px; height: 40px; border-radius: 50%; 
+            font-size: 18px; cursor: pointer; z-index: 1;">✕</button>
+    `
     
-    modal.onclick = () => { modal.remove(); document.body.style.overflow = '' }
+    const closeModal = () => {
+        modal.remove()
+        document.body.style.overflow = ''
+        document.removeEventListener('keydown', handleKeydown)
+    }
+    
+    const handleKeydown = (e) => {
+        if (e.key === 'Escape' || e.key === 'Backspace') {
+            closeModal()
+        }
+    }
+    
+    modal.onclick = (e) => {
+        if (e.target === modal) {
+            closeModal()
+        }
+    }
     
     document.body.appendChild(modal)
     document.body.style.overflow = 'hidden'
+    document.addEventListener('keydown', handleKeydown)
     
     const video = document.getElementById(videoId)
+    
+    // Prevent video clicks from bubbling up to modal
+    video.onclick = (e) => {
+        e.stopPropagation()
+    }
     
     // Initialize Shaka Player
     shaka.polyfill.installAll()

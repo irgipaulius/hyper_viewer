@@ -206,13 +206,13 @@ class HlsCacheGenerationJob extends QueuedJob {
 			'resolutions' => $resolutions
 		]);
 
-		// Define optimized bitrate variants for speed and storage efficiency
+		// Define optimized bitrate variants with resolution-specific presets
 		$allVariants = [
-			'1080p' => ['resolution' => '1920x1080', 'bitrate' => '4000k', 'maxrate' => '4800k', 'bufsize' => '8000k', 'crf' => '23'],
-			'720p' => ['resolution' => '1280x720', 'bitrate' => '3000k', 'maxrate' => '3600k', 'bufsize' => '6000k', 'crf' => '23'],
-			'480p' => ['resolution' => '854x480', 'bitrate' => '800k', 'maxrate' => '1000k', 'bufsize' => '1600k', 'crf' => '26'],
-			'360p' => ['resolution' => '640x360', 'bitrate' => '500k', 'maxrate' => '600k', 'bufsize' => '1000k', 'crf' => '28'],
-			'240p' => ['resolution' => '426x240', 'bitrate' => '300k', 'maxrate' => '400k', 'bufsize' => '600k', 'crf' => '30']
+			'1080p' => ['resolution' => '1920x1080', 'bitrate' => '6000k', 'maxrate' => '8000k', 'bufsize' => '12000k', 'crf' => '20', 'preset' => 'fast'],
+			'720p' => ['resolution' => '1280x720', 'bitrate' => '3000k', 'maxrate' => '3600k', 'bufsize' => '6000k', 'crf' => '23', 'preset' => 'superfast'],
+			'480p' => ['resolution' => '854x480', 'bitrate' => '800k', 'maxrate' => '1000k', 'bufsize' => '1600k', 'crf' => '26', 'preset' => 'superfast'],
+			'360p' => ['resolution' => '640x360', 'bitrate' => '500k', 'maxrate' => '600k', 'bufsize' => '1000k', 'crf' => '28', 'preset' => 'superfast'],
+			'240p' => ['resolution' => '426x240', 'bitrate' => '300k', 'maxrate' => '400k', 'bufsize' => '600k', 'crf' => '30', 'preset' => 'superfast']
 		];
 
 		// Filter variants based on user selection
@@ -235,8 +235,8 @@ class HlsCacheGenerationJob extends QueuedJob {
 		foreach ($variants as $name => $variant) {
 			// Map video stream for this variant
 			$ffmpegCmd .= sprintf(
-				' -map 0:v:0 -c:v:%d libx264 -preset superfast -crf %s -maxrate %s -bufsize %s -s:v:%d %s -profile:v:%d main',
-				$streamIndex, $variant['crf'], $variant['maxrate'], $variant['bufsize'], $streamIndex, $variant['resolution'], $streamIndex
+				' -map 0:v:0 -c:v:%d libx264 -preset %s -crf %s -maxrate %s -bufsize %s -s:v:%d %s -profile:v:%d main',
+				$streamIndex, $variant['preset'], $variant['crf'], $variant['maxrate'], $variant['bufsize'], $streamIndex, $variant['resolution'], $streamIndex
 			);
 			// Map audio stream for this variant (each variant needs its own audio for FFmpeg 4.4.x)
 			$ffmpegCmd .= sprintf(' -map 0:a:0 -c:a:%d aac -b:a:%d 128k', $streamIndex, $streamIndex);
@@ -264,10 +264,12 @@ class HlsCacheGenerationJob extends QueuedJob {
 		// Add progress output to log file for real-time tracking
 		$logFile = $outputPath . '/generation.log';
 		$progressFile = $outputPath . '/progress.json';
-		$ffmpegCmd .= ' -progress pipe:1 2>&1 | tee ' . escapeshellarg($logFile);
-
-		// Initialize progress file
+		
+		// Initialize progress file BEFORE starting FFmpeg
 		$this->initializeProgressFile($progressFile, $filename, $resolutions);
+		
+		// Add progress piping to FFmpeg command
+		$ffmpegCmd .= ' -progress ' . escapeshellarg($progressFile . '.raw') . ' 2>&1 | tee ' . escapeshellarg($logFile);
 
 		$this->logger->info('Executing optimized FFmpeg command', ['cmd' => $ffmpegCmd]);
 
@@ -284,7 +286,8 @@ class HlsCacheGenerationJob extends QueuedJob {
 			'variants' => array_keys($variants)
 		]);
 		
-		exec($ffmpegCmd . ' 2>&1', $output, $returnCode);
+		// Execute FFmpeg with real-time progress monitoring
+		$this->executeFFmpegWithProgress($ffmpegCmd, $progressFile, $output, $returnCode);
 
 		if ($returnCode !== 0) {
 			$errorOutput = implode("\n", $output);
@@ -315,7 +318,7 @@ class HlsCacheGenerationJob extends QueuedJob {
 	 */
 	private function initializeProgressFile(string $progressFile, string $filename, array $resolutions): void {
 		$progressData = [
-			'status' => 'starting',
+			'status' => 'processing',
 			'filename' => $filename,
 			'resolutions' => $resolutions,
 			'progress' => 0,
@@ -331,7 +334,14 @@ class HlsCacheGenerationJob extends QueuedJob {
 			'error' => null
 		];
 
+		// Ensure directory exists
+		$dir = dirname($progressFile);
+		if (!is_dir($dir)) {
+			mkdir($dir, 0755, true);
+		}
+		
 		file_put_contents($progressFile, json_encode($progressData, JSON_PRETTY_PRINT));
+		$this->logger->info('Progress file initialized', ['file' => $progressFile]);
 	}
 
 	/**
@@ -414,5 +424,113 @@ class HlsCacheGenerationJob extends QueuedJob {
 		// This is a simplified approach - in a real implementation,
 		// you'd need to properly handle the user context in background jobs
 		return $this->argument['userId'] ?? '';
+	}
+
+	/**
+	 * Execute FFmpeg with real-time progress monitoring
+	 */
+	private function executeFFmpegWithProgress(string $ffmpegCmd, string $progressFile, array &$output, int &$returnCode): void {
+		$progressRawFile = $progressFile . '.raw';
+		
+		// Start FFmpeg process
+		$descriptorspec = [
+			0 => ['pipe', 'r'],  // stdin
+			1 => ['pipe', 'w'],  // stdout
+			2 => ['pipe', 'w']   // stderr
+		];
+		
+		$process = proc_open($ffmpegCmd, $descriptorspec, $pipes);
+		$output = [];
+		
+		if (is_resource($process)) {
+			// Close stdin
+			fclose($pipes[0]);
+			
+			// Read output in real-time
+			stream_set_blocking($pipes[1], false);
+			stream_set_blocking($pipes[2], false);
+			
+			while (true) {
+				$status = proc_get_status($process);
+				
+				// Read stdout and stderr
+				$stdout = fread($pipes[1], 8192);
+				$stderr = fread($pipes[2], 8192);
+				
+				if ($stdout !== false && $stdout !== '') {
+					$output[] = $stdout;
+				}
+				if ($stderr !== false && $stderr !== '') {
+					$output[] = $stderr;
+					// Parse progress from stderr
+					$this->parseAndUpdateProgress($stderr, $progressFile);
+				}
+				
+				if (!$status['running']) {
+					break;
+				}
+				
+				usleep(100000); // 0.1 second
+			}
+			
+			// Close pipes
+			fclose($pipes[1]);
+			fclose($pipes[2]);
+			
+			// Get return code
+			$returnCode = proc_close($process);
+		} else {
+			$returnCode = -1;
+			$output[] = 'Failed to start FFmpeg process';
+		}
+	}
+
+	/**
+	 * Parse FFmpeg progress output and update progress file
+	 */
+	private function parseAndUpdateProgress(string $output, string $progressFile): void {
+		if (!file_exists($progressFile)) {
+			return;
+		}
+		
+		$progressData = json_decode(file_get_contents($progressFile), true) ?: [];
+		$updated = false;
+		
+		// Parse FFmpeg progress output
+		if (preg_match('/frame=\s*(\d+)/', $output, $matches)) {
+			$progressData['frame'] = (int)$matches[1];
+			$updated = true;
+		}
+		
+		if (preg_match('/fps=\s*([\d.]+)/', $output, $matches)) {
+			$progressData['fps'] = (float)$matches[1];
+			$updated = true;
+		}
+		
+		if (preg_match('/speed=\s*([\d.]+x)/', $output, $matches)) {
+			$progressData['speed'] = $matches[1];
+			$updated = true;
+		}
+		
+		if (preg_match('/time=(\d{2}:\d{2}:\d{2}\.\d{2})/', $output, $matches)) {
+			$progressData['time'] = $matches[1];
+			$updated = true;
+		}
+		
+		if (preg_match('/bitrate=\s*([\d.]+kbits\/s)/', $output, $matches)) {
+			$progressData['bitrate'] = $matches[1];
+			$updated = true;
+		}
+		
+		if (preg_match('/size=\s*(\d+kB)/', $output, $matches)) {
+			$progressData['size'] = $matches[1];
+			$updated = true;
+		}
+		
+		if ($updated) {
+			$progressData['lastUpdate'] = time();
+			$progressData['status'] = 'processing';
+			file_put_contents($progressFile, json_encode($progressData, JSON_PRETTY_PRINT));
+		}
 	}
 }
