@@ -697,9 +697,10 @@ async function startCacheGeneration(files) {
 		if (result.success) {
 			console.log('HLS cache generation started successfully', result)
 
-			// Start progress tracking
-			if (result.jobId) {
-				trackProgress(result.jobId, files.length)
+			// Start progress tracking with modal
+			if (result.jobId && files.length === 1) {
+				// For single files, show progress modal
+				showProgressModal(files[0].filename, files[0].directory)
 			}
 
 			OC.dialogs.info(
@@ -749,56 +750,329 @@ function showProgressDialog(fileCount) {
 }
 
 /**
- * Track progress of cache generation
- *
- * @param jobId
- * @param fileCount
+ * Show progress modal for HLS generation
  */
-async function trackProgress(jobId, fileCount) {
-	console.log(`📈 Tracking progress for job: ${jobId}`)
+function showProgressModal(filename, directory) {
+	console.log(`📈 Showing progress modal for: ${filename}`)
 
-	const maxAttempts = 240 // 20 minutes max (for large videos)
-	let attempts = 0
+	// Create unique modal ID
+	const modalId = `progressModal_${Date.now()}`
+	
+	// Create modal container
+	const modal = document.createElement('div')
+	modal.id = modalId
+	modal.className = 'hyper-viewer-progress-modal'
+	modal.setAttribute('role', 'dialog')
+	modal.setAttribute('aria-modal', 'true')
+	modal.setAttribute('aria-labelledby', 'progress-title')
+	
+	modal.innerHTML = `
+		<div class="hyper-viewer-overlay"></div>
+		<div class="hyper-viewer-progress-container">
+			<div class="hyper-viewer-progress-header">
+				<h3 id="progress-title" class="hyper-viewer-progress-title">Generating HLS Cache</h3>
+				<button class="hyper-viewer-close" aria-label="Close progress modal">
+					<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<line x1="18" y1="6" x2="6" y2="18"></line>
+						<line x1="6" y1="6" x2="18" y2="18"></line>
+					</svg>
+				</button>
+			</div>
+			<div class="hyper-viewer-progress-content">
+				<div class="progress-file-info">
+					<strong>File:</strong> ${filename}
+				</div>
+				<div class="progress-bar-container">
+					<div class="progress-bar">
+						<div class="progress-bar-fill" style="width: 0%"></div>
+					</div>
+					<div class="progress-percentage">0%</div>
+				</div>
+				<div class="progress-details">
+					<div class="progress-status">Starting...</div>
+					<div class="progress-stats">
+						<span class="progress-speed">Speed: 0x</span>
+						<span class="progress-time">Time: 00:00:00</span>
+						<span class="progress-fps">FPS: 0</span>
+					</div>
+				</div>
+				<div class="progress-spinner">
+					<div class="spinner"></div>
+				</div>
+			</div>
+		</div>
+		
+		<style>
+			.hyper-viewer-progress-modal {
+				position: fixed;
+				top: 0;
+				left: 0;
+				right: 0;
+				bottom: 0;
+				z-index: 10001;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				padding: 20px;
+				box-sizing: border-box;
+				opacity: 0;
+				visibility: hidden;
+				transition: opacity 0.3s ease, visibility 0.3s ease;
+			}
+			
+			.hyper-viewer-progress-modal.show {
+				opacity: 1;
+				visibility: visible;
+			}
+			
+			.hyper-viewer-progress-container {
+				position: relative;
+				background: #1a1a1a;
+				border-radius: 12px;
+				box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+				max-width: 500px;
+				width: 100%;
+				display: flex;
+				flex-direction: column;
+				overflow: hidden;
+				transform: scale(0.95);
+				transition: transform 0.3s ease;
+			}
+			
+			.hyper-viewer-progress-modal.show .hyper-viewer-progress-container {
+				transform: scale(1);
+			}
+			
+			.hyper-viewer-progress-header {
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				padding: 16px 20px;
+				background: #2a2a2a;
+				border-bottom: 1px solid #3a3a3a;
+			}
+			
+			.hyper-viewer-progress-title {
+				margin: 0;
+				color: #ffffff;
+				font-size: 16px;
+				font-weight: 600;
+			}
+			
+			.hyper-viewer-progress-content {
+				padding: 20px;
+				color: #ffffff;
+			}
+			
+			.progress-file-info {
+				margin-bottom: 20px;
+				font-size: 14px;
+				color: #cccccc;
+			}
+			
+			.progress-bar-container {
+				display: flex;
+				align-items: center;
+				gap: 12px;
+				margin-bottom: 16px;
+			}
+			
+			.progress-bar {
+				flex: 1;
+				height: 8px;
+				background: #333333;
+				border-radius: 4px;
+				overflow: hidden;
+			}
+			
+			.progress-bar-fill {
+				height: 100%;
+				background: linear-gradient(90deg, #4a9eff, #0066cc);
+				border-radius: 4px;
+				transition: width 0.3s ease;
+			}
+			
+			.progress-percentage {
+				font-weight: 600;
+				min-width: 40px;
+				text-align: right;
+			}
+			
+			.progress-details {
+				display: flex;
+				flex-direction: column;
+				gap: 8px;
+			}
+			
+			.progress-status {
+				font-weight: 500;
+				color: #4a9eff;
+			}
+			
+			.progress-stats {
+				display: flex;
+				gap: 16px;
+				font-size: 13px;
+				color: #999999;
+			}
+			
+			.progress-spinner {
+				display: flex;
+				justify-content: center;
+				margin-top: 16px;
+			}
+			
+			.spinner {
+				width: 24px;
+				height: 24px;
+				border: 2px solid #333333;
+				border-top: 2px solid #4a9eff;
+				border-radius: 50%;
+				animation: spin 1s linear infinite;
+			}
+			
+			@keyframes spin {
+				0% { transform: rotate(0deg); }
+				100% { transform: rotate(360deg); }
+			}
+			
+			.hyper-viewer-close {
+				background: transparent;
+				border: none;
+				color: #ffffff;
+				cursor: pointer;
+				padding: 8px;
+				border-radius: 6px;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				transition: background-color 0.2s ease, color 0.2s ease;
+			}
+			
+			.hyper-viewer-close:hover {
+				background: rgba(255, 255, 255, 0.1);
+				color: #ff6b6b;
+			}
+		</style>
+	`
+	
+	// Add modal to DOM
+	document.body.appendChild(modal)
+	
+	// Prevent body scroll
+	document.body.style.overflow = 'hidden'
+	
+	// Show modal with animation
+	requestAnimationFrame(() => {
+		modal.classList.add('show')
+	})
 
-	const checkProgress = async () => {
+	// Close functionality
+	const closeModal = () => {
+		modal.classList.remove('show')
+		setTimeout(() => {
+			document.body.style.overflow = ''
+			if (modal.parentNode) {
+				modal.parentNode.removeChild(modal)
+			}
+		}, 300)
+	}
+
+	modal.querySelector('.hyper-viewer-close').addEventListener('click', closeModal)
+	modal.querySelector('.hyper-viewer-overlay').addEventListener('click', closeModal)
+
+	// Start progress polling
+	startProgressPolling(filename, directory, modal)
+}
+
+/**
+ * Start polling for progress updates
+ */
+function startProgressPolling(filename, directory, modal) {
+	const baseFilename = filename.replace(/\.[^/.]+$/, '') // Remove extension
+	const cachePath = directory === '/' ? `/.cached_hls/${baseFilename}` : `${directory}/.cached_hls/${baseFilename}`
+	
+	let pollCount = 0
+	const maxPolls = 360 // 30 minutes max (polling every 5 seconds)
+	
+	const poll = async () => {
 		try {
-			const response = await fetch(OC.generateUrl('/apps/hyper_viewer/cache/progress'), {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					requesttoken: OC.requestToken,
-				},
-				body: JSON.stringify({ jobId }),
-			})
+			pollCount++
+			console.log(`📊 Progress poll ${pollCount}/${maxPolls} for: ${filename}`)
 
-			const progress = await response.json()
-			console.log('📊 Progress update:', progress)
+			const encodedCachePath = encodeURIComponent(cachePath)
+			const response = await fetch(`/apps/hyper_viewer/cache/progress/${encodedCachePath}`)
+			const result = await response.json()
 
-			if (progress.status === 'completed') {
-				console.log('✅ HLS cache generation completed!')
-				return
+			if (result.success && result.progress) {
+				updateProgressModal(modal, result.progress)
+				
+				if (result.progress.status === 'completed') {
+					console.log(`✅ HLS generation completed for: ${filename}`)
+					setTimeout(() => {
+						modal.querySelector('.hyper-viewer-close').click()
+					}, 2000) // Auto-close after 2 seconds
+					return
+				} else if (result.progress.status === 'failed') {
+					console.error(`❌ HLS generation failed for: ${filename}`)
+					updateProgressModal(modal, { ...result.progress, status: 'Error: Generation failed' })
+					return
+				}
 			}
 
-			if (progress.status === 'failed') {
-				console.error('❌ HLS cache generation failed:', progress.message)
-				return
-			}
-
-			// Continue tracking if still processing
-			attempts++
-			if (attempts < maxAttempts) {
-				setTimeout(checkProgress, 5000) // Check every 5 seconds
-			} else {
-				console.log('⏰ Progress tracking timeout reached')
+			// Continue polling if not completed and within limits
+			if (pollCount < maxPolls && modal.parentNode) {
+				setTimeout(poll, 5000) // Poll every 5 seconds
 			}
 
 		} catch (error) {
-			console.error('Failed to check progress:', error)
+			console.error('Progress polling error:', error)
+			if (pollCount < maxPolls && modal.parentNode) {
+				setTimeout(poll, 5000) // Retry on error
+			}
 		}
 	}
 
-	// Start checking progress after a short delay
-	setTimeout(checkProgress, 2000)
+	// Start polling after a short delay
+	setTimeout(poll, 2000)
+}
+
+/**
+ * Update progress modal with latest data
+ */
+function updateProgressModal(modal, progress) {
+	const progressBar = modal.querySelector('.progress-bar-fill')
+	const progressPercentage = modal.querySelector('.progress-percentage')
+	const progressStatus = modal.querySelector('.progress-status')
+	const progressSpeed = modal.querySelector('.progress-speed')
+	const progressTime = modal.querySelector('.progress-time')
+	const progressFps = modal.querySelector('.progress-fps')
+	const spinner = modal.querySelector('.progress-spinner')
+
+	// Calculate progress percentage (rough estimate based on time)
+	let percentage = progress.progress || 0
+	if (progress.time && progress.time !== '00:00:00') {
+		// Rough estimation - this could be improved with video duration
+		const timeMatch = progress.time.match(/(\d{2}):(\d{2}):(\d{2})/)
+		if (timeMatch) {
+			const totalSeconds = parseInt(timeMatch[1]) * 3600 + parseInt(timeMatch[2]) * 60 + parseInt(timeMatch[3])
+			// Assume average video is 3 minutes (180 seconds) for rough percentage
+			percentage = Math.min(Math.round((totalSeconds / 180) * 100), 99)
+		}
+	}
+
+	if (progress.status === 'completed') {
+		percentage = 100
+		spinner.style.display = 'none'
+	}
+
+	// Update UI elements
+	progressBar.style.width = `${percentage}%`
+	progressPercentage.textContent = `${percentage}%`
+	progressStatus.textContent = progress.status || 'Processing...'
+	progressSpeed.textContent = `Speed: ${progress.speed || '0x'}`
+	progressTime.textContent = `Time: ${progress.time || '00:00:00'}`
+	progressFps.textContent = `FPS: ${progress.fps || 0}`
 }
 
 /**

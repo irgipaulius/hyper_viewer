@@ -209,7 +209,7 @@ class HlsCacheGenerationJob extends QueuedJob {
 		// Define optimized bitrate variants for speed and storage efficiency
 		$allVariants = [
 			'1080p' => ['resolution' => '1920x1080', 'bitrate' => '4000k', 'maxrate' => '4800k', 'bufsize' => '8000k', 'crf' => '23'],
-			'720p' => ['resolution' => '1280x720', 'bitrate' => '2000k', 'maxrate' => '2400k', 'bufsize' => '4000k', 'crf' => '24'],
+			'720p' => ['resolution' => '1280x720', 'bitrate' => '3000k', 'maxrate' => '3600k', 'bufsize' => '6000k', 'crf' => '23'],
 			'480p' => ['resolution' => '854x480', 'bitrate' => '800k', 'maxrate' => '1000k', 'bufsize' => '1600k', 'crf' => '26'],
 			'360p' => ['resolution' => '640x360', 'bitrate' => '500k', 'maxrate' => '600k', 'bufsize' => '1000k', 'crf' => '28'],
 			'240p' => ['resolution' => '426x240', 'bitrate' => '300k', 'maxrate' => '400k', 'bufsize' => '600k', 'crf' => '30']
@@ -261,12 +261,20 @@ class HlsCacheGenerationJob extends QueuedJob {
 		// Output pattern for variant playlists
 		$ffmpegCmd .= ' ' . escapeshellarg($outputPath . '/playlist_%v.m3u8');
 
+		// Add progress output to log file for real-time tracking
+		$logFile = $outputPath . '/generation.log';
+		$progressFile = $outputPath . '/progress.json';
+		$ffmpegCmd .= ' -progress pipe:1 2>&1 | tee ' . escapeshellarg($logFile);
+
+		// Initialize progress file
+		$this->initializeProgressFile($progressFile, $filename, $resolutions);
+
 		$this->logger->info('Executing optimized FFmpeg command', ['cmd' => $ffmpegCmd]);
 
 		// Execute FFmpeg with extended timeout for multi-bitrate encoding
 		$output = [];
 		$returnCode = 0;
-		set_time_limit(1800); // 30 minutes timeout
+		set_time_limit(3600 * 3); // 3 hour timeout
 		
 		// Log the exact command being executed
 		$this->logger->info('Executing FFmpeg command', [
@@ -287,12 +295,60 @@ class HlsCacheGenerationJob extends QueuedJob {
 				'command' => $ffmpegCmd,
 				'commandLength' => strlen($ffmpegCmd)
 			]);
+			
+			// Update progress file to indicate failure
+			$this->updateProgressFileCompletion($progressFile, false, $errorOutput);
+			
 			throw new \Exception("FFmpeg failed with return code $returnCode: $errorOutput");
 		}
 
 		$this->logger->info('Adaptive HLS generation completed successfully', [
 			'output' => implode("\n", array_slice($output, -5))
 		]);
+
+		// Update progress file to indicate completion
+		$this->updateProgressFileCompletion($progressFile, true);
+	}
+
+	/**
+	 * Initialize progress tracking file
+	 */
+	private function initializeProgressFile(string $progressFile, string $filename, array $resolutions): void {
+		$progressData = [
+			'status' => 'starting',
+			'filename' => $filename,
+			'resolutions' => $resolutions,
+			'progress' => 0,
+			'frame' => 0,
+			'fps' => 0,
+			'speed' => '0x',
+			'time' => '00:00:00',
+			'bitrate' => '0kbits/s',
+			'size' => '0kB',
+			'startTime' => time(),
+			'lastUpdate' => time(),
+			'completed' => false,
+			'error' => null
+		];
+
+		file_put_contents($progressFile, json_encode($progressData, JSON_PRETTY_PRINT));
+	}
+
+	/**
+	 * Update progress file when generation completes
+	 */
+	private function updateProgressFileCompletion(string $progressFile, bool $success, string $error = ''): void {
+		if (file_exists($progressFile)) {
+			$progressData = json_decode(file_get_contents($progressFile), true) ?: [];
+			$progressData['status'] = $success ? 'completed' : 'failed';
+			$progressData['completed'] = $success;
+			$progressData['progress'] = $success ? 100 : $progressData['progress'];
+			$progressData['lastUpdate'] = time();
+			if (!$success && $error) {
+				$progressData['error'] = $error;
+			}
+			file_put_contents($progressFile, json_encode($progressData, JSON_PRETTY_PRINT));
+		}
 	}
 
 	/**
@@ -304,9 +360,9 @@ class HlsCacheGenerationJob extends QueuedJob {
 			'output' => $outputPath
 		]);
 
-		// Simple single-bitrate HLS command (720p)
+		// Simple single-bitrate HLS command (720p with higher bitrate)
 		$ffmpegCmd = '/usr/local/bin/ffmpeg -y -i ' . escapeshellarg($inputPath) .
-			' -c:v libx264 -preset superfast -crf 24 -maxrate 2400k -bufsize 4000k -s 1280x720' .
+			' -c:v libx264 -preset superfast -crf 23 -maxrate 3600k -bufsize 6000k -s 1280x720' .
 			' -c:a aac -b:a 128k' .
 			' -f hls -hls_time 6 -hls_playlist_type vod -hls_flags independent_segments' .
 			' ' . escapeshellarg($outputPath . '/playlist.m3u8');

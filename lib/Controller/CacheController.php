@@ -146,6 +146,101 @@ class CacheController extends Controller {
 	}
 
 	/**
+	 * Get real-time progress for HLS generation
+	 * 
+	 * @NoAdminRequired
+	 * @NoCSRFRequired
+	 */
+	public function getProgress(string $cachePath): JSONResponse {
+		$user = $this->userSession->getUser();
+		if (!$user) {
+			return new JSONResponse(['error' => 'User not authenticated'], 401);
+		}
+
+		try {
+			$userFolder = $this->rootFolder->getUserFolder($user->getUID());
+			$decodedCachePath = urldecode($cachePath);
+			
+			// Check if cache directory exists
+			if (!$userFolder->nodeExists($decodedCachePath)) {
+				return new JSONResponse(['error' => 'Cache path not found'], 404);
+			}
+
+			$cacheFolder = $userFolder->get($decodedCachePath);
+			if (!($cacheFolder instanceof \OCP\Files\Folder)) {
+				return new JSONResponse(['error' => 'Invalid cache path'], 400);
+			}
+
+			// Look for progress.json file
+			$progressFile = $decodedCachePath . '/progress.json';
+			$logFile = $decodedCachePath . '/generation.log';
+
+			$progressData = ['status' => 'not_found', 'progress' => 0];
+
+			if ($userFolder->nodeExists($progressFile)) {
+				$progressNode = $userFolder->get($progressFile);
+				$progressContent = $progressNode->getContent();
+				$progressData = json_decode($progressContent, true) ?: $progressData;
+			}
+
+			// Parse latest log entries for real-time progress if log exists
+			if ($userFolder->nodeExists($logFile)) {
+				$logNode = $userFolder->get($logFile);
+				$logContent = $logNode->getContent();
+				$parsedProgress = $this->parseFFmpegProgress($logContent);
+				
+				// Merge parsed progress with existing data
+				$progressData = array_merge($progressData, $parsedProgress);
+				$progressData['status'] = $progressData['completed'] ? 'completed' : 'processing';
+			}
+
+			return new JSONResponse([
+				'success' => true,
+				'progress' => $progressData
+			]);
+
+		} catch (\Exception $e) {
+			$this->logger->error('Failed to get progress', [
+				'cachePath' => $cachePath,
+				'error' => $e->getMessage()
+			]);
+			return new JSONResponse(['error' => $e->getMessage()], 500);
+		}
+	}
+
+	/**
+	 * Parse FFmpeg progress output
+	 */
+	private function parseFFmpegProgress(string $logContent): array {
+		$lines = explode("\n", $logContent);
+		$progress = [
+			'frame' => 0,
+			'fps' => 0,
+			'speed' => '0x',
+			'time' => '00:00:00',
+			'bitrate' => '0kbits/s',
+			'size' => '0kB',
+			'lastUpdate' => time()
+		];
+
+		// Parse the last progress line (FFmpeg outputs progress periodically)
+		for ($i = count($lines) - 1; $i >= 0; $i--) {
+			$line = trim($lines[$i]);
+			if (preg_match('/frame=\s*(\d+).*fps=\s*([\d.]+).*speed=\s*([\d.]+x).*time=(\d{2}:\d{2}:\d{2}\.\d{2}).*bitrate=\s*([\d.]+kbits\/s).*size=\s*(\d+kB)/', $line, $matches)) {
+				$progress['frame'] = (int)$matches[1];
+				$progress['fps'] = (float)$matches[2];
+				$progress['speed'] = $matches[3];
+				$progress['time'] = $matches[4];
+				$progress['bitrate'] = $matches[5];
+				$progress['size'] = $matches[6];
+				break;
+			}
+		}
+
+		return $progress;
+	}
+
+	/**
 	 * Check if HLS cache exists for a video file
 	 * 
 	 * @NoAdminRequired
