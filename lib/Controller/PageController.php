@@ -29,7 +29,6 @@ use OCP\IRequest;
 use OCP\AppFramework\Http\TemplateResponse;
 use OCP\AppFramework\Controller;
 use OCP\Util;
-use OCP\AppFramework\Http\EmptyContentSecurityPolicy;
 
 class PageController extends Controller {
 	protected $appName;
@@ -46,60 +45,11 @@ class PageController extends Controller {
 	public function index() {
 		Util::addScript($this->appName, 'hyper_viewer-main');
 		Util::addStyle($this->appName, 'icons');
-	
+
 		$response = new TemplateResponse($this->appName, 'main');
-	
-		// Relax CSP for Shaka Player
-		$csp = new EmptyContentSecurityPolicy();
-
-		// Media: allow both self (default files) AND blob (MSE)
-		$csp->addAllowedMediaDomain("'self'");
-		$csp->addAllowedMediaDomain('blob:');
-
-		// Scripts: allow self and blob workers
-		$csp->addAllowedScriptDomain("'self'");
-		$csp->addAllowedScriptDomain('blob:');
-
-		// Workers (MSE demuxers run in workers)
-		$csp->addAllowedWorkerSrcDomain("'self'");
-		$csp->addAllowedWorkerSrcDomain('blob:');
-
-		$response->setContentSecurityPolicy($csp);
-	
 		return $response;
 	}
-	
 
-	/**
-	 * Files integration endpoint with relaxed CSP for blob URLs
-	 * 
-	 * @NoAdminRequired
-	 * @NoCSRFRequired
-	 */
-	public function filesIntegration() {
-		Util::addInitScript($this->appName, 'files-integration');
-	
-		$response = new TemplateResponse($this->appName, 'empty');
-	
-		// Relax CSP for Shaka Player
-		$csp = new EmptyContentSecurityPolicy();
-
-		// Media: allow both self (default files) AND blob (MSE)
-		$csp->addAllowedMediaDomain("'self'");
-		$csp->addAllowedMediaDomain('blob:');
-
-		// Scripts: allow self and blob workers
-		$csp->addAllowedScriptDomain("'self'");
-		$csp->addAllowedScriptDomain('blob:');
-
-		// Workers (MSE demuxers run in workers)
-		$csp->addAllowedWorkerSrcDomain("'self'");
-		$csp->addAllowedWorkerSrcDomain('blob:');
-
-		$response->setContentSecurityPolicy($csp);
-	
-		return $response;
-	}
 	/**
 	 * Load files integration script globally
 	 * This will be called automatically by Nextcloud when the Files app loads
