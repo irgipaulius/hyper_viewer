@@ -21,6 +21,9 @@ import { translate as t, translatePlural as n } from '@nextcloud/l10n'
 
 import App from './App'
 
+// Load files integration
+import './files-integration.js'
+
 // Adding translations to the whole app
 Vue.mixin({
 	methods: {

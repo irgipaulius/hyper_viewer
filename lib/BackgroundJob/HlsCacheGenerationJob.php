@@ -590,9 +590,10 @@ class HlsCacheGenerationJob extends QueuedJob {
 				}
 				if ($stderr !== false && $stderr !== '') {
 					$output[] = $stderr;
-					// Parse progress from stderr
-					$this->parseAndUpdateProgress($stderr, $progressFile);
 				}
+				
+				// Parse progress from the .raw file that FFmpeg writes to
+				$this->parseProgressFromRawFile($progressRawFile, $progressFile);
 				
 				if (!$status['running']) {
 					break;
@@ -614,7 +615,95 @@ class HlsCacheGenerationJob extends QueuedJob {
 	}
 
 	/**
-	 * Parse FFmpeg progress output and update progress file
+	 * Parse progress from FFmpeg's -progress output file
+	 */
+	private function parseProgressFromRawFile(string $progressRawFile, string $progressFile): void {
+		if (!file_exists($progressRawFile) || !file_exists($progressFile)) {
+			return;
+		}
+		
+		// Read the raw progress file
+		$rawContent = file_get_contents($progressRawFile);
+		if (empty($rawContent)) {
+			return;
+		}
+		
+		$progressData = json_decode(file_get_contents($progressFile), true) ?: [];
+		$updated = false;
+		
+		// Parse the key=value format from FFmpeg progress output
+		$lines = explode("\n", $rawContent);
+		$currentFrame = null;
+		
+		foreach ($lines as $line) {
+			$line = trim($line);
+			if (empty($line)) continue;
+			
+			if (strpos($line, '=') !== false) {
+				list($key, $value) = explode('=', $line, 2);
+				$key = trim($key);
+				$value = trim($value);
+				
+				switch ($key) {
+					case 'frame':
+						$progressData['frame'] = (int)$value;
+						$currentFrame = (int)$value;
+						$updated = true;
+						break;
+					case 'fps':
+						$progressData['fps'] = (float)$value;
+						$updated = true;
+						break;
+					case 'speed':
+						$progressData['speed'] = $value;
+						$updated = true;
+						break;
+					case 'out_time':
+						$progressData['time'] = substr($value, 0, 8); // Trim to HH:MM:SS
+						$updated = true;
+						break;
+					case 'bitrate':
+						$progressData['bitrate'] = $value;
+						$updated = true;
+						break;
+					case 'total_size':
+						$sizeKB = round((int)$value / 1024);
+						$progressData['size'] = $sizeKB . 'kB';
+						$updated = true;
+						break;
+					case 'progress':
+						if ($value === 'end') {
+							$progressData['status'] = 'completed';
+							$progressData['completed'] = true;
+							$progressData['progress'] = 100;
+							$updated = true;
+							$this->logger->info('FFmpeg progress detected completion');
+						}
+						break;
+				}
+			}
+		}
+		
+		// Calculate progress percentage based on frame count (rough estimate)
+		if ($currentFrame && !isset($progressData['progress'])) {
+			// Estimate total frames based on typical video (rough calculation)
+			// This is just an estimate - real progress tracking would need video duration
+			$estimatedProgress = min(($currentFrame / 1000) * 10, 99); // Very rough estimate
+			$progressData['progress'] = (int)$estimatedProgress;
+			$updated = true;
+		}
+		
+		if ($updated) {
+			$progressData['lastUpdate'] = time();
+			if (!isset($progressData['status']) || $progressData['status'] !== 'completed') {
+				$progressData['status'] = 'processing';
+			}
+			file_put_contents($progressFile, json_encode($progressData, JSON_PRETTY_PRINT));
+		}
+	}
+
+	/**
+	 * Parse FFmpeg progress output and update progress file (legacy method)
 	 */
 	private function parseAndUpdateProgress(string $output, string $progressFile): void {
 		if (!file_exists($progressFile)) {
