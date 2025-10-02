@@ -931,12 +931,30 @@ async function startDirectoryCacheGeneration(videoFiles, directoryPath) {
 	console.log("Directory cache generation options:", options);
 
 	try {
-		// Start cache generation for all discovered files
-		await startCacheGeneration(videoFiles);
+		// Only start cache generation if there are files to process
+		if (videoFiles.length > 0) {
+			await startCacheGeneration(videoFiles);
+		}
 
 		// If auto-generation is enabled, register the directory for monitoring
 		if (enableAutoGeneration) {
 			await registerDirectoryForAutoGeneration(directoryPath, options);
+		}
+
+		// Show appropriate success message
+		if (videoFiles.length > 0 && enableAutoGeneration) {
+			// Both processing and auto-generation
+			console.log(`✅ Started processing ${videoFiles.length} files and enabled auto-generation for ${directoryPath}`);
+		} else if (videoFiles.length > 0) {
+			// Only processing files
+			console.log(`✅ Started processing ${videoFiles.length} files in ${directoryPath}`);
+		} else if (enableAutoGeneration) {
+			// Only auto-generation setup
+			console.log(`✅ Auto-generation enabled for ${directoryPath} - will monitor for new videos`);
+			OC.dialogs.info(
+				`Auto-generation has been enabled for "${directoryPath}".\n\nNew video files added to this directory will automatically have HLS cache generated.`,
+				"Auto-Generation Enabled"
+			);
 		}
 	} catch (error) {
 		console.error("Failed to start directory cache generation:", error);
