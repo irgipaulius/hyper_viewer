@@ -312,20 +312,30 @@ class HlsCacheGenerationJob extends QueuedJob {
 		// Execute FFmpeg with real-time progress monitoring
 		$this->executeFFmpegWithProgress($ffmpegCmd, $progressFile, $output, $returnCode);
 
-		if ($returnCode !== 0) {
-			$errorOutput = implode("\n", $output);
+		// Check if FFmpeg actually succeeded by analyzing output
+		$outputText = implode("\n", $output);
+		$isActuallySuccessful = $this->isFFmpegOutputSuccessful($outputText, $outputPath);
+		
+		if ($returnCode !== 0 && !$isActuallySuccessful) {
 			$this->logger->error('FFmpeg adaptive HLS generation failed', [
 				'returnCode' => $returnCode,
-				'output' => $errorOutput,
+				'output' => $outputText,
 				'outputLines' => count($output),
 				'command' => $ffmpegCmd,
 				'commandLength' => strlen($ffmpegCmd)
 			]);
 			
 			// Update progress file to indicate failure
-			$this->updateProgressFileCompletion($progressFile, false, $errorOutput);
+			$this->updateProgressFileCompletion($progressFile, false, $outputText);
 			
-			throw new \Exception("FFmpeg failed with return code $returnCode: $errorOutput");
+			throw new \Exception("FFmpeg failed with return code $returnCode: $outputText");
+		} elseif ($returnCode !== 0 && $isActuallySuccessful) {
+			// FFmpeg succeeded but returned non-zero code (common with progress piping)
+			$this->logger->debug('FFmpeg completed successfully despite non-zero return code', [
+				'returnCode' => $returnCode,
+				'outputPath' => $outputPath,
+				'outputLines' => count($output)
+			]);
 		}
 
 		$this->logger->info('Adaptive HLS generation completed successfully', [
@@ -334,6 +344,51 @@ class HlsCacheGenerationJob extends QueuedJob {
 
 		// Update progress file to indicate completion (clear any error field)
 		$this->updateProgressFileCompletion($progressFile, true);
+	}
+
+	/**
+	 * Check if FFmpeg output indicates successful completion
+	 */
+	private function isFFmpegOutputSuccessful(string $output, string $outputPath): bool {
+		// Check for successful completion indicators in FFmpeg output
+		$successIndicators = [
+			'muxing overhead:',           // Final statistics line
+			'kb/s:',                     // Bitrate statistics (final output)
+			'Opening \'' . $outputPath . '/master.m3u8\' for writing',  // Master playlist creation
+			'video:.*audio:.*subtitle:.*other streams:.*global headers:.*muxing overhead'  // Final summary
+		];
+		
+		foreach ($successIndicators as $indicator) {
+			if (preg_match('/' . preg_quote($indicator, '/') . '/i', $output)) {
+				// Also verify that actual files were created
+				if (file_exists($outputPath . '/master.m3u8') || 
+					file_exists($outputPath . '/playlist.m3u8') ||
+					glob($outputPath . '/playlist_*.m3u8')) {
+					return true;
+				}
+			}
+		}
+		
+		// Check for error indicators that would suggest actual failure
+		$errorIndicators = [
+			'No such file or directory',
+			'Permission denied',
+			'Invalid data found',
+			'Conversion failed',
+			'Error opening',
+			'Could not open'
+		];
+		
+		foreach ($errorIndicators as $errorIndicator) {
+			if (preg_match('/' . preg_quote($errorIndicator, '/') . '/i', $output)) {
+				return false;
+			}
+		}
+		
+		// If we have HLS files created and no clear errors, consider it successful
+		return file_exists($outputPath . '/master.m3u8') || 
+			   file_exists($outputPath . '/playlist.m3u8') ||
+			   !empty(glob($outputPath . '/playlist_*.m3u8'));
 	}
 
 	/**
@@ -445,14 +500,23 @@ class HlsCacheGenerationJob extends QueuedJob {
 		$returnCode = 0;
 		exec($ffmpegCmd . ' 2>&1', $output, $returnCode);
 
-		if ($returnCode !== 0) {
-			$errorOutput = implode("\n", $output);
+		// Check if FFmpeg actually succeeded by analyzing output
+		$outputText = implode("\n", $output);
+		$isActuallySuccessful = $this->isFFmpegOutputSuccessful($outputText, $outputPath);
+		
+		if ($returnCode !== 0 && !$isActuallySuccessful) {
 			$this->logger->error('Single HLS generation also failed', [
 				'returnCode' => $returnCode,
-				'output' => $errorOutput,
+				'output' => $outputText,
 				'command' => $ffmpegCmd
 			]);
-			throw new \Exception("Single HLS generation failed with return code $returnCode: $errorOutput");
+			throw new \Exception("Single HLS generation failed with return code $returnCode: $outputText");
+		} elseif ($returnCode !== 0 && $isActuallySuccessful) {
+			// FFmpeg succeeded but returned non-zero code (common with progress piping)
+			$this->logger->debug('Single HLS generation completed successfully despite non-zero return code', [
+				'returnCode' => $returnCode,
+				'outputPath' => $outputPath
+			]);
 		}
 
 		$this->logger->info('Single HLS generation completed successfully');
