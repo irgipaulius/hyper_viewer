@@ -632,54 +632,77 @@ class HlsCacheGenerationJob extends QueuedJob {
 		$updated = false;
 		
 		// Parse the key=value format from FFmpeg progress output
+		// Get the last complete progress block (between progress=continue markers)
 		$lines = explode("\n", $rawContent);
 		$currentFrame = null;
+		$latestProgressBlock = [];
 		
+		// Find the most recent progress block
+		$currentBlock = [];
 		foreach ($lines as $line) {
 			$line = trim($line);
 			if (empty($line)) continue;
 			
-			if (strpos($line, '=') !== false) {
-				list($key, $value) = explode('=', $line, 2);
-				$key = trim($key);
-				$value = trim($value);
-				
-				switch ($key) {
-					case 'frame':
-						$progressData['frame'] = (int)$value;
-						$currentFrame = (int)$value;
-						$updated = true;
-						break;
-					case 'fps':
-						$progressData['fps'] = (float)$value;
-						$updated = true;
-						break;
-					case 'speed':
-						$progressData['speed'] = $value;
-						$updated = true;
-						break;
-					case 'out_time':
-						$progressData['time'] = substr($value, 0, 8); // Trim to HH:MM:SS
-						$updated = true;
-						break;
-					case 'bitrate':
-						$progressData['bitrate'] = $value;
-						$updated = true;
-						break;
-					case 'total_size':
-						$sizeKB = round((int)$value / 1024);
-						$progressData['size'] = $sizeKB . 'kB';
-						$updated = true;
-						break;
-					case 'progress':
-						if ($value === 'end') {
-							$progressData['status'] = 'completed';
-							$progressData['completed'] = true;
-							$progressData['progress'] = 100;
+			if (strpos($line, 'progress=continue') !== false || strpos($line, 'progress=end') !== false) {
+				if (!empty($currentBlock)) {
+					$latestProgressBlock = $currentBlock;
+				}
+				$currentBlock = [];
+				$currentBlock[] = $line; // Include the progress line
+			} else {
+				$currentBlock[] = $line;
+			}
+		}
+		
+		// Use the latest block if we have one
+		if (!empty($latestProgressBlock)) {
+			foreach ($latestProgressBlock as $line) {
+				if (strpos($line, '=') !== false) {
+					list($key, $value) = explode('=', $line, 2);
+					$key = trim($key);
+					$value = trim($value);
+					
+					switch ($key) {
+						case 'frame':
+							$progressData['frame'] = (int)$value;
+							$currentFrame = (int)$value;
 							$updated = true;
-							$this->logger->info('FFmpeg progress detected completion');
-						}
-						break;
+							break;
+						case 'fps':
+							$progressData['fps'] = (float)$value;
+							$updated = true;
+							break;
+						case 'speed':
+							$progressData['speed'] = $value;
+							$updated = true;
+							break;
+						case 'out_time':
+							$progressData['time'] = substr($value, 0, 8); // Trim to HH:MM:SS
+							$updated = true;
+							break;
+						case 'bitrate':
+							if ($value !== 'N/A') {
+								$progressData['bitrate'] = $value;
+								$updated = true;
+							}
+							break;
+						case 'total_size':
+							if ($value !== 'N/A') {
+								$sizeKB = round((int)$value / 1024);
+								$progressData['size'] = $sizeKB . 'kB';
+								$updated = true;
+							}
+							break;
+						case 'progress':
+							if ($value === 'end') {
+								$progressData['status'] = 'completed';
+								$progressData['completed'] = true;
+								$progressData['progress'] = 100;
+								$updated = true;
+								$this->logger->info('FFmpeg progress detected completion');
+							}
+							break;
+					}
 				}
 			}
 		}

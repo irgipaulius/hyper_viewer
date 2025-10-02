@@ -170,10 +170,10 @@ export default {
 		console.log('🎬 Hyper Viewer Dashboard mounted!')
 		await this.refreshData()
 		
-		// Set up auto-refresh every 30 seconds
+		// Set up auto-refresh every 5 seconds for active jobs monitoring
 		this.refreshInterval = setInterval(() => {
 			this.refreshData()
-		}, 30000)
+		}, 5000)
 
 		// Set up scroll listener for back-to-top button
 		window.addEventListener('scroll', this.handleScroll)
