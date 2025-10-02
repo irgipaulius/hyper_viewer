@@ -878,26 +878,65 @@ class CacheController extends Controller {
 	private function getJobCacheSize($jobFolder): string {
 		try {
 			$size = 0;
-			$items = $jobFolder->getDirectoryListing();
 			
-			foreach ($items as $item) {
-				if ($item->getType() === \OCP\Files\FileInfo::TYPE_FILE) {
-					$size += $item->getSize();
+			// Try to get the actual filesystem path for more accurate size calculation
+			$folderPath = $jobFolder->getStorage()->getLocalFile($jobFolder->getInternalPath());
+			
+			if ($folderPath && is_dir($folderPath)) {
+				// Use direct filesystem access for accurate sizes
+				$files = glob($folderPath . '/*');
+				foreach ($files as $file) {
+					if (is_file($file)) {
+						$fileSize = filesize($file);
+						if ($fileSize !== false) {
+							$size += $fileSize;
+						}
+					}
+				}
+			} else {
+				// Fallback to Nextcloud's virtual filesystem
+				$items = $jobFolder->getDirectoryListing();
+				foreach ($items as $item) {
+					if ($item->getType() === \OCP\Files\FileInfo::TYPE_FILE) {
+						$itemSize = $item->getSize();
+						if ($itemSize > 0) {
+							$size += $itemSize;
+						}
+					}
 				}
 			}
 			
-			// Format size for display
-			if ($size >= 1024 * 1024 * 1024) {
-				return round($size / (1024 * 1024 * 1024), 1) . ' GB';
-			} elseif ($size >= 1024 * 1024) {
-				return round($size / (1024 * 1024), 1) . ' MB';
-			} elseif ($size >= 1024) {
-				return round($size / 1024, 1) . ' KB';
-			} else {
-				return $size . ' B';
-			}
+			// Debug logging to see what we're getting
+			$this->logger->debug('Cache size calculation', [
+				'folder' => $jobFolder->getName(),
+				'path' => $folderPath ?? 'virtual',
+				'size' => $size,
+				'formatted' => $this->formatBytes($size)
+			]);
+			
+			return $this->formatBytes($size);
+			
 		} catch (\Exception $e) {
+			$this->logger->error('Error calculating cache size', [
+				'folder' => $jobFolder->getName() ?? 'unknown',
+				'error' => $e->getMessage()
+			]);
 			return '0 MB';
+		}
+	}
+	
+	/**
+	 * Format bytes into human readable format
+	 */
+	private function formatBytes(int $size): string {
+		if ($size >= 1024 * 1024 * 1024) {
+			return round($size / (1024 * 1024 * 1024), 1) . ' GB';
+		} elseif ($size >= 1024 * 1024) {
+			return round($size / (1024 * 1024), 1) . ' MB';
+		} elseif ($size >= 1024) {
+			return round($size / 1024, 1) . ' KB';
+		} else {
+			return $size . ' B';
 		}
 	}
 	
