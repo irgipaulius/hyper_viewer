@@ -382,193 +382,472 @@ async function openDirectoryCacheGenerationDialog(directoryName, context) {
 	console.log("🔍 Discovering video files in directory:", fullPath);
 	const videoFiles = await discoverVideoFilesInDirectory(fullPath);
 
-	if (videoFiles.length === 0) {
-		OC.dialogs.alert(
-			"No video files (MOV/MP4) found in this directory.",
-			"No Videos Found"
-		);
-		return;
-	}
+	// Allow proceeding even with no videos (for auto-generation setup)
+	// if (videoFiles.length === 0) {
+	//     OC.dialogs.alert(
+	//         "No video files (MOV/MP4) found in this directory.",
+	//         "No Videos Found"
+	//     );
+	//     return;
+	// }
 
 	const fileList = videoFiles.map(f => f.filename).join(", ");
 	const fileCount = videoFiles.length;
 
-	// Create modal HTML content for directory processing
-	const modalContent = `
-		<div class="hyper-viewer-cache-dialog">
-			<h3>Generate HLS Cache (Directory)</h3>
-			<p class="directory-info"><strong>Directory:</strong> ${fullPath}</p>
-			<p class="file-list"><strong>Found ${fileCount} video files:</strong><br>${fileList}</p>
-			
-			<div class="section">
-				<label class="section-title">Cache Location</label>
-				<div class="radio-group">
-					<label class="radio-option">
-						<input type="radio" name="cache_location" value="relative" checked>
-						<span>Next to video files</span>
-					</label>
-					<label class="radio-option">
-						<input type="radio" name="cache_location" value="home">
-						<span>Home directory</span>
-					</label>
-					<label class="radio-option">
-						<input type="radio" name="cache_location" value="custom">
-						<span>Custom path</span>
-						<input type="text" id="custom_path" placeholder="/mnt/cache/.cached_hls/" disabled>
-					</label>
-				</div>
+	// Create beautiful modal with same styling as progress modal
+	const modal = document.createElement("div");
+	modal.className = "hyper-viewer-directory-modal";
+	modal.innerHTML = `
+		<div class="hyper-viewer-overlay"></div>
+		<div class="hyper-viewer-directory-container">
+			<div class="hyper-viewer-directory-header">
+				<h3 class="hyper-viewer-directory-title">Generate HLS Cache (Directory)</h3>
+				<button class="hyper-viewer-close" aria-label="Close dialog">
+					<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<line x1="18" y1="6" x2="6" y2="18"></line>
+						<line x1="6" y1="6" x2="18" y2="18"></line>
+					</svg>
+				</button>
 			</div>
-			
-			<div class="section">
-				<label class="section-title">Resolution Renditions</label>
-				<div class="checkbox-group">
-					<label class="checkbox-option">
-						<input type="checkbox" name="resolution" value="1080p">
-						<span>1080p (4000k) - Full HD</span>
-					</label>
-					<label class="checkbox-option">
-						<input type="checkbox" name="resolution" value="720p" checked>
-						<span>720p (2000k) - HD</span>
-					</label>
-					<label class="checkbox-option">
-						<input type="checkbox" name="resolution" value="480p" checked>
-						<span>480p (800k) - SD</span>
-					</label>
-					<label class="checkbox-option">
-						<input type="checkbox" name="resolution" value="360p">
-						<span>360p (500k) - Low</span>
-					</label>
-					<label class="checkbox-option">
-						<input type="checkbox" name="resolution" value="240p" checked>
-						<span>240p (300k) - Mobile</span>
-					</label>
+			<div class="hyper-viewer-directory-content">
+				<div class="directory-info-card">
+					<div class="info-item">
+						<strong>Directory:</strong> ${fullPath}
+					</div>
+					<div class="info-item ${fileCount === 0 ? 'no-videos' : ''}">
+						<strong>Video files found:</strong> ${fileCount}
+						${fileCount > 0 ? `<div class="file-list">${fileList}</div>` : '<div class="no-videos-text">No videos currently, but auto-generation can monitor for new files</div>'}
+					</div>
 				</div>
-			</div>
-			
-			<div class="section">
-				<label class="checkbox-option">
-					<input type="checkbox" id="overwrite_existing" checked>
-					<span>Overwrite existing cache</span>
-				</label>
-				<label class="checkbox-option">
-					<input type="checkbox" id="enable_auto_generation">
-					<span>Enable auto-generation for new videos in this directory</span>
-				</label>
+				
+				<div class="form-section">
+					<label class="section-title">Cache Location</label>
+					<div class="option-group">
+						<label class="option-item">
+							<input type="radio" name="cache_location" value="relative" checked>
+							<div class="option-content">
+								<span class="option-title">Next to each video file</span>
+								<span class="option-desc">.cached_hls/ folder alongside videos</span>
+							</div>
+						</label>
+						<label class="option-item">
+							<input type="radio" name="cache_location" value="home">
+							<div class="option-content">
+								<span class="option-title">User home directory</span>
+								<span class="option-desc">~/.cached_hls/ centralized location</span>
+							</div>
+						</label>
+						<label class="option-item">
+							<input type="radio" name="cache_location" value="custom">
+							<div class="option-content">
+								<span class="option-title">Custom location</span>
+								<input type="text" id="custom_path" placeholder="/path/to/cache" disabled class="custom-input">
+							</div>
+						</label>
+					</div>
+				</div>
+				
+				<div class="form-section">
+					<label class="section-title">Resolution Renditions</label>
+					<div class="resolution-grid">
+						<label class="resolution-item">
+							<input type="checkbox" name="resolution" value="720p" checked>
+							<div class="resolution-content">
+								<span class="resolution-name">720p</span>
+								<span class="resolution-desc">HD Quality</span>
+							</div>
+						</label>
+						<label class="resolution-item">
+							<input type="checkbox" name="resolution" value="480p" checked>
+							<div class="resolution-content">
+								<span class="resolution-name">480p</span>
+								<span class="resolution-desc">SD Quality</span>
+							</div>
+						</label>
+						<label class="resolution-item">
+							<input type="checkbox" name="resolution" value="360p">
+							<div class="resolution-content">
+								<span class="resolution-name">360p</span>
+								<span class="resolution-desc">Low Quality</span>
+							</div>
+						</label>
+						<label class="resolution-item">
+							<input type="checkbox" name="resolution" value="240p" checked>
+							<div class="resolution-content">
+								<span class="resolution-name">240p</span>
+								<span class="resolution-desc">Mobile</span>
+							</div>
+						</label>
+					</div>
+				</div>
+				
+				<div class="form-section">
+					<label class="section-title">Options</label>
+					<div class="option-group">
+						<label class="option-item">
+							<input type="checkbox" id="overwrite_existing">
+							<div class="option-content">
+								<span class="option-title">Overwrite existing cache</span>
+								<span class="option-desc">Replace existing HLS files</span>
+							</div>
+						</label>
+						<label class="option-item highlight">
+							<input type="checkbox" id="enable_auto_generation">
+							<div class="option-content">
+								<span class="option-title">Enable automatic generation</span>
+								<span class="option-desc">Monitor directory for new videos and auto-generate HLS cache</span>
+							</div>
+						</label>
+					</div>
+				</div>
+				
+				<div class="dialog-actions">
+					<button class="btn-cancel">Cancel</button>
+					<button class="btn-confirm">Generate HLS Cache</button>
+				</div>
 			</div>
 		</div>
 		
 		<style>
-		.hyper-viewer-cache-dialog {
-			padding: 20px;
-			max-width: 500px;
-			font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-		}
-		.hyper-viewer-cache-dialog h3 {
-			margin: 0 0 15px 0;
-			color: #333;
-			font-size: 18px;
-		}
-		.directory-info {
-			margin: 0 0 10px 0;
-			padding: 8px;
-			background: #e3f2fd;
-			border-radius: 6px;
-			font-size: 14px;
-			color: #1976d2;
-			font-weight: 500;
-		}
-		.file-list {
-			margin: 0 0 20px 0;
-			padding: 10px;
-			background: #f8f9fa;
-			border-radius: 6px;
-			font-size: 13px;
-			color: #666;
-			max-height: 120px;
-			overflow-y: auto;
-		}
-		.section {
-			margin-bottom: 20px;
-		}
-		.section-title {
-			display: block;
-			font-weight: 600;
-			color: #333;
-			margin-bottom: 10px;
-			font-size: 14px;
-		}
-		.radio-group, .checkbox-group {
-			display: flex;
-			flex-direction: column;
-			gap: 8px;
-		}
-		.radio-option, .checkbox-option {
-			display: flex;
-			align-items: center;
-			cursor: pointer;
-			padding: 8px;
-			border-radius: 4px;
-			transition: background-color 0.2s;
-		}
-		.radio-option:hover, .checkbox-option:hover {
-			background-color: #f5f5f5;
-		}
-		.radio-option input, .checkbox-option input {
-			margin: 0 10px 0 0;
-		}
-		.radio-option span, .checkbox-option span {
-			font-size: 14px;
-			color: #333;
-		}
-		#custom_path {
-			margin-left: 24px;
-			margin-top: 5px;
-			width: calc(100% - 24px);
-			padding: 6px 8px;
-			border: 1px solid #ddd;
-			border-radius: 4px;
-			font-size: 13px;
-		}
-		#custom_path:disabled {
-			background-color: #f5f5f5;
-			color: #999;
-		}
+			.hyper-viewer-directory-modal {
+				position: fixed;
+				top: 0;
+				left: 0;
+				right: 0;
+				bottom: 0;
+				z-index: 10001;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				padding: 20px;
+				box-sizing: border-box;
+				opacity: 0;
+				visibility: hidden;
+				transition: opacity 0.3s ease, visibility 0.3s ease;
+			}
+			
+			.hyper-viewer-directory-modal.show {
+				opacity: 1;
+				visibility: visible;
+			}
+			
+			.hyper-viewer-overlay {
+				position: absolute;
+				top: 0;
+				left: 0;
+				right: 0;
+				bottom: 0;
+				background: rgba(0, 0, 0, 0.7);
+				backdrop-filter: blur(4px);
+			}
+			
+			.hyper-viewer-directory-container {
+				position: relative;
+				background: #1a1a1a;
+				border-radius: 12px;
+				box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+				max-width: 600px;
+				width: 100%;
+				max-height: 90vh;
+				display: flex;
+				flex-direction: column;
+				overflow: hidden;
+				transform: scale(0.95);
+				transition: transform 0.3s ease;
+			}
+			
+			.hyper-viewer-directory-modal.show .hyper-viewer-directory-container {
+				transform: scale(1);
+			}
+			
+			.hyper-viewer-directory-header {
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				padding: 16px 20px;
+				background: #2a2a2a;
+				border-bottom: 1px solid #3a3a3a;
+			}
+			
+			.hyper-viewer-directory-title {
+				margin: 0;
+				color: #ffffff;
+				font-size: 16px;
+				font-weight: 600;
+			}
+			
+			.hyper-viewer-directory-content {
+				padding: 20px;
+				color: #ffffff;
+				overflow-y: auto;
+				flex: 1;
+			}
+			
+			.directory-info-card {
+				background: #2a2a2a;
+				border-radius: 8px;
+				padding: 16px;
+				margin-bottom: 24px;
+				border: 1px solid #3a3a3a;
+			}
+			
+			.info-item {
+				margin-bottom: 12px;
+			}
+			
+			.info-item:last-child {
+				margin-bottom: 0;
+			}
+			
+			.file-list {
+				margin-top: 8px;
+				padding: 8px 12px;
+				background: #1a1a1a;
+				border-radius: 4px;
+				font-size: 13px;
+				color: #cccccc;
+				max-height: 80px;
+				overflow-y: auto;
+			}
+			
+			.no-videos-text {
+				margin-top: 8px;
+				padding: 8px 12px;
+				background: #2d1b1b;
+				border: 1px solid #4a3333;
+				border-radius: 4px;
+				font-size: 13px;
+				color: #ffcc99;
+			}
+			
+			.form-section {
+				margin-bottom: 24px;
+			}
+			
+			.section-title {
+				display: block;
+				font-weight: 600;
+				margin-bottom: 12px;
+				color: #ffffff;
+				font-size: 14px;
+			}
+			
+			.option-group {
+				display: flex;
+				flex-direction: column;
+				gap: 8px;
+			}
+			
+			.option-item {
+				display: flex;
+				align-items: flex-start;
+				gap: 12px;
+				padding: 12px;
+				background: #2a2a2a;
+				border: 1px solid #3a3a3a;
+				border-radius: 8px;
+				cursor: pointer;
+				transition: all 0.2s ease;
+			}
+			
+			.option-item:hover {
+				background: #333333;
+				border-color: #4a4a4a;
+			}
+			
+			.option-item.highlight {
+				border-color: #4a9eff;
+				background: rgba(74, 158, 255, 0.1);
+			}
+			
+			.option-content {
+				flex: 1;
+				display: flex;
+				flex-direction: column;
+				gap: 4px;
+			}
+			
+			.option-title {
+				font-weight: 500;
+				color: #ffffff;
+			}
+			
+			.option-desc {
+				font-size: 13px;
+				color: #999999;
+			}
+			
+			.custom-input {
+				margin-top: 8px;
+				padding: 8px 12px;
+				background: #1a1a1a;
+				border: 1px solid #3a3a3a;
+				border-radius: 4px;
+				color: #ffffff;
+				font-size: 13px;
+			}
+			
+			.custom-input:disabled {
+				background: #2a2a2a;
+				color: #666666;
+			}
+			
+			.custom-input:focus {
+				outline: none;
+				border-color: #4a9eff;
+			}
+			
+			.resolution-grid {
+				display: grid;
+				grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+				gap: 8px;
+			}
+			
+			.resolution-item {
+				display: flex;
+				align-items: center;
+				gap: 8px;
+				padding: 12px;
+				background: #2a2a2a;
+				border: 1px solid #3a3a3a;
+				border-radius: 8px;
+				cursor: pointer;
+				transition: all 0.2s ease;
+			}
+			
+			.resolution-item:hover {
+				background: #333333;
+				border-color: #4a4a4a;
+			}
+			
+			.resolution-content {
+				display: flex;
+				flex-direction: column;
+				gap: 2px;
+			}
+			
+			.resolution-name {
+				font-weight: 500;
+				color: #ffffff;
+				font-size: 14px;
+			}
+			
+			.resolution-desc {
+				font-size: 12px;
+				color: #999999;
+			}
+			
+			.dialog-actions {
+				display: flex;
+				gap: 12px;
+				justify-content: flex-end;
+				margin-top: 24px;
+				padding-top: 20px;
+				border-top: 1px solid #3a3a3a;
+			}
+			
+			.btn-cancel, .btn-confirm {
+				padding: 10px 20px;
+				border: none;
+				border-radius: 6px;
+				font-weight: 500;
+				cursor: pointer;
+				transition: all 0.2s ease;
+			}
+			
+			.btn-cancel {
+				background: #3a3a3a;
+				color: #ffffff;
+			}
+			
+			.btn-cancel:hover {
+				background: #4a4a4a;
+			}
+			
+			.btn-confirm {
+				background: #4a9eff;
+				color: #ffffff;
+			}
+			
+			.btn-confirm:hover {
+				background: #0066cc;
+			}
+			
+			.hyper-viewer-close {
+				background: transparent;
+				border: none;
+				color: #ffffff;
+				cursor: pointer;
+				padding: 8px;
+				border-radius: 6px;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				transition: background-color 0.2s ease, color 0.2s ease;
+			}
+			
+			.hyper-viewer-close:hover {
+				background: rgba(255, 255, 255, 0.1);
+				color: #ff6b6b;
+			}
 		</style>
 	`;
 
-	// Show modal dialog
-	OC.dialogs.confirmHtml(
-		modalContent,
-		"Generate HLS Cache (Directory)",
-		function(confirmed) {
-			if (confirmed) {
-				startDirectoryCacheGeneration(videoFiles, fullPath);
-			}
-		},
-		true // modal
-	);
+	// Add modal to DOM
+	document.body.appendChild(modal);
+	document.body.style.overflow = "hidden";
 
-	// Add event listeners after dialog is shown
-	setTimeout(() => {
-		// Handle custom location radio button
-		const customRadio = document.querySelector(
-			'input[name="cache_location"][value="custom"]'
-		);
-		const customPath = document.getElementById("custom_path");
+	// Show modal with animation
+	requestAnimationFrame(() => {
+		modal.classList.add("show");
+	});
 
-		if (customRadio && customPath) {
-			document
-				.querySelectorAll('input[name="cache_location"]')
-				.forEach(radio => {
-					radio.addEventListener("change", function() {
-						customPath.disabled = this.value !== "custom";
-						if (this.value === "custom") {
-							customPath.focus();
-						}
-					});
-				});
+	// Handle escape key
+	const handleKeydown = (e) => {
+		if (e.key === "Escape") {
+			closeModal();
 		}
-	}, 100);
+	};
+
+	// Close functionality
+	const closeModal = () => {
+		modal.classList.remove("show");
+		document.removeEventListener("keydown", handleKeydown);
+		setTimeout(() => {
+			document.body.style.overflow = "";
+			if (modal.parentNode) {
+				modal.parentNode.removeChild(modal);
+			}
+		}, 300);
+	};
+
+	// Event listeners
+	modal.querySelector(".hyper-viewer-close").addEventListener("click", closeModal);
+	modal.querySelector(".hyper-viewer-overlay").addEventListener("click", closeModal);
+	modal.querySelector(".btn-cancel").addEventListener("click", closeModal);
+	
+	modal.querySelector(".btn-confirm").addEventListener("click", () => {
+		startDirectoryCacheGeneration(videoFiles, fullPath);
+		closeModal();
+	});
+
+	// Handle custom location radio button
+	const customRadio = modal.querySelector('input[name="cache_location"][value="custom"]');
+	const customPath = modal.querySelector("#custom_path");
+
+	if (customRadio && customPath) {
+		modal.querySelectorAll('input[name="cache_location"]').forEach(radio => {
+			radio.addEventListener("change", function() {
+				customPath.disabled = this.value !== "custom";
+				if (this.value === "custom") {
+					customPath.focus();
+				}
+			});
+		});
+	}
+
+	document.addEventListener("keydown", handleKeydown);
+
 }
 
 /**
