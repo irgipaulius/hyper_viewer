@@ -228,7 +228,8 @@ class HlsCacheGenerationJob extends QueuedJob {
 		}
 
 		// Build FFmpeg command for adaptive streaming (FFmpeg 4.4.x compatible)
-		$ffmpegCmd = '/usr/local/bin/ffmpeg -y -i ' . escapeshellarg($inputPath);
+		// Add flags to reduce file locking issues with WebDAV
+		$ffmpegCmd = '/usr/local/bin/ffmpeg -y -fflags +genpts -avoid_negative_ts make_zero -i ' . escapeshellarg($inputPath);
 		
 		// Map video and audio streams for each variant (separate audio per variant for FFmpeg 4.4.x)
 		$streamIndex = 0;
@@ -488,7 +489,8 @@ class HlsCacheGenerationJob extends QueuedJob {
 		]);
 
 		// Simple single-bitrate HLS command (720p with higher bitrate)
-		$ffmpegCmd = '/usr/local/bin/ffmpeg -y -i ' . escapeshellarg($inputPath) .
+		// Add flags to reduce file locking issues with WebDAV
+		$ffmpegCmd = '/usr/local/bin/ffmpeg -y -fflags +genpts -avoid_negative_ts make_zero -i ' . escapeshellarg($inputPath) .
 			' -c:v libx264 -preset superfast -crf 23 -maxrate 3600k -bufsize 6000k -s 1280x720' .
 			' -c:a aac -b:a 128k' .
 			' -f hls -hls_time 6 -hls_playlist_type vod -hls_flags independent_segments' .

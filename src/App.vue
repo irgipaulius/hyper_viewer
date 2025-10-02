@@ -11,8 +11,16 @@
 			</button>
 		</div>
 
+		<!-- Quick Navigation -->
+		<div class="quick-nav">
+			<button @click="scrollToSection('stats')" class="nav-btn">📊 Stats</button>
+			<button @click="scrollToSection('active-jobs')" class="nav-btn">🔥 Active</button>
+			<button @click="scrollToSection('auto-gen')" class="nav-btn">🤖 Auto-Gen</button>
+			<button @click="scrollToSection('system-info')" class="nav-btn">ℹ️ System</button>
+		</div>
+
 		<!-- Statistics Cards -->
-		<div class="stats-grid">
+		<div id="stats" class="stats-grid">
 			<div class="stat-card">
 				<div class="stat-icon">⚡</div>
 				<div class="stat-content">
@@ -44,7 +52,7 @@
 		</div>
 
 		<!-- Active Jobs Section -->
-		<div class="section">
+		<div id="active-jobs" class="section">
 			<h2>🔥 Active Jobs</h2>
 			<div v-if="activeJobs.length === 0" class="empty-state">
 				<div class="empty-icon">😴</div>
@@ -76,7 +84,7 @@
 		</div>
 
 		<!-- Auto-Generation Management -->
-		<div class="section">
+		<div id="auto-gen" class="section">
 			<h2>🤖 Auto-Generation Directories</h2>
 			<div v-if="autoGenDirs.length === 0" class="empty-state">
 				<div class="empty-icon">📁</div>
@@ -107,11 +115,11 @@
 		</div>
 
 		<!-- System Info -->
-		<div class="section">
+		<div id="system-info" class="section">
 			<h2>ℹ️ System Information</h2>
 			<div class="info-grid">
 				<div class="info-item">
-					<strong>Auto-Generation Interval:</strong> Every 15 minutes
+					<strong>Auto-Generation Interval:</strong> Every 60 minutes
 				</div>
 				<div class="info-item">
 					<strong>Supported Formats:</strong> MOV, MP4
@@ -124,6 +132,15 @@
 				</div>
 			</div>
 		</div>
+
+		<!-- Back to Top Button -->
+		<button 
+			v-show="showBackToTop" 
+			@click="scrollToTop" 
+			class="back-to-top-btn"
+			title="Back to top">
+			↑
+		</button>
 	</div>
 </template>
 
@@ -145,7 +162,8 @@ export default {
 				failedJobs: 0
 			},
 			lastRefresh: 'Never',
-			refreshInterval: null
+			refreshInterval: null,
+			showBackToTop: false
 		}
 	},
 	async mounted() {
@@ -156,11 +174,15 @@ export default {
 		this.refreshInterval = setInterval(() => {
 			this.refreshData()
 		}, 30000)
+
+		// Set up scroll listener for back-to-top button
+		window.addEventListener('scroll', this.handleScroll)
 	},
 	beforeDestroy() {
 		if (this.refreshInterval) {
 			clearInterval(this.refreshInterval)
 		}
+		window.removeEventListener('scroll', this.handleScroll)
 	},
 	methods: {
 		async refreshData() {
@@ -215,6 +237,27 @@ export default {
 		formatDate(timestamp) {
 			if (!timestamp) return 'Unknown'
 			return new Date(timestamp * 1000).toLocaleDateString()
+		},
+
+		handleScroll() {
+			this.showBackToTop = window.scrollY > 300
+		},
+
+		scrollToTop() {
+			window.scrollTo({
+				top: 0,
+				behavior: 'smooth'
+			})
+		},
+
+		scrollToSection(sectionId) {
+			const element = document.getElementById(sectionId)
+			if (element) {
+				element.scrollIntoView({
+					behavior: 'smooth',
+					block: 'start'
+				})
+			}
 		}
 	}
 }
@@ -226,6 +269,9 @@ export default {
 	max-width: 1200px;
 	margin: 0 auto;
 	font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+	min-height: 100vh;
+	overflow-y: auto;
+	box-sizing: border-box;
 }
 
 /* Header */
@@ -273,6 +319,39 @@ export default {
 	cursor: not-allowed;
 }
 
+/* Quick Navigation */
+.quick-nav {
+	display: flex;
+	justify-content: center;
+	gap: 15px;
+	margin-bottom: 30px;
+	flex-wrap: wrap;
+}
+
+.nav-btn {
+	background: rgba(255, 255, 255, 0.9);
+	border: 2px solid #667eea;
+	color: #667eea;
+	padding: 8px 16px;
+	border-radius: 20px;
+	cursor: pointer;
+	font-size: 14px;
+	font-weight: 500;
+	transition: all 0.3s ease;
+	backdrop-filter: blur(10px);
+}
+
+.nav-btn:hover {
+	background: #667eea;
+	color: white;
+	transform: translateY(-2px);
+	box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.nav-btn:active {
+	transform: translateY(0);
+}
+
 /* Statistics Grid */
 .stats-grid {
 	display: grid;
@@ -318,6 +397,7 @@ export default {
 /* Sections */
 .section {
 	margin-bottom: 40px;
+	scroll-margin-top: 20px; /* For smooth scrolling to sections */
 }
 
 .section h2 {
@@ -571,5 +651,66 @@ export default {
 	.stats-grid {
 		grid-template-columns: 1fr;
 	}
+}
+
+/* Back to Top Button */
+.back-to-top-btn {
+	position: fixed;
+	bottom: 30px;
+	right: 30px;
+	width: 50px;
+	height: 50px;
+	background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+	color: white;
+	border: none;
+	border-radius: 50%;
+	font-size: 20px;
+	font-weight: bold;
+	cursor: pointer;
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+	transition: all 0.3s ease;
+	z-index: 1000;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.back-to-top-btn:hover {
+	transform: translateY(-3px);
+	box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+	background: linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%);
+}
+
+.back-to-top-btn:active {
+	transform: translateY(-1px);
+}
+
+/* Smooth scrolling for the entire page */
+html {
+	scroll-behavior: smooth;
+}
+
+/* Better scrollbar styling for webkit browsers */
+.hyper-viewer-dashboard::-webkit-scrollbar {
+	width: 8px;
+}
+
+.hyper-viewer-dashboard::-webkit-scrollbar-track {
+	background: #f1f1f1;
+	border-radius: 4px;
+}
+
+.hyper-viewer-dashboard::-webkit-scrollbar-thumb {
+	background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+	border-radius: 4px;
+}
+
+.hyper-viewer-dashboard::-webkit-scrollbar-thumb:hover {
+	background: linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%);
+}
+
+/* Improve section spacing for better scrolling */
+.section:last-child {
+	margin-bottom: 100px; /* Extra space at bottom for comfortable scrolling */
 }
 </style>
