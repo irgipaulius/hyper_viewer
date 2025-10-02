@@ -160,38 +160,16 @@
 					</div>
 				</div>
 			</div>
-
-			<!-- System Info -->
-			<div id="system-info" class="section">
-				<h2>ℹ️ System Information</h2>
-				<div class="job-stats">
-					<div class="stat-item">
-						<strong>Frame:</strong> {{ job.frame || 0 }}
-					</div>
-					<div class="stat-item">
-						<strong>FPS:</strong> {{ job.fps || 0 }}
-					</div>
-					<div class="stat-item">
-						<strong>Speed:</strong> {{ job.speed || '0x' }}
-					</div>
-					<div class="stat-item">
-						<strong>Time:</strong> {{ job.time || '00:00:00' }}
-					</div>
-					<div v-if="job.cacheSize" class="stat-item">
-						<strong>Cache Size:</strong> {{ job.cacheSize }}
-					</div>
-				</div>
-			</div>
-
-			<!-- Back to Top Button -->
-			<button 
-				v-show="showBackToTop" 
-				class="back-to-top-btn" 
-				title="Back to top"
-				@click="scrollToTop">
-				↑
-			</button>
 		</div>
+
+		<!-- Back to Top Button -->
+		<button 
+			v-show="showBackToTop" 
+			class="back-to-top-btn" 
+			title="Back to top"
+			@click="scrollToTop">
+			↑
+		</button>
 	</div>
 </template>
 
