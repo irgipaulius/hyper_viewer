@@ -707,12 +707,31 @@ class HlsCacheGenerationJob extends QueuedJob {
 			}
 		}
 		
-		// Calculate progress percentage based on frame count (rough estimate)
-		if ($currentFrame && !isset($progressData['progress'])) {
-			// Estimate total frames based on typical video (rough calculation)
-			// This is just an estimate - real progress tracking would need video duration
-			$estimatedProgress = min(($currentFrame / 1000) * 10, 99); // Very rough estimate
+		// Calculate progress percentage based on time and frame count
+		if ($currentFrame && $progressData['time'] !== '00:00:00') {
+			// Convert time to seconds for calculation
+			$timeParts = explode(':', $progressData['time']);
+			$currentSeconds = ($timeParts[0] * 3600) + ($timeParts[1] * 60) + $timeParts[2];
+			
+			// Estimate total duration based on typical video lengths
+			// For better accuracy, we could store video duration, but this is a reasonable estimate
+			$estimatedTotalSeconds = max($currentSeconds * 2, 300); // At least 5 minutes, or double current time
+			
+			// Calculate percentage based on time progress
+			$timeBasedProgress = min(($currentSeconds / $estimatedTotalSeconds) * 100, 99);
+			
+			// Also calculate frame-based progress (backup method)
+			$frameBasedProgress = min(($currentFrame / 5000) * 100, 99); // Assume ~5000 frames for typical video
+			
+			// Use the higher of the two estimates (more conservative)
+			$estimatedProgress = max($timeBasedProgress, $frameBasedProgress);
+			
 			$progressData['progress'] = (int)$estimatedProgress;
+			$updated = true;
+		} elseif ($currentFrame > 0) {
+			// Fallback: frame-only based progress
+			$frameBasedProgress = min(($currentFrame / 3000) * 100, 95); // Conservative estimate
+			$progressData['progress'] = (int)$frameBasedProgress;
 			$updated = true;
 		}
 		

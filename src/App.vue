@@ -157,12 +157,12 @@ export default {
 			autoGenDirs: [],
 			statistics: {
 				activeJobs: 0,
-				autoGenDirectories: 0,
 				completedJobs: 0,
 				failedJobs: 0
 			},
 			lastRefresh: 'Never',
 			refreshInterval: null,
+			progressIntervals: new Map(), // Track individual job progress polling
 			showBackToTop: false
 		}
 	},
@@ -170,10 +170,10 @@ export default {
 		console.log('🎬 Hyper Viewer Dashboard mounted!')
 		await this.refreshData()
 		
-		// Set up auto-refresh every 5 seconds for active jobs monitoring
+		// Set up auto-refresh every 10 seconds for job discovery
 		this.refreshInterval = setInterval(() => {
-			this.refreshData()
-		}, 5000)
+			this.refreshActiveJobs()
+		}, 10000)
 
 		// Set up scroll listener for back-to-top button
 		window.addEventListener('scroll', this.handleScroll)
@@ -182,20 +182,24 @@ export default {
 		if (this.refreshInterval) {
 			clearInterval(this.refreshInterval)
 		}
+		// Clear all individual progress intervals
+		this.progressIntervals.forEach(intervalId => clearInterval(intervalId))
+		this.progressIntervals.clear()
 		window.removeEventListener('scroll', this.handleScroll)
 	},
 	methods: {
 		async refreshData() {
 			this.loading = true
 			try {
-				// Fetch all data in parallel
-				const [activeJobsRes, autoGenRes, statsRes] = await Promise.all([
-					axios.get(generateUrl('/apps/hyper_viewer/api/jobs/active')),
+				// Fetch all data in parallel (full refresh)
+				const [autoGenRes, statsRes] = await Promise.all([
 					axios.get(generateUrl('/apps/hyper_viewer/api/auto-generation')),
 					axios.get(generateUrl('/apps/hyper_viewer/api/jobs/statistics'))
 				])
 
-				this.activeJobs = activeJobsRes.data.jobs || []
+				// Also refresh active jobs initially
+				await this.refreshActiveJobs()
+				
 				this.autoGenDirs = autoGenRes.data.autoGenDirs || []
 				this.statistics = statsRes.data.stats || this.statistics
 
@@ -211,6 +215,66 @@ export default {
 			} finally {
 				this.loading = false
 			}
+		},
+
+		async refreshActiveJobs() {
+			try {
+				// Fast scan - just get list of active jobs (no detailed progress)
+				const response = await axios.get(generateUrl('/apps/hyper_viewer/api/jobs/active'))
+				const newActiveJobs = response.data.jobs || []
+				
+				// Update the job list
+				const oldJobFilenames = new Set(this.activeJobs.map(job => job.filename))
+				const newJobFilenames = new Set(newActiveJobs.map(job => job.filename))
+				
+				// Stop polling for jobs that are no longer active
+				oldJobFilenames.forEach(filename => {
+					if (!newJobFilenames.has(filename) && this.progressIntervals.has(filename)) {
+						clearInterval(this.progressIntervals.get(filename))
+						this.progressIntervals.delete(filename)
+					}
+				})
+				
+				// Start polling for new jobs
+				newActiveJobs.forEach(job => {
+					if (!this.progressIntervals.has(job.filename)) {
+						this.startJobProgressPolling(job.filename)
+					}
+				})
+				
+				// Update the jobs list (merge with existing progress data)
+				this.activeJobs = newActiveJobs.map(newJob => {
+					const existingJob = this.activeJobs.find(j => j.filename === newJob.filename)
+					return existingJob ? { ...existingJob, ...newJob } : { ...newJob, progress: 0, frame: 0, fps: 0, speed: '0x', time: '00:00:00' }
+				})
+				
+			} catch (error) {
+				console.error('❌ Failed to refresh active jobs:', error)
+			}
+		},
+
+		startJobProgressPolling(filename) {
+			// Poll individual job progress every 2 seconds
+			const intervalId = setInterval(async () => {
+				try {
+					const response = await axios.get(generateUrl(`/apps/hyper_viewer/api/jobs/active/${filename}`))
+					
+					// Update the specific job in the array
+					const jobIndex = this.activeJobs.findIndex(job => job.filename === filename)
+					if (jobIndex !== -1) {
+						this.activeJobs[jobIndex] = { ...this.activeJobs[jobIndex], ...response.data }
+					}
+					
+				} catch (error) {
+					if (error.response?.status === 404) {
+						// Job no longer active, stop polling
+						clearInterval(intervalId)
+						this.progressIntervals.delete(filename)
+					}
+				}
+			}, 2000) // Poll every 2 seconds for smooth progress updates
+			
+			this.progressIntervals.set(filename, intervalId)
 		},
 
 		async removeAutoGeneration(configKey) {

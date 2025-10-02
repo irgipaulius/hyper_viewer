@@ -530,7 +530,7 @@ class CacheController extends Controller {
 			$userFolder = $this->rootFolder->getUserFolder($user->getUID());
 			$activeJobs = [];
 
-			// Scan for progress files in cache directories
+			// Fast scan - just find active job directories, no detailed progress
 			$cacheLocations = [
 				'/.cached_hls',
 				'/cached_hls'
@@ -540,7 +540,7 @@ class CacheController extends Controller {
 				if ($userFolder->nodeExists($cacheLocation)) {
 					$cacheFolder = $userFolder->get($cacheLocation);
 					if ($cacheFolder instanceof \OCP\Files\Folder) {
-						$this->scanForProgressFiles($cacheFolder, $activeJobs);
+						$this->scanForActiveJobsOnly($cacheFolder, $activeJobs);
 					}
 				}
 			}
@@ -550,6 +550,74 @@ class CacheController extends Controller {
 		} catch (\Exception $e) {
 			$this->logger->error('Error getting active jobs', ['error' => $e->getMessage()]);
 			return new JSONResponse(['error' => 'Failed to get active jobs'], 500);
+		}
+	}
+
+	/**
+	 * Get detailed progress for a specific active job
+	 * 
+	 * @NoAdminRequired
+	 */
+	public function getJobProgress(string $filename): JSONResponse {
+		$user = $this->userSession->getUser();
+		if (!$user) {
+			return new JSONResponse(['error' => 'Unauthorized'], 401);
+		}
+
+		try {
+			$userFolder = $this->rootFolder->getUserFolder($user->getUID());
+			
+			// Look for the job in cache directories
+			$cacheLocations = [
+				'/.cached_hls',
+				'/cached_hls'
+			];
+
+			foreach ($cacheLocations as $cacheLocation) {
+				if ($userFolder->nodeExists($cacheLocation)) {
+					$cacheFolder = $userFolder->get($cacheLocation);
+					if ($cacheFolder instanceof \OCP\Files\Folder) {
+						// Try to find the specific job directory
+						$jobDirName = pathinfo($filename, PATHINFO_FILENAME); // Remove extension
+						if ($cacheFolder->nodeExists($jobDirName)) {
+							$jobFolder = $cacheFolder->get($jobDirName);
+							if ($jobFolder instanceof \OCP\Files\Folder && $jobFolder->nodeExists('progress.json')) {
+								try {
+									$progressFile = $jobFolder->get('progress.json');
+									$progressData = json_decode($progressFile->getContent(), true);
+									
+									if ($progressData && ($progressData['status'] ?? '') === 'processing') {
+										return new JSONResponse([
+											'cachePath' => $jobFolder->getPath(),
+											'filename' => $filename,
+											'progress' => $progressData['progress'] ?? 0,
+											'status' => $progressData['status'] ?? 'unknown',
+											'frame' => $progressData['frame'] ?? 0,
+											'fps' => $progressData['fps'] ?? 0,
+											'speed' => $progressData['speed'] ?? '0x',
+											'time' => $progressData['time'] ?? '00:00:00',
+											'bitrate' => $progressData['bitrate'] ?? '0kbits/s',
+											'size' => $progressData['size'] ?? '0kB',
+											'resolutions' => $progressData['resolutions'] ?? [],
+											'startTime' => $progressData['startTime'] ?? time(),
+											'lastUpdate' => $progressData['lastUpdate'] ?? time()
+										]);
+									}
+								} catch (\Exception $e) {
+									// Skip invalid progress files
+									continue;
+								}
+							}
+						}
+					}
+				}
+			}
+
+			return new JSONResponse(['error' => 'Job not found or not active'], 404);
+
+		} catch (\Exception $e) {
+			$this->logger->error('Error getting job progress', ['error' => $e->getMessage(), 'filename' => $filename]);
+			return new JSONResponse(['error' => 'Failed to get job progress'], 500);
 		}
 	}
 
@@ -651,8 +719,8 @@ class CacheController extends Controller {
 		}
 
 		try {
-			// This is a simplified version - in a real implementation you might want
-			// to store job history in the database for better performance
+			$userFolder = $this->rootFolder->getUserFolder($user->getUID());
+			
 			$stats = [
 				'totalJobs' => 0,
 				'completedJobs' => 0,
@@ -662,6 +730,21 @@ class CacheController extends Controller {
 				'totalCacheSize' => 0,
 				'recentJobs' => []
 			];
+
+			// Scan cache directories for job statistics
+			$cacheLocations = [
+				'/.cached_hls',
+				'/cached_hls'
+			];
+
+			foreach ($cacheLocations as $cacheLocation) {
+				if ($userFolder->nodeExists($cacheLocation)) {
+					$cacheFolder = $userFolder->get($cacheLocation);
+					if ($cacheFolder instanceof \OCP\Files\Folder) {
+						$this->gatherJobStatistics($cacheFolder, $stats);
+					}
+				}
+			}
 
 			// Count auto-generation directories
 			$allAppValues = $this->config->getAppKeys('hyper_viewer');
@@ -677,7 +760,7 @@ class CacheController extends Controller {
 				}
 			}
 
-			// Get active jobs count
+			// Get active jobs count (use existing method for consistency)
 			$activeJobsResponse = $this->getActiveJobs();
 			$activeJobsData = $activeJobsResponse->getData();
 			if (isset($activeJobsData['jobs'])) {
@@ -693,7 +776,129 @@ class CacheController extends Controller {
 	}
 
 	/**
-	 * Scan folder for progress files
+	 * Gather job statistics from cache directories (optimized)
+	 */
+	private function gatherJobStatistics($folder, array &$stats): void {
+		try {
+			$items = $folder->getDirectoryListing();
+			
+			// Process in batches to avoid memory issues
+			$batchSize = 50;
+			$processed = 0;
+			
+			foreach ($items as $node) {
+				if ($node instanceof \OCP\Files\Folder) {
+					$stats['totalJobs']++;
+					
+					// Quick check for completion status
+					if ($node->nodeExists('master.m3u8') || $node->nodeExists('playlist.m3u8')) {
+						// Check if there's a progress file to determine final status
+						if ($node->nodeExists('progress.json')) {
+							try {
+								$progressFile = $node->get('progress.json');
+								$progressData = json_decode($progressFile->getContent(), true);
+								$status = $progressData['status'] ?? 'unknown';
+								
+								if ($status === 'completed') {
+									$stats['completedJobs']++;
+								} elseif ($status === 'failed') {
+									$stats['failedJobs']++;
+								} elseif ($status === 'processing') {
+									// This will be counted separately by getActiveJobs
+								}
+							} catch (\Exception $e) {
+								// Assume completed if HLS files exist but no progress file
+								$stats['completedJobs']++;
+							}
+						} else {
+							// No progress file but HLS files exist = completed
+							$stats['completedJobs']++;
+						}
+						
+						// Add to cache size calculation
+						try {
+							$stats['totalCacheSize'] += $node->getSize();
+						} catch (\Exception $e) {
+							// Skip size calculation if it fails
+						}
+					} else {
+						// No HLS files - check if it's failed or just starting
+						if ($node->nodeExists('progress.json')) {
+							try {
+								$progressFile = $node->get('progress.json');
+								$progressData = json_decode($progressFile->getContent(), true);
+								$status = $progressData['status'] ?? 'unknown';
+								
+								if ($status === 'failed') {
+									$stats['failedJobs']++;
+								}
+								// Processing jobs are counted by getActiveJobs
+							} catch (\Exception $e) {
+								// Skip if we can't read progress
+							}
+						}
+					}
+				}
+				
+				// Limit processing to avoid timeouts
+				$processed++;
+				if ($processed >= 200) { // Limit to 200 cache directories
+					break;
+				}
+			}
+		} catch (\Exception $e) {
+			// Skip folders we can't access
+			return;
+		}
+	}
+
+	/**
+	 * Fast scan - only find active job directories, no detailed progress
+	 */
+	private function scanForActiveJobsOnly($folder, array &$activeJobs): void {
+		try {
+			$items = $folder->getDirectoryListing();
+			$processed = 0;
+			
+			foreach ($items as $node) {
+				if ($node instanceof \OCP\Files\Folder) {
+					// Quick check: does it have a progress.json file?
+					if ($node->nodeExists('progress.json')) {
+						try {
+							$progressFile = $node->get('progress.json');
+							$progressData = json_decode($progressFile->getContent(), true);
+							
+							// Only include if status is 'processing'
+							if ($progressData && ($progressData['status'] ?? '') === 'processing') {
+								$activeJobs[] = [
+									'cachePath' => $node->getPath(),
+									'filename' => $progressData['filename'] ?? 'Unknown',
+									'status' => 'processing',
+									'resolutions' => $progressData['resolutions'] ?? [],
+									'startTime' => $progressData['startTime'] ?? time()
+								];
+							}
+						} catch (\Exception $e) {
+							// Skip invalid progress files
+							continue;
+						}
+					}
+				}
+				
+				// Limit to prevent timeouts
+				$processed++;
+				if ($processed >= 100) {
+					break;
+				}
+			}
+		} catch (\Exception $e) {
+			// Skip folders we can't access
+			return;
+		}
+	}
+
+	/**
+	 * Scan folder for progress files (legacy method for statistics)
 	 */
 	private function scanForProgressFiles($folder, array &$activeJobs): void {
 		try {
