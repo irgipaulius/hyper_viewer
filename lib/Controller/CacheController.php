@@ -1,7 +1,5 @@
 <?php
 
-declare(strict_types=1);
-
 namespace OCA\HyperViewer\Controller;
 
 use OCP\AppFramework\Controller;
@@ -9,17 +7,20 @@ use OCP\AppFramework\Http\JSONResponse;
 use OCP\AppFramework\Http\StreamResponse;
 use OCP\AppFramework\Http\Response;
 use OCP\IRequest;
+use OCP\AppFramework\Http\DataResponse;
 use OCP\Files\IRootFolder;
 use OCP\IUserSession;
 use OCP\BackgroundJob\IJobList;
-use OCA\HyperViewer\BackgroundJob\HlsCacheGenerationJob;
+use OCP\IConfig;
 use Psr\Log\LoggerInterface;
+use OCA\HyperViewer\BackgroundJob\HlsCacheGenerationJob;
 
 class CacheController extends Controller {
 	
 	private IRootFolder $rootFolder;
 	private IUserSession $userSession;
 	private IJobList $jobList;
+	private IConfig $config;
 	private LoggerInterface $logger;
 
 	public function __construct(
@@ -28,12 +29,14 @@ class CacheController extends Controller {
 		IRootFolder $rootFolder,
 		IUserSession $userSession,
 		IJobList $jobList,
+		IConfig $config,
 		LoggerInterface $logger
 	) {
 		parent::__construct($appName, $request);
 		$this->rootFolder = $rootFolder;
 		$this->userSession = $userSession;
 		$this->jobList = $jobList;
+		$this->config = $config;
 		$this->logger = $logger;
 	}
 
@@ -509,6 +512,226 @@ class CacheController extends Controller {
 				'filename' => $filename
 			]);
 			return new Response('Internal server error', 500);
+		}
+	}
+
+	/**
+	 * Get all active HLS generation jobs with progress
+	 * 
+	 * @NoAdminRequired
+	 */
+	public function getActiveJobs(): JSONResponse {
+		$user = $this->userSession->getUser();
+		if (!$user) {
+			return new JSONResponse(['error' => 'Unauthorized'], 401);
+		}
+
+		try {
+			$userFolder = $this->rootFolder->getUserFolder($user->getUID());
+			$activeJobs = [];
+
+			// Scan for progress files in cache directories
+			$cacheLocations = [
+				'/.cached_hls',
+				'/cached_hls'
+			];
+
+			foreach ($cacheLocations as $cacheLocation) {
+				if ($userFolder->nodeExists($cacheLocation)) {
+					$cacheFolder = $userFolder->get($cacheLocation);
+					if ($cacheFolder instanceof \OCP\Files\Folder) {
+						$this->scanForProgressFiles($cacheFolder, $activeJobs);
+					}
+				}
+			}
+
+			return new JSONResponse(['jobs' => $activeJobs]);
+
+		} catch (\Exception $e) {
+			$this->logger->error('Error getting active jobs', ['error' => $e->getMessage()]);
+			return new JSONResponse(['error' => 'Failed to get active jobs'], 500);
+		}
+	}
+
+	/**
+	 * Get auto-generation directory settings
+	 * 
+	 * @NoAdminRequired
+	 */
+	public function getAutoGenerationSettings(): JSONResponse {
+		$user = $this->userSession->getUser();
+		if (!$user) {
+			return new JSONResponse(['error' => 'Unauthorized'], 401);
+		}
+
+		try {
+			$autoGenDirs = [];
+			$allAppValues = $this->config->getAppKeys('hyper_viewer');
+
+			foreach ($allAppValues as $key) {
+				if (str_starts_with($key, 'auto_gen_')) {
+					$settingsJson = $this->config->getAppValue('hyper_viewer', $key, '');
+					if (!empty($settingsJson)) {
+						$settings = json_decode($settingsJson, true);
+						if ($settings && isset($settings['userId']) && $settings['userId'] === $user->getUID()) {
+							$autoGenDirs[] = [
+								'configKey' => $key,
+								'directory' => $settings['directory'] ?? '',
+								'enabled' => $settings['enabled'] ?? false,
+								'resolutions' => $settings['resolutions'] ?? [],
+								'cacheLocation' => $settings['cacheLocation'] ?? 'relative',
+								'registeredAt' => $settings['registeredAt'] ?? 0,
+								'lastScan' => $settings['lastScan'] ?? 0
+							];
+						}
+					}
+				}
+			}
+
+			return new JSONResponse(['autoGenDirs' => $autoGenDirs]);
+
+		} catch (\Exception $e) {
+			$this->logger->error('Error getting auto-generation settings', ['error' => $e->getMessage()]);
+			return new JSONResponse(['error' => 'Failed to get settings'], 500);
+		}
+	}
+
+	/**
+	 * Remove auto-generation for a directory
+	 * 
+	 * @NoAdminRequired
+	 */
+	public function removeAutoGeneration(string $configKey): JSONResponse {
+		$user = $this->userSession->getUser();
+		if (!$user) {
+			return new JSONResponse(['error' => 'Unauthorized'], 401);
+		}
+
+		try {
+			// Verify the config belongs to this user
+			$settingsJson = $this->config->getAppValue('hyper_viewer', $configKey, '');
+			if (empty($settingsJson)) {
+				return new JSONResponse(['error' => 'Configuration not found'], 404);
+			}
+
+			$settings = json_decode($settingsJson, true);
+			if (!$settings || ($settings['userId'] ?? '') !== $user->getUID()) {
+				return new JSONResponse(['error' => 'Unauthorized'], 403);
+			}
+
+			// Remove the configuration
+			$this->config->deleteAppValue('hyper_viewer', $configKey);
+
+			$this->logger->info('Auto-generation removed', [
+				'configKey' => $configKey,
+				'directory' => $settings['directory'] ?? 'unknown',
+				'userId' => $user->getUID()
+			]);
+
+			return new JSONResponse(['success' => true]);
+
+		} catch (\Exception $e) {
+			$this->logger->error('Error removing auto-generation', [
+				'error' => $e->getMessage(),
+				'configKey' => $configKey
+			]);
+			return new JSONResponse(['error' => 'Failed to remove auto-generation'], 500);
+		}
+	}
+
+	/**
+	 * Get job statistics and history
+	 * 
+	 * @NoAdminRequired
+	 */
+	public function getJobStatistics(): JSONResponse {
+		$user = $this->userSession->getUser();
+		if (!$user) {
+			return new JSONResponse(['error' => 'Unauthorized'], 401);
+		}
+
+		try {
+			// This is a simplified version - in a real implementation you might want
+			// to store job history in the database for better performance
+			$stats = [
+				'totalJobs' => 0,
+				'completedJobs' => 0,
+				'failedJobs' => 0,
+				'activeJobs' => 0,
+				'autoGenDirectories' => 0,
+				'totalCacheSize' => 0,
+				'recentJobs' => []
+			];
+
+			// Count auto-generation directories
+			$allAppValues = $this->config->getAppKeys('hyper_viewer');
+			foreach ($allAppValues as $key) {
+				if (str_starts_with($key, 'auto_gen_')) {
+					$settingsJson = $this->config->getAppValue('hyper_viewer', $key, '');
+					if (!empty($settingsJson)) {
+						$settings = json_decode($settingsJson, true);
+						if ($settings && isset($settings['userId']) && $settings['userId'] === $user->getUID() && ($settings['enabled'] ?? false)) {
+							$stats['autoGenDirectories']++;
+						}
+					}
+				}
+			}
+
+			// Get active jobs count
+			$activeJobsResponse = $this->getActiveJobs();
+			$activeJobsData = $activeJobsResponse->getData();
+			if (isset($activeJobsData['jobs'])) {
+				$stats['activeJobs'] = count($activeJobsData['jobs']);
+			}
+
+			return new JSONResponse(['stats' => $stats]);
+
+		} catch (\Exception $e) {
+			$this->logger->error('Error getting job statistics', ['error' => $e->getMessage()]);
+			return new JSONResponse(['error' => 'Failed to get statistics'], 500);
+		}
+	}
+
+	/**
+	 * Scan folder for progress files
+	 */
+	private function scanForProgressFiles($folder, array &$activeJobs): void {
+		try {
+			foreach ($folder->getDirectoryListing() as $node) {
+				if ($node instanceof \OCP\Files\Folder) {
+					// Check for progress.json in this cache folder
+					if ($node->nodeExists('progress.json')) {
+						try {
+							$progressFile = $node->get('progress.json');
+							$progressData = json_decode($progressFile->getContent(), true);
+							
+							if ($progressData && ($progressData['status'] ?? '') === 'processing') {
+								$activeJobs[] = [
+									'cachePath' => $node->getPath(),
+									'filename' => $progressData['filename'] ?? 'Unknown',
+									'progress' => $progressData['progress'] ?? 0,
+									'status' => $progressData['status'] ?? 'unknown',
+									'frame' => $progressData['frame'] ?? 0,
+									'fps' => $progressData['fps'] ?? 0,
+									'speed' => $progressData['speed'] ?? '0x',
+									'time' => $progressData['time'] ?? '00:00:00',
+									'resolutions' => $progressData['resolutions'] ?? [],
+									'startTime' => $progressData['startTime'] ?? time()
+								];
+							}
+						} catch (\Exception $e) {
+							// Skip invalid progress files
+							continue;
+						}
+					}
+					
+					// Recursively scan subdirectories
+					$this->scanForProgressFiles($node, $activeJobs);
+				}
+			}
+		} catch (\Exception $e) {
+			// Skip folders we can't access
+			return;
 		}
 	}
 }
