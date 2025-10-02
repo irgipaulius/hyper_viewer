@@ -4,7 +4,7 @@
 		<div class="dashboard-header">
 			<h1>🎬 Hyper Viewer Management</h1>
 			<p>Monitor HLS generation jobs and manage auto-generation settings</p>
-			<button @click="refreshData" class="refresh-btn" :disabled="loading">
+			<button class="refresh-btn" :disabled="loading" @click="refreshData">
 				<span v-if="loading">🔄</span>
 				<span v-else>↻</span>
 				Refresh
@@ -13,40 +13,72 @@
 
 		<!-- Quick Navigation -->
 		<div class="quick-nav">
-			<button @click="scrollToSection('stats')" class="nav-btn">📊 Stats</button>
-			<button @click="scrollToSection('active-jobs')" class="nav-btn">🔥 Active</button>
-			<button @click="scrollToSection('auto-gen')" class="nav-btn">🤖 Auto-Gen</button>
-			<button @click="scrollToSection('system-info')" class="nav-btn">ℹ️ System</button>
+			<button class="nav-btn" @click="scrollToSection('stats')">
+				📊 Stats
+			</button>
+			<button class="nav-btn" @click="scrollToSection('active-jobs')">
+				🔥 Active
+			</button>
+			<button class="nav-btn" @click="scrollToSection('auto-gen')">
+				🤖 Auto-Gen
+			</button>
+			<button class="nav-btn" @click="scrollToSection('system-info')">
+				ℹ️ System
+			</button>
 		</div>
 
 		<!-- Statistics Cards -->
 		<div id="stats" class="stats-grid">
 			<div class="stat-card">
-				<div class="stat-icon">⚡</div>
+				<div class="stat-icon">
+					⚡
+				</div>
 				<div class="stat-content">
-					<div class="stat-number">{{ statistics.activeJobs }}</div>
-					<div class="stat-label">Active Jobs</div>
+					<div class="stat-number">
+						{{ statistics.activeJobs }}
+					</div>
+					<div class="stat-label">
+						Active Jobs
+					</div>
 				</div>
 			</div>
 			<div class="stat-card">
-				<div class="stat-icon">🤖</div>
+				<div class="stat-icon">
+					🤖
+				</div>
 				<div class="stat-content">
-					<div class="stat-number">{{ statistics.autoGenDirectories }}</div>
-					<div class="stat-label">Auto-Gen Dirs</div>
+					<div class="stat-number">
+						{{ statistics.autoGenDirectories }}
+					</div>
+					<div class="stat-label">
+						Auto-Gen Dirs
+					</div>
 				</div>
 			</div>
 			<div class="stat-card">
-				<div class="stat-icon">✅</div>
+				<div class="stat-icon">
+					✅
+				</div>
 				<div class="stat-content">
-					<div class="stat-number">{{ statistics.completedJobs }}</div>
-					<div class="stat-label">Completed</div>
+					<div class="stat-number">
+						{{ statistics.completedJobs }}
+					</div>
+					<div class="stat-label">
+						Completed
+					</div>
 				</div>
 			</div>
 			<div class="stat-card">
-				<div class="stat-icon">❌</div>
+				<div class="stat-icon">
+					⏳
+				</div>
 				<div class="stat-content">
-					<div class="stat-number">{{ statistics.failedJobs }}</div>
-					<div class="stat-label">Failed</div>
+					<div class="stat-number">
+						{{ statistics.pendingJobs }}
+					</div>
+					<div class="stat-label">
+						Pending
+					</div>
 				</div>
 			</div>
 		</div>
@@ -55,26 +87,35 @@
 		<div id="active-jobs" class="section">
 			<h2>🔥 Active Jobs</h2>
 			<div v-if="activeJobs.length === 0" class="empty-state">
-				<div class="empty-icon">😴</div>
+				<div class="empty-icon">
+					😴
+				</div>
 				<p>No active jobs running</p>
 			</div>
 			<div v-else class="jobs-list">
 				<div v-for="job in activeJobs" :key="job.cachePath" class="job-card">
 					<div class="job-header">
-						<div class="job-filename">{{ job.filename }}</div>
-						<div class="job-status processing">{{ job.status }}</div>
+						<div class="job-filename">
+							{{ job.filename }}
+						</div>
+						<div class="job-status processing">
+							{{ job.status }}
+						</div>
 					</div>
 					<div class="job-progress">
 						<div class="progress-bar">
-							<div class="progress-fill" :style="{ width: job.progress + '%' }"></div>
+							<div class="progress-fill" :style="{ width: job.progress + '%' }" />
 						</div>
-						<div class="progress-text">{{ job.progress }}%</div>
+						<div class="progress-text">
+							{{ job.progress }}%
+						</div>
 					</div>
 					<div class="job-details">
 						<span class="detail-item">⏱️ {{ job.time }}</span>
 						<span class="detail-item">🎬 {{ job.frame }} frames</span>
 						<span class="detail-item">⚡ {{ job.speed }}</span>
 						<span class="detail-item">📺 {{ job.fps }} fps</span>
+						<span v-if="job.cacheSize" class="detail-item">💾 {{ job.cacheSize }}</span>
 					</div>
 					<div class="job-resolutions">
 						<span v-for="res in job.resolutions" :key="res" class="resolution-tag">{{ res }}</span>
@@ -87,13 +128,17 @@
 		<div id="auto-gen" class="section">
 			<h2>🤖 Auto-Generation Directories</h2>
 			<div v-if="autoGenDirs.length === 0" class="empty-state">
-				<div class="empty-icon">📁</div>
+				<div class="empty-icon">
+					📁
+				</div>
 				<p>No auto-generation directories configured</p>
 			</div>
 			<div v-else class="auto-gen-list">
 				<div v-for="dir in autoGenDirs" :key="dir.configKey" class="auto-gen-card">
 					<div class="auto-gen-header">
-						<div class="auto-gen-path">📁 {{ dir.directory }}</div>
+						<div class="auto-gen-path">
+							📁 {{ dir.directory }}
+						</div>
 						<div class="auto-gen-status" :class="{ enabled: dir.enabled, disabled: !dir.enabled }">
 							{{ dir.enabled ? 'Enabled' : 'Disabled' }}
 						</div>
@@ -106,41 +151,47 @@
 						<span v-for="res in dir.resolutions" :key="res" class="resolution-tag">{{ res }}</span>
 					</div>
 					<div class="auto-gen-actions">
-						<button @click="removeAutoGeneration(dir.configKey)" class="remove-btn">
+						<button class="edit-btn" @click="editAutoGeneration(dir)">
+							✏️ Edit
+						</button>
+						<button class="remove-btn" @click="removeAutoGeneration(dir.configKey)">
 							🗑️ Remove
 						</button>
 					</div>
 				</div>
 			</div>
-		</div>
 
-		<!-- System Info -->
-		<div id="system-info" class="section">
-			<h2>ℹ️ System Information</h2>
-			<div class="info-grid">
-				<div class="info-item">
-					<strong>Auto-Generation Interval:</strong> Every 60 minutes
-				</div>
-				<div class="info-item">
-					<strong>Supported Formats:</strong> MOV, MP4
-				</div>
-				<div class="info-item">
-					<strong>Cache Locations:</strong> Relative to video, User home
-				</div>
-				<div class="info-item">
-					<strong>Last Refresh:</strong> {{ lastRefresh }}
+			<!-- System Info -->
+			<div id="system-info" class="section">
+				<h2>ℹ️ System Information</h2>
+				<div class="job-stats">
+					<div class="stat-item">
+						<strong>Frame:</strong> {{ job.frame || 0 }}
+					</div>
+					<div class="stat-item">
+						<strong>FPS:</strong> {{ job.fps || 0 }}
+					</div>
+					<div class="stat-item">
+						<strong>Speed:</strong> {{ job.speed || '0x' }}
+					</div>
+					<div class="stat-item">
+						<strong>Time:</strong> {{ job.time || '00:00:00' }}
+					</div>
+					<div v-if="job.cacheSize" class="stat-item">
+						<strong>Cache Size:</strong> {{ job.cacheSize }}
+					</div>
 				</div>
 			</div>
-		</div>
 
-		<!-- Back to Top Button -->
-		<button 
-			v-show="showBackToTop" 
-			@click="scrollToTop" 
-			class="back-to-top-btn"
-			title="Back to top">
-			↑
-		</button>
+			<!-- Back to Top Button -->
+			<button 
+				v-show="showBackToTop" 
+				class="back-to-top-btn" 
+				title="Back to top"
+				@click="scrollToTop">
+				↑
+			</button>
+		</div>
 	</div>
 </template>
 
@@ -158,10 +209,11 @@ export default {
 			statistics: {
 				activeJobs: 0,
 				completedJobs: 0,
-				failedJobs: 0
+				pendingJobs: 0
 			},
 			lastRefresh: 'Never',
 			refreshInterval: null,
+			statsInterval: null,
 			progressIntervals: new Map(), // Track individual job progress polling
 			showBackToTop: false
 		}
@@ -175,12 +227,20 @@ export default {
 			this.refreshActiveJobs()
 		}, 10000)
 
+		// Set up periodic refresh for statistics and auto-gen (every 10 seconds)
+		this.statsInterval = setInterval(() => {
+			this.refreshStatisticsAndAutoGen()
+		}, 10000)
+
 		// Set up scroll listener for back-to-top button
 		window.addEventListener('scroll', this.handleScroll)
 	},
 	beforeDestroy() {
 		if (this.refreshInterval) {
 			clearInterval(this.refreshInterval)
+		}
+		if (this.statsInterval) {
+			clearInterval(this.statsInterval)
 		}
 		// Clear all individual progress intervals
 		this.progressIntervals.forEach(intervalId => clearInterval(intervalId))
@@ -214,6 +274,22 @@ export default {
 				OC.Notification.showTemporary('Failed to refresh dashboard data', { type: 'error' })
 			} finally {
 				this.loading = false
+			}
+		},
+
+		async refreshStatisticsAndAutoGen() {
+			try {
+				// Refresh statistics and auto-gen directories (not active jobs)
+				const [autoGenRes, statsRes] = await Promise.all([
+					axios.get(generateUrl('/apps/hyper_viewer/api/auto-generation')),
+					axios.get(generateUrl('/apps/hyper_viewer/api/jobs/statistics'))
+				])
+				
+				this.autoGenDirs = autoGenRes.data.autoGenDirs || []
+				this.statistics = statsRes.data.stats || this.statistics
+				
+			} catch (error) {
+				console.error('❌ Failed to refresh statistics and auto-gen:', error)
 			}
 		},
 
@@ -259,22 +335,111 @@ export default {
 				try {
 					const response = await axios.get(generateUrl(`/apps/hyper_viewer/api/jobs/active/${filename}`))
 					
-					// Update the specific job in the array
+					// Update the specific job in the array IMMEDIATELY
 					const jobIndex = this.activeJobs.findIndex(job => job.filename === filename)
 					if (jobIndex !== -1) {
-						this.activeJobs[jobIndex] = { ...this.activeJobs[jobIndex], ...response.data }
+						// Use Vue.set to ensure reactivity
+						this.$set(this.activeJobs, jobIndex, { ...this.activeJobs[jobIndex], ...response.data })
 					}
 					
 				} catch (error) {
 					if (error.response?.status === 404) {
-						// Job no longer active, stop polling
+						// Job no longer active, stop polling and remove from list
 						clearInterval(intervalId)
 						this.progressIntervals.delete(filename)
+						
+						// Remove completed job from active list
+						const jobIndex = this.activeJobs.findIndex(job => job.filename === filename)
+						if (jobIndex !== -1) {
+							this.activeJobs.splice(jobIndex, 1)
+						}
 					}
 				}
-			}, 2000) // Poll every 2 seconds for smooth progress updates
+			}, 1500) // Poll every 1.5 seconds for faster updates
 			
 			this.progressIntervals.set(filename, intervalId)
+		},
+
+		editAutoGeneration(dir) {
+			// Create a simple edit dialog
+			const resolutions = ['1080p', '720p', '480p', '360p', '240p']
+			const currentResolutions = dir.resolutions || []
+			
+			// Build checkbox list
+			const checkboxes = resolutions.map(res => {
+				const checked = currentResolutions.includes(res) ? 'checked' : ''
+				return `<label style="display: block; margin: 5px 0;"><input type="checkbox" value="${res}" ${checked}> ${res}</label>`
+			}).join('')
+			
+			const enabledChecked = dir.enabled ? 'checked' : ''
+			
+			const dialogContent = `
+				<div style="padding: 20px;">
+					<h3>Edit Auto-Generation Settings</h3>
+					<p><strong>Directory:</strong> ${dir.directory}</p>
+					
+					<div style="margin: 15px 0;">
+						<label><input type="checkbox" id="enabled-checkbox" ${enabledChecked}> Enabled</label>
+					</div>
+					
+					<div style="margin: 15px 0;">
+						<strong>Resolutions:</strong><br>
+						${checkboxes}
+					</div>
+					
+					<div style="margin-top: 20px;">
+						<button id="save-btn" style="background: #0082c9; color: white; padding: 8px 16px; border: none; border-radius: 4px; margin-right: 10px;">Save</button>
+						<button id="cancel-btn" style="background: #ccc; color: black; padding: 8px 16px; border: none; border-radius: 4px;">Cancel</button>
+					</div>
+				</div>
+			`
+			
+			// Create modal
+			const modal = document.createElement('div')
+			modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 10000; display: flex; align-items: center; justify-content: center;'
+			modal.innerHTML = `<div style="background: white; border-radius: 8px; max-width: 500px; width: 90%;">${dialogContent}</div>`
+			
+			document.body.appendChild(modal)
+			
+			// Handle save
+			modal.querySelector('#save-btn').onclick = async () => {
+				const enabled = modal.querySelector('#enabled-checkbox').checked
+				const selectedResolutions = Array.from(modal.querySelectorAll('input[type="checkbox"][value]'))
+					.filter(cb => cb.checked)
+					.map(cb => cb.value)
+				
+				try {
+					await axios.put(generateUrl(`/apps/hyper_viewer/api/auto-generation/${dir.configKey}`), {
+						enabled,
+						resolutions: selectedResolutions
+					})
+					
+					// Update local data
+					const dirIndex = this.autoGenDirs.findIndex(d => d.configKey === dir.configKey)
+					if (dirIndex !== -1) {
+						this.autoGenDirs[dirIndex].enabled = enabled
+						this.autoGenDirs[dirIndex].resolutions = selectedResolutions
+					}
+					
+					document.body.removeChild(modal)
+					OC.Notification.showTemporary('Auto-generation settings updated successfully', { type: 'success' })
+				} catch (error) {
+					console.error('❌ Failed to update auto-generation settings:', error)
+					OC.Notification.showTemporary('Failed to update settings', { type: 'error' })
+				}
+			}
+			
+			// Handle cancel
+			modal.querySelector('#cancel-btn').onclick = () => {
+				document.body.removeChild(modal)
+			}
+			
+			// Handle click outside
+			modal.onclick = (e) => {
+				if (e.target === modal) {
+					document.body.removeChild(modal)
+				}
+			}
 		},
 
 		async removeAutoGeneration(configKey) {

@@ -587,6 +587,9 @@ class CacheController extends Controller {
 									$progressData = json_decode($progressFile->getContent(), true);
 									
 									if ($progressData && ($progressData['status'] ?? '') === 'processing') {
+										// Get cache directory size
+										$cacheSize = $this->getJobCacheSize($jobFolder);
+										
 										return new JSONResponse([
 											'cachePath' => $jobFolder->getPath(),
 											'filename' => $filename,
@@ -598,6 +601,7 @@ class CacheController extends Controller {
 											'time' => $progressData['time'] ?? '00:00:00',
 											'bitrate' => $progressData['bitrate'] ?? '0kbits/s',
 											'size' => $progressData['size'] ?? '0kB',
+											'cacheSize' => $cacheSize, // Add cache directory size
 											'resolutions' => $progressData['resolutions'] ?? [],
 											'startTime' => $progressData['startTime'] ?? time(),
 											'lastUpdate' => $progressData['lastUpdate'] ?? time()
@@ -665,6 +669,53 @@ class CacheController extends Controller {
 	}
 
 	/**
+	 * Update auto-generation directory settings
+	 * 
+	 * @NoAdminRequired
+	 */
+	public function updateAutoGeneration(string $configKey): JSONResponse {
+		$user = $this->userSession->getUser();
+		if (!$user) {
+			return new JSONResponse(['error' => 'Unauthorized'], 401);
+		}
+
+		try {
+			$settingsJson = $this->config->getAppValue('hyper_viewer', $configKey, '');
+			if (empty($settingsJson)) {
+				return new JSONResponse(['error' => 'Auto-generation setting not found'], 404);
+			}
+
+			$settings = json_decode($settingsJson, true);
+			if (!$settings || $settings['userId'] !== $user->getUID()) {
+				return new JSONResponse(['error' => 'Unauthorized or invalid setting'], 403);
+			}
+
+			// Get updated settings from request
+			$input = json_decode(file_get_contents('php://input'), true);
+			
+			// Update allowed fields
+			if (isset($input['enabled'])) {
+				$settings['enabled'] = (bool)$input['enabled'];
+			}
+			if (isset($input['resolutions']) && is_array($input['resolutions'])) {
+				$settings['resolutions'] = $input['resolutions'];
+			}
+			if (isset($input['cacheLocation'])) {
+				$settings['cacheLocation'] = $input['cacheLocation'];
+			}
+
+			// Save updated settings
+			$this->config->setAppValue('hyper_viewer', $configKey, json_encode($settings));
+
+			return new JSONResponse(['success' => true, 'settings' => $settings]);
+
+		} catch (\Exception $e) {
+			$this->logger->error('Error updating auto-generation setting', ['error' => $e->getMessage()]);
+			return new JSONResponse(['error' => 'Failed to update auto-generation setting'], 500);
+		}
+	}
+
+	/**
 	 * Remove auto-generation for a directory
 	 * 
 	 * @NoAdminRequired
@@ -724,7 +775,7 @@ class CacheController extends Controller {
 			$stats = [
 				'totalJobs' => 0,
 				'completedJobs' => 0,
-				'failedJobs' => 0,
+				'pendingJobs' => 0,
 				'activeJobs' => 0,
 				'autoGenDirectories' => 0,
 				'totalCacheSize' => 0,
@@ -810,18 +861,10 @@ class CacheController extends Controller {
 			
 			$stats['completedJobs'] = count($completedDirs);
 			
-			// Calculate pending/failed jobs: totalJobs - completedJobs
-			$stats['failedJobs'] = $stats['totalJobs'] - $stats['completedJobs'];
+			// Calculate pending jobs: totalJobs - completedJobs
+			$stats['pendingJobs'] = $stats['totalJobs'] - $stats['completedJobs'];
 			
-			// Quick cache size estimate (optional - can be slow with many dirs)
-			if ($stats['completedJobs'] < 50) { // Only for small numbers
-				foreach (array_keys($completedDirs) as $dir) {
-					$size = $this->getDirSize($dir);
-					if ($size > 0) {
-						$stats['totalCacheSize'] += $size;
-					}
-				}
-			}
+			// Skip total cache size calculation - we'll show it per job card instead
 			
 		} catch (\Exception $e) {
 			// Fallback to slow method if glob fails
@@ -830,7 +873,36 @@ class CacheController extends Controller {
 	}
 	
 	/**
-	 * Get directory size quickly
+	 * Get cache size for a specific job (formatted for display)
+	 */
+	private function getJobCacheSize($jobFolder): string {
+		try {
+			$size = 0;
+			$items = $jobFolder->getDirectoryListing();
+			
+			foreach ($items as $item) {
+				if ($item->getType() === \OCP\Files\FileInfo::TYPE_FILE) {
+					$size += $item->getSize();
+				}
+			}
+			
+			// Format size for display
+			if ($size >= 1024 * 1024 * 1024) {
+				return round($size / (1024 * 1024 * 1024), 1) . ' GB';
+			} elseif ($size >= 1024 * 1024) {
+				return round($size / (1024 * 1024), 1) . ' MB';
+			} elseif ($size >= 1024) {
+				return round($size / 1024, 1) . ' KB';
+			} else {
+				return $size . ' B';
+			}
+		} catch (\Exception $e) {
+			return '0 MB';
+		}
+	}
+	
+	/**
+	 * Get directory size quickly (legacy method)
 	 */
 	private function getDirSize($dir): int {
 		try {
@@ -866,7 +938,7 @@ class CacheController extends Controller {
 				}
 			}
 			
-			$stats['failedJobs'] = $stats['totalJobs'] - $stats['completedJobs'];
+			$stats['pendingJobs'] = $stats['totalJobs'] - $stats['completedJobs'];
 			
 		} catch (\Exception $e) {
 			// Skip folders we can't access

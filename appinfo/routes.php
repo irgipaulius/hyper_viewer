@@ -38,6 +38,7 @@ return [
 		['name' => 'cache#getActiveJobs', 'url' => '/api/jobs/active', 'verb' => 'GET'],
 		['name' => 'cache#getJobProgress', 'url' => '/api/jobs/active/{filename}', 'verb' => 'GET'],
 		['name' => 'cache#getAutoGenerationSettings', 'url' => '/api/auto-generation', 'verb' => 'GET'],
+		['name' => 'cache#updateAutoGeneration', 'url' => '/api/auto-generation/{configKey}', 'verb' => 'PUT'],
 		['name' => 'cache#removeAutoGeneration', 'url' => '/api/auto-generation/{configKey}', 'verb' => 'DELETE'],
 		['name' => 'cache#getJobStatistics', 'url' => '/api/jobs/statistics', 'verb' => 'GET'],
 	]

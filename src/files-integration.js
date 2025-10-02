@@ -1192,6 +1192,9 @@ function showProgressDialog(fileCount) {
 
 /**
  * Show progress modal for HLS generation
+ *
+ * @param filename
+ * @param directory
  */
 function showProgressModal(filename, directory) {
 	console.log(`📈 Showing progress modal for: ${filename}`);
@@ -1432,6 +1435,10 @@ function showProgressModal(filename, directory) {
 
 /**
  * Start polling for progress updates
+ *
+ * @param filename
+ * @param directory
+ * @param modal
  */
 function startProgressPolling(filename, directory, modal) {
 	const baseFilename = filename.replace(/\.[^/.]+$/, ""); // Remove extension
@@ -1514,6 +1521,8 @@ function startProgressPolling(filename, directory, modal) {
 
 /**
  * Start countdown timer showing time until next cron execution
+ *
+ * @param modal
  */
 function startCronCountdown(modal) {
 	const statusElement = modal.querySelector(".progress-status");
@@ -1546,6 +1555,9 @@ function startCronCountdown(modal) {
 
 /**
  * Update progress modal with latest data
+ *
+ * @param modal
+ * @param progress
  */
 function updateProgressModal(modal, progress) {
 	const progressBar = modal.querySelector(".progress-bar-fill");
@@ -1661,6 +1673,7 @@ async function playWithHls(filename, directory, context) {
 
 /**
  * Load Shaka Player in a modal
+ *
  * @param {string} filename - Video filename
  * @param {string} cachePath - HLS cache path
  * @param {object} context - File context
