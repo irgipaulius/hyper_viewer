@@ -731,7 +731,7 @@ class CacheController extends Controller {
 				'recentJobs' => []
 			];
 
-			// Scan cache directories for job statistics
+			// Fast statistics using simple file system queries
 			$cacheLocations = [
 				'/.cached_hls',
 				'/cached_hls'
@@ -741,7 +741,7 @@ class CacheController extends Controller {
 				if ($userFolder->nodeExists($cacheLocation)) {
 					$cacheFolder = $userFolder->get($cacheLocation);
 					if ($cacheFolder instanceof \OCP\Files\Folder) {
-						$this->gatherJobStatistics($cacheFolder, $stats);
+						$this->gatherSimpleStatistics($cacheFolder, $stats);
 					}
 				}
 			}
@@ -776,76 +776,98 @@ class CacheController extends Controller {
 	}
 
 	/**
-	 * Gather job statistics from cache directories (optimized)
+	 * Ultra-fast statistics using direct filesystem glob queries
 	 */
-	private function gatherJobStatistics($folder, array &$stats): void {
+	private function gatherSimpleStatistics($folder, array &$stats): void {
+		try {
+			$folderPath = $folder->getStorage()->getLocalFile($folder->getInternalPath());
+			
+			if (!$folderPath || !is_dir($folderPath)) {
+				return;
+			}
+			
+			// Count total jobs: all directories in .cached_hls
+			$totalDirs = glob($folderPath . '/*', GLOB_ONLYDIR);
+			$stats['totalJobs'] = count($totalDirs);
+			
+			// Count completed jobs: directories with HLS files
+			$masterFiles = glob($folderPath . '/*/master.m3u8');
+			$playlistFiles = glob($folderPath . '/*/playlist.m3u8');
+			$adaptiveFiles = glob($folderPath . '/*/playlist_*p.m3u8');
+			
+			// Get unique directory names that have any HLS files
+			$completedDirs = [];
+			
+			foreach ($masterFiles as $file) {
+				$completedDirs[dirname($file)] = true;
+			}
+			foreach ($playlistFiles as $file) {
+				$completedDirs[dirname($file)] = true;
+			}
+			foreach ($adaptiveFiles as $file) {
+				$completedDirs[dirname($file)] = true;
+			}
+			
+			$stats['completedJobs'] = count($completedDirs);
+			
+			// Calculate pending/failed jobs: totalJobs - completedJobs
+			$stats['failedJobs'] = $stats['totalJobs'] - $stats['completedJobs'];
+			
+			// Quick cache size estimate (optional - can be slow with many dirs)
+			if ($stats['completedJobs'] < 50) { // Only for small numbers
+				foreach (array_keys($completedDirs) as $dir) {
+					$size = $this->getDirSize($dir);
+					if ($size > 0) {
+						$stats['totalCacheSize'] += $size;
+					}
+				}
+			}
+			
+		} catch (\Exception $e) {
+			// Fallback to slow method if glob fails
+			$this->gatherSimpleStatisticsFallback($folder, $stats);
+		}
+	}
+	
+	/**
+	 * Get directory size quickly
+	 */
+	private function getDirSize($dir): int {
+		try {
+			$size = 0;
+			$files = glob($dir . '/*');
+			foreach ($files as $file) {
+				if (is_file($file)) {
+					$size += filesize($file);
+				}
+			}
+			return $size;
+		} catch (\Exception $e) {
+			return 0;
+		}
+	}
+	
+	/**
+	 * Fallback method if glob doesn't work
+	 */
+	private function gatherSimpleStatisticsFallback($folder, array &$stats): void {
 		try {
 			$items = $folder->getDirectoryListing();
-			
-			// Process in batches to avoid memory issues
-			$batchSize = 50;
-			$processed = 0;
 			
 			foreach ($items as $node) {
 				if ($node instanceof \OCP\Files\Folder) {
 					$stats['totalJobs']++;
 					
-					// Quick check for completion status
-					if ($node->nodeExists('master.m3u8') || $node->nodeExists('playlist.m3u8')) {
-						// Check if there's a progress file to determine final status
-						if ($node->nodeExists('progress.json')) {
-							try {
-								$progressFile = $node->get('progress.json');
-								$progressData = json_decode($progressFile->getContent(), true);
-								$status = $progressData['status'] ?? 'unknown';
-								
-								if ($status === 'completed') {
-									$stats['completedJobs']++;
-								} elseif ($status === 'failed') {
-									$stats['failedJobs']++;
-								} elseif ($status === 'processing') {
-									// This will be counted separately by getActiveJobs
-								}
-							} catch (\Exception $e) {
-								// Assume completed if HLS files exist but no progress file
-								$stats['completedJobs']++;
-							}
-						} else {
-							// No progress file but HLS files exist = completed
-							$stats['completedJobs']++;
-						}
-						
-						// Add to cache size calculation
-						try {
-							$stats['totalCacheSize'] += $node->getSize();
-						} catch (\Exception $e) {
-							// Skip size calculation if it fails
-						}
-					} else {
-						// No HLS files - check if it's failed or just starting
-						if ($node->nodeExists('progress.json')) {
-							try {
-								$progressFile = $node->get('progress.json');
-								$progressData = json_decode($progressFile->getContent(), true);
-								$status = $progressData['status'] ?? 'unknown';
-								
-								if ($status === 'failed') {
-									$stats['failedJobs']++;
-								}
-								// Processing jobs are counted by getActiveJobs
-							} catch (\Exception $e) {
-								// Skip if we can't read progress
-							}
-						}
+					// Check if job is completed (has HLS files)
+					if ($node->nodeExists('master.m3u8') || $node->nodeExists('playlist.m3u8') || 
+						$this->hasPlaylistFiles($node)) {
+						$stats['completedJobs']++;
 					}
 				}
-				
-				// Limit processing to avoid timeouts
-				$processed++;
-				if ($processed >= 200) { // Limit to 200 cache directories
-					break;
-				}
 			}
+			
+			$stats['failedJobs'] = $stats['totalJobs'] - $stats['completedJobs'];
+			
 		} catch (\Exception $e) {
 			// Skip folders we can't access
 			return;
@@ -853,42 +875,96 @@ class CacheController extends Controller {
 	}
 
 	/**
-	 * Fast scan - only find active job directories, no detailed progress
+	 * Check if folder has playlist files (adaptive HLS)
+	 */
+	private function hasPlaylistFiles($folder): bool {
+		try {
+			$items = $folder->getDirectoryListing();
+			foreach ($items as $item) {
+				if ($item->getType() === \OCP\Files\FileInfo::TYPE_FILE) {
+					$name = $item->getName();
+					if (preg_match('/^playlist_\d+p\.m3u8$/', $name)) {
+						return true;
+					}
+				}
+			}
+		} catch (\Exception $e) {
+			// Skip if we can't read directory
+		}
+		return false;
+	}
+
+	/**
+	 * Ultra-fast active jobs scan using glob
 	 */
 	private function scanForActiveJobsOnly($folder, array &$activeJobs): void {
 		try {
+			$folderPath = $folder->getStorage()->getLocalFile($folder->getInternalPath());
+			
+			if (!$folderPath || !is_dir($folderPath)) {
+				return;
+			}
+			
+			// Get all directories
+			$allDirs = glob($folderPath . '/*', GLOB_ONLYDIR);
+			
+			// Get directories with HLS files
+			$masterFiles = glob($folderPath . '/*/master.m3u8');
+			$playlistFiles = glob($folderPath . '/*/playlist.m3u8');
+			$adaptiveFiles = glob($folderPath . '/*/playlist_*p.m3u8');
+			
+			// Build set of completed directories
+			$completedDirs = [];
+			foreach ($masterFiles as $file) {
+				$completedDirs[dirname($file)] = true;
+			}
+			foreach ($playlistFiles as $file) {
+				$completedDirs[dirname($file)] = true;
+			}
+			foreach ($adaptiveFiles as $file) {
+				$completedDirs[dirname($file)] = true;
+			}
+			
+			// Find active jobs: directories without HLS files
+			foreach ($allDirs as $dir) {
+				if (!isset($completedDirs[$dir])) {
+					$dirName = basename($dir);
+					$activeJobs[] = [
+						'cachePath' => $folder->getPath() . '/' . $dirName,
+						'filename' => $dirName . '.MOV',
+						'status' => 'processing'
+					];
+				}
+			}
+			
+		} catch (\Exception $e) {
+			// Fallback to slow method if glob fails
+			$this->scanForActiveJobsFallback($folder, $activeJobs);
+		}
+	}
+	
+	/**
+	 * Fallback method for active jobs if glob doesn't work
+	 */
+	private function scanForActiveJobsFallback($folder, array &$activeJobs): void {
+		try {
 			$items = $folder->getDirectoryListing();
-			$processed = 0;
 			
 			foreach ($items as $node) {
 				if ($node instanceof \OCP\Files\Folder) {
-					// Quick check: does it have a progress.json file?
-					if ($node->nodeExists('progress.json')) {
-						try {
-							$progressFile = $node->get('progress.json');
-							$progressData = json_decode($progressFile->getContent(), true);
-							
-							// Only include if status is 'processing'
-							if ($progressData && ($progressData['status'] ?? '') === 'processing') {
-								$activeJobs[] = [
-									'cachePath' => $node->getPath(),
-									'filename' => $progressData['filename'] ?? 'Unknown',
-									'status' => 'processing',
-									'resolutions' => $progressData['resolutions'] ?? [],
-									'startTime' => $progressData['startTime'] ?? time()
-								];
-							}
-						} catch (\Exception $e) {
-							// Skip invalid progress files
-							continue;
-						}
+					// Check if job is NOT completed (no HLS files)
+					$hasHlsFiles = $node->nodeExists('master.m3u8') || 
+								   $node->nodeExists('playlist.m3u8') || 
+								   $this->hasPlaylistFiles($node);
+					
+					if (!$hasHlsFiles) {
+						// This is an active/pending job - just return the name
+						$activeJobs[] = [
+							'cachePath' => $node->getPath(),
+							'filename' => $node->getName() . '.MOV',
+							'status' => 'processing'
+						];
 					}
-				}
-				
-				// Limit to prevent timeouts
-				$processed++;
-				if ($processed >= 100) {
-					break;
 				}
 			}
 		} catch (\Exception $e) {
