@@ -1681,23 +1681,112 @@ async function playWithHls(filename, directory, context) {
 function loadShakaPlayer(filename, cachePath, context) {
 	const videoId = `hyperVideo_${Date.now()}`;
 
-	// Create simple modal
+	// Create enhanced modal with clipping controls
 	const modal = document.createElement("div");
 	modal.style.cssText = `
         position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 10000;
-        background: rgba(0,0,0,0.9); display: flex; align-items: center; justify-content: center;
+        background: rgba(0,0,0,0.9); display: flex; flex-direction: column; align-items: center; justify-content: center;
         padding: 20px; box-sizing: border-box;
     `;
 
 	modal.innerHTML = `
-        <video id="${videoId}" autoplay style="
-            width: min(90vw, 1200px); height: min(80vh, 675px); 
-            object-fit: contain; background: #000; border-radius: 8px;
-        "></video>
-        <button class="close-btn" style="
-            position: absolute; top: 20px; right: 20px; background: rgba(0,0,0,0.7); 
-            border: none; color: white; width: 40px; height: 40px; border-radius: 50%; 
-            font-size: 18px; cursor: pointer; z-index: 10001;">✕</button>
+        <div class="video-container" style="position: relative; display: flex; flex-direction: column; align-items: center;">
+            <video id="${videoId}" autoplay style="
+                width: min(90vw, 1200px); height: min(70vh, 600px); 
+                object-fit: contain; background: #000; border-radius: 8px;
+            "></video>
+            
+            <!-- Clipping Controls Panel -->
+            <div id="clipping-panel" style="
+                width: min(90vw, 1200px); background: rgba(20,20,20,0.95); border-radius: 0 0 8px 8px;
+                padding: 15px; display: none; border-top: 1px solid #444;
+            ">
+                <!-- Clip Mode Toggle -->
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h3 style="color: white; margin: 0; font-size: 16px;">📹 Video Clipping Mode</h3>
+                    <button id="exit-clip-mode" style="
+                        background: #666; border: none; color: white; padding: 6px 12px; 
+                        border-radius: 4px; cursor: pointer; font-size: 12px;">Exit Clip Mode</button>
+                </div>
+                
+                <!-- Timeline with Clip Markers -->
+                <div style="margin-bottom: 20px;">
+                    <div style="display: flex; justify-content: space-between; color: #ccc; font-size: 12px; margin-bottom: 5px;">
+                        <span>Timeline</span>
+                        <span id="clip-duration">Clip Duration: 0:00</span>
+                    </div>
+                    <div id="timeline-container" style="position: relative; height: 40px; background: #333; border-radius: 4px; overflow: hidden;">
+                        <div id="timeline-progress" style="height: 100%; background: #555; width: 0%; transition: width 0.1s;"></div>
+                        <div id="start-marker" style="
+                            position: absolute; top: 0; left: 0%; width: 3px; height: 100%; 
+                            background: #4CAF50; cursor: ew-resize; z-index: 2;
+                        "></div>
+                        <div id="end-marker" style="
+                            position: absolute; top: 0; right: 0%; width: 3px; height: 100%; 
+                            background: #f44336; cursor: ew-resize; z-index: 2;
+                        "></div>
+                        <div id="clip-range" style="
+                            position: absolute; top: 0; left: 0%; right: 0%; height: 100%; 
+                            background: rgba(76, 175, 80, 0.2); z-index: 1;
+                        "></div>
+                    </div>
+                </div>
+                
+                <!-- Frame-Accurate Controls -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+                    <!-- Start Time Controls -->
+                    <div style="background: rgba(76, 175, 80, 0.1); padding: 12px; border-radius: 6px; border: 1px solid #4CAF50;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            <label style="color: #4CAF50; font-weight: bold; font-size: 14px;">🟢 Start Time</label>
+                            <span id="start-time-display" style="color: white; font-family: monospace;">0:00.000</span>
+                        </div>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <button id="start-frame-back" style="background: #4CAF50; border: none; color: white; padding: 6px 8px; border-radius: 3px; cursor: pointer; font-size: 11px;">⏪ -1f</button>
+                            <button id="start-set-current" style="background: #4CAF50; border: none; color: white; padding: 6px 12px; border-radius: 3px; cursor: pointer; font-size: 11px;">Set Current</button>
+                            <button id="start-frame-forward" style="background: #4CAF50; border: none; color: white; padding: 6px 8px; border-radius: 3px; cursor: pointer; font-size: 11px;">+1f ⏩</button>
+                        </div>
+                    </div>
+                    
+                    <!-- End Time Controls -->
+                    <div style="background: rgba(244, 67, 54, 0.1); padding: 12px; border-radius: 6px; border: 1px solid #f44336;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            <label style="color: #f44336; font-weight: bold; font-size: 14px;">🔴 End Time</label>
+                            <span id="end-time-display" style="color: white; font-family: monospace;">0:00.000</span>
+                        </div>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <button id="end-frame-back" style="background: #f44336; border: none; color: white; padding: 6px 8px; border-radius: 3px; cursor: pointer; font-size: 11px;">⏪ -1f</button>
+                            <button id="end-set-current" style="background: #f44336; border: none; color: white; padding: 6px 12px; border-radius: 3px; cursor: pointer; font-size: 11px;">Set Current</button>
+                            <button id="end-frame-forward" style="background: #f44336; border: none; color: white; padding: 6px 8px; border-radius: 3px; cursor: pointer; font-size: 11px;">+1f ⏩</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Preview and Export Controls -->
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div style="display: flex; gap: 10px;">
+                        <button id="preview-clip" style="
+                            background: #2196F3; border: none; color: white; padding: 8px 16px; 
+                            border-radius: 4px; cursor: pointer; font-size: 14px;">🎬 Preview Clip</button>
+                        <button id="reset-markers" style="
+                            background: #666; border: none; color: white; padding: 8px 16px; 
+                            border-radius: 4px; cursor: pointer; font-size: 14px;">🔄 Reset</button>
+                    </div>
+                    <button id="export-clip" style="
+                        background: #FF9800; border: none; color: white; padding: 10px 20px; 
+                        border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: bold;">📤 Export Clip</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Top Controls -->
+        <div style="position: absolute; top: 20px; right: 20px; display: flex; gap: 10px; z-index: 10001;">
+            <button id="toggle-clip-mode" style="
+                background: rgba(255, 152, 0, 0.9); border: none; color: white; 
+                padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">✂️ Clip Video</button>
+            <button class="close-btn" style="
+                background: rgba(0,0,0,0.7); border: none; color: white; 
+                width: 40px; height: 40px; border-radius: 50%; font-size: 18px; cursor: pointer;">✕</button>
+        </div>
     `;
 
 	const closeModal = () => {
@@ -1724,6 +1813,13 @@ function loadShakaPlayer(filename, cachePath, context) {
 
 	const video = document.getElementById(videoId);
 
+	// Clipping state
+	let isClipMode = false;
+	let startTime = 0;
+	let endTime = 0;
+	let videoDuration = 0;
+	const videoFrameRate = 30; // Default, will be updated when video loads
+
 	// Add close button event listener
 	modal.querySelector(".close-btn").addEventListener("click", closeModal);
 
@@ -1745,5 +1841,269 @@ function loadShakaPlayer(filename, cachePath, context) {
 
 		// Try master.m3u8 first, fallback to playlist.m3u8
 		player.load(masterUrl).catch(() => player.load(playlistUrl));
+
+		// Video event listeners
+		video.addEventListener('loadedmetadata', () => {
+			videoDuration = video.duration;
+			endTime = videoDuration;
+			updateTimelineMarkers();
+			updateTimeDisplays();
+		});
+
+		video.addEventListener('timeupdate', () => {
+			if (isClipMode) {
+				updateTimelineProgress();
+			}
+		});
 	}
+
+	// Clipping functionality
+	function toggleClipMode() {
+		isClipMode = !isClipMode;
+		const panel = modal.querySelector('#clipping-panel');
+		const toggleBtn = modal.querySelector('#toggle-clip-mode');
+		
+		if (isClipMode) {
+			panel.style.display = 'block';
+			toggleBtn.textContent = '✂️ Exit Clip Mode';
+			toggleBtn.style.background = 'rgba(244, 67, 54, 0.9)';
+			// Initialize markers
+			startTime = 0;
+			endTime = videoDuration;
+			updateTimelineMarkers();
+			updateTimeDisplays();
+		} else {
+			panel.style.display = 'none';
+			toggleBtn.textContent = '✂️ Clip Video';
+			toggleBtn.style.background = 'rgba(255, 152, 0, 0.9)';
+		}
+	}
+
+	function formatTime(seconds) {
+		const mins = Math.floor(seconds / 60);
+		const secs = Math.floor(seconds % 60);
+		const ms = Math.floor((seconds % 1) * 1000);
+		return `${mins}:${secs.toString().padStart(2, '0')}.${ms.toString().padStart(3, '0')}`;
+	}
+
+	function updateTimeDisplays() {
+		modal.querySelector('#start-time-display').textContent = formatTime(startTime);
+		modal.querySelector('#end-time-display').textContent = formatTime(endTime);
+		
+		const duration = Math.max(0, endTime - startTime);
+		const durationMins = Math.floor(duration / 60);
+		const durationSecs = Math.floor(duration % 60);
+		modal.querySelector('#clip-duration').textContent = 
+			`Clip Duration: ${durationMins}:${durationSecs.toString().padStart(2, '0')}`;
+	}
+
+	function updateTimelineMarkers() {
+		if (videoDuration === 0) return;
+		
+		const startPercent = (startTime / videoDuration) * 100;
+		const endPercent = (endTime / videoDuration) * 100;
+		
+		modal.querySelector('#start-marker').style.left = `${startPercent}%`;
+		modal.querySelector('#end-marker').style.left = `${endPercent}%`;
+		modal.querySelector('#clip-range').style.left = `${startPercent}%`;
+		modal.querySelector('#clip-range').style.width = `${endPercent - startPercent}%`;
+	}
+
+	function updateTimelineProgress() {
+		if (videoDuration === 0) return;
+		const progressPercent = (video.currentTime / videoDuration) * 100;
+		modal.querySelector('#timeline-progress').style.width = `${progressPercent}%`;
+	}
+
+	function stepFrame(direction, isStart = true) {
+		const frameTime = 1 / videoFrameRate;
+		const newTime = video.currentTime + (direction * frameTime);
+		const clampedTime = Math.max(0, Math.min(videoDuration, newTime));
+		
+		video.currentTime = clampedTime;
+		
+		if (isStart) {
+			startTime = clampedTime;
+		} else {
+			endTime = clampedTime;
+		}
+		
+		updateTimelineMarkers();
+		updateTimeDisplays();
+	}
+
+	function setCurrentTime(isStart = true) {
+		if (isStart) {
+			startTime = video.currentTime;
+		} else {
+			endTime = video.currentTime;
+		}
+		
+		// Ensure start < end
+		if (startTime >= endTime) {
+			if (isStart) {
+				endTime = Math.min(videoDuration, startTime + 1);
+			} else {
+				startTime = Math.max(0, endTime - 1);
+			}
+		}
+		
+		updateTimelineMarkers();
+		updateTimeDisplays();
+	}
+
+	function previewClip() {
+		video.currentTime = startTime;
+		video.play();
+		
+		// Stop at end time
+		const checkTime = () => {
+			if (video.currentTime >= endTime) {
+				video.pause();
+			} else {
+				requestAnimationFrame(checkTime);
+			}
+		};
+		requestAnimationFrame(checkTime);
+	}
+
+	function resetMarkers() {
+		startTime = 0;
+		endTime = videoDuration;
+		updateTimelineMarkers();
+		updateTimeDisplays();
+	}
+
+	function showExportModal() {
+		// Create export modal
+		const exportModal = document.createElement('div');
+		exportModal.style.cssText = `
+			position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 10002;
+			background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center;
+		`;
+		
+		exportModal.innerHTML = `
+			<div style="
+				background: #2a2a2a; border-radius: 8px; padding: 24px; max-width: 500px; width: 90%;
+				color: white; box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+			">
+				<h3 style="margin: 0 0 20px 0; color: #FF9800;">📤 Export Video Clip</h3>
+				
+				<div style="margin-bottom: 20px;">
+					<label style="display: block; margin-bottom: 8px; font-weight: bold;">Export Location:</label>
+					<div style="display: flex; gap: 8px;">
+						<input id="export-path" type="text" value="../exports" style="
+							flex: 1; padding: 8px; border: 1px solid #555; border-radius: 4px; 
+							background: #333; color: white; font-family: monospace;
+						">
+						<button id="browse-location" style="
+							background: #666; border: none; color: white; padding: 8px 12px; 
+							border-radius: 4px; cursor: pointer;">📁 Browse</button>
+					</div>
+					<small style="color: #ccc; margin-top: 4px; display: block;">
+						Relative to video location. Use "../exports" for parent directory.
+					</small>
+				</div>
+				
+				<div style="margin-bottom: 20px;">
+					<label style="display: block; margin-bottom: 12px; font-weight: bold;">Export Options:</label>
+					<div style="display: flex; flex-direction: column; gap: 8px;">
+						<label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+							<input type="checkbox" id="export-original" checked style="margin: 0;">
+							<span>📹 Export original quality (${filename})</span>
+						</label>
+						<label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+							<input type="checkbox" id="export-720p" style="margin: 0;">
+							<span>🎬 Export compressed 720p MP4</span>
+						</label>
+						<label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+							<input type="checkbox" id="generate-proxy" checked style="margin: 0;">
+							<span>⚡ Generate HLS proxy for clip</span>
+						</label>
+					</div>
+				</div>
+				
+				<div style="margin-bottom: 20px; padding: 12px; background: rgba(76, 175, 80, 0.1); border-radius: 4px; border: 1px solid #4CAF50;">
+					<div style="font-size: 14px; margin-bottom: 8px;">📊 Clip Details:</div>
+					<div style="font-family: monospace; font-size: 12px; color: #ccc;">
+						<div>Start: ${formatTime(startTime)}</div>
+						<div>End: ${formatTime(endTime)}</div>
+						<div>Duration: ${formatTime(endTime - startTime)}</div>
+					</div>
+				</div>
+				
+				<div style="display: flex; justify-content: flex-end; gap: 12px;">
+					<button id="cancel-export" style="
+						background: #666; border: none; color: white; padding: 10px 16px; 
+						border-radius: 4px; cursor: pointer;">Cancel</button>
+					<button id="confirm-export" style="
+						background: #FF9800; border: none; color: white; padding: 10px 16px; 
+						border-radius: 4px; cursor: pointer; font-weight: bold;">🚀 Start Export</button>
+				</div>
+			</div>
+		`;
+		
+		document.body.appendChild(exportModal);
+		
+		// Export modal event listeners
+		exportModal.querySelector('#cancel-export').addEventListener('click', () => {
+			exportModal.remove();
+		});
+		
+		exportModal.querySelector('#confirm-export').addEventListener('click', () => {
+			const exportPath = exportModal.querySelector('#export-path').value;
+			const exportOriginal = exportModal.querySelector('#export-original').checked;
+			const export720p = exportModal.querySelector('#export-720p').checked;
+			const generateProxy = exportModal.querySelector('#generate-proxy').checked;
+			
+			console.log('🚀 Export settings:', {
+				filename,
+				startTime,
+				endTime,
+				duration: endTime - startTime,
+				exportPath,
+				exportOriginal,
+				export720p,
+				generateProxy
+			});
+			
+			// TODO: Implement actual export functionality
+			OC.dialogs.alert('Export functionality will be implemented next!', 'Coming Soon');
+			exportModal.remove();
+		});
+		
+		exportModal.addEventListener('click', (e) => {
+			if (e.target === exportModal) {
+				exportModal.remove();
+			}
+		});
+	}
+
+	// Event listeners for clipping controls
+	modal.querySelector('#toggle-clip-mode').addEventListener('click', toggleClipMode);
+	modal.querySelector('#exit-clip-mode').addEventListener('click', toggleClipMode);
+	
+	// Start time controls
+	modal.querySelector('#start-frame-back').addEventListener('click', () => stepFrame(-1, true));
+	modal.querySelector('#start-frame-forward').addEventListener('click', () => stepFrame(1, true));
+	modal.querySelector('#start-set-current').addEventListener('click', () => setCurrentTime(true));
+	
+	// End time controls
+	modal.querySelector('#end-frame-back').addEventListener('click', () => stepFrame(-1, false));
+	modal.querySelector('#end-frame-forward').addEventListener('click', () => stepFrame(1, false));
+	modal.querySelector('#end-set-current').addEventListener('click', () => setCurrentTime(false));
+	
+	// Preview and export controls
+	modal.querySelector('#preview-clip').addEventListener('click', previewClip);
+	modal.querySelector('#reset-markers').addEventListener('click', resetMarkers);
+	modal.querySelector('#export-clip').addEventListener('click', showExportModal);
+
+	// Timeline click to seek
+	modal.querySelector('#timeline-container').addEventListener('click', (e) => {
+		const rect = e.target.getBoundingClientRect();
+		const clickX = e.clientX - rect.left;
+		const clickPercent = clickX / rect.width;
+		const seekTime = clickPercent * videoDuration;
+		video.currentTime = Math.max(0, Math.min(videoDuration, seekTime));
+	});
 }
