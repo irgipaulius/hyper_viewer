@@ -1691,7 +1691,7 @@ function loadShakaPlayer(filename, cachePath, context) {
 
 	modal.innerHTML = `
         <div class="video-container" style="position: relative; display: flex; flex-direction: column; align-items: center;">
-            <video id="${videoId}" autoplay style="
+            <video id="${videoId}" controls autoplay style="
                 width: min(90vw, 1200px); height: min(70vh, 600px); 
                 object-fit: contain; background: #000; border-radius: 8px;
             "></video>
@@ -1709,13 +1709,23 @@ function loadShakaPlayer(filename, cachePath, context) {
                         border-radius: 4px; cursor: pointer; font-size: 12px;">Exit Clip Mode</button>
                 </div>
                 
+                <!-- Basic Playback Controls -->
+                <div style="display: flex; justify-content: center; align-items: center; gap: 15px; margin-bottom: 15px; padding: 10px; background: rgba(40,40,40,0.8); border-radius: 6px;">
+                    <button id="play-pause-btn" style="
+                        background: #2196F3; border: none; color: white; padding: 8px 12px; 
+                        border-radius: 4px; cursor: pointer; font-size: 14px;">⏸️ Pause</button>
+                    <span id="current-time-display" style="color: #ccc; font-family: monospace; font-size: 14px;">0:00.000</span>
+                    <span style="color: #666;">/</span>
+                    <span id="total-time-display" style="color: #ccc; font-family: monospace; font-size: 14px;">0:00.000</span>
+                </div>
+                
                 <!-- Timeline with Clip Markers -->
                 <div style="margin-bottom: 20px;">
                     <div style="display: flex; justify-content: space-between; color: #ccc; font-size: 12px; margin-bottom: 5px;">
                         <span>Timeline</span>
                         <span id="clip-duration">Clip Duration: 0:00</span>
                     </div>
-                    <div id="timeline-container" style="position: relative; height: 40px; background: #333; border-radius: 4px; overflow: hidden;">
+                    <div id="timeline-container" style="position: relative; height: 40px; background: #333; border-radius: 4px; overflow: hidden; cursor: pointer;">
                         <div id="timeline-progress" style="height: 100%; background: #555; width: 0%; transition: width 0.1s;"></div>
                         <div id="start-marker" style="
                             position: absolute; top: 0; left: 0%; width: 3px; height: 100%; 
@@ -1828,8 +1838,8 @@ function loadShakaPlayer(filename, cachePath, context) {
 
 	if (shaka.Player.isBrowserSupported()) {
 		const player = new shaka.Player(video);
-		const ui = new shaka.ui.Overlay(player, video.parentElement, video); // eslint-disable-line no-unused-vars
-
+		// Don't create Shaka UI overlay - use native video controls instead
+		
 		// Build manifest URL
 		const encodedCachePath = encodeURIComponent(cachePath);
 		const masterUrl = `${OC.generateUrl(
@@ -1853,6 +1863,25 @@ function loadShakaPlayer(filename, cachePath, context) {
 		video.addEventListener('timeupdate', () => {
 			if (isClipMode) {
 				updateTimelineProgress();
+				updateTimeDisplays();
+			}
+		});
+
+		video.addEventListener('play', () => {
+			if (isClipMode) {
+				const playPauseBtn = modal.querySelector('#play-pause-btn');
+				if (playPauseBtn) {
+					playPauseBtn.textContent = '⏸️ Pause';
+				}
+			}
+		});
+
+		video.addEventListener('pause', () => {
+			if (isClipMode) {
+				const playPauseBtn = modal.querySelector('#play-pause-btn');
+				if (playPauseBtn) {
+					playPauseBtn.textContent = '▶️ Play';
+				}
 			}
 		});
 	}
@@ -1867,6 +1896,8 @@ function loadShakaPlayer(filename, cachePath, context) {
 			panel.style.display = 'block';
 			toggleBtn.textContent = '✂️ Exit Clip Mode';
 			toggleBtn.style.background = 'rgba(244, 67, 54, 0.9)';
+			// Hide native video controls to avoid conflicts
+			video.controls = false;
 			// Initialize markers
 			startTime = 0;
 			endTime = videoDuration;
@@ -1876,6 +1907,8 @@ function loadShakaPlayer(filename, cachePath, context) {
 			panel.style.display = 'none';
 			toggleBtn.textContent = '✂️ Clip Video';
 			toggleBtn.style.background = 'rgba(255, 152, 0, 0.9)';
+			// Show native video controls when not in clip mode
+			video.controls = true;
 		}
 	}
 
@@ -1895,6 +1928,12 @@ function loadShakaPlayer(filename, cachePath, context) {
 		const durationSecs = Math.floor(duration % 60);
 		modal.querySelector('#clip-duration').textContent = 
 			`Clip Duration: ${durationMins}:${durationSecs.toString().padStart(2, '0')}`;
+		
+		// Update current time and total time displays
+		if (isClipMode) {
+			modal.querySelector('#current-time-display').textContent = formatTime(video.currentTime);
+			modal.querySelector('#total-time-display').textContent = formatTime(videoDuration);
+		}
 	}
 
 	function updateTimelineMarkers() {
@@ -1972,6 +2011,14 @@ function loadShakaPlayer(filename, cachePath, context) {
 		endTime = videoDuration;
 		updateTimelineMarkers();
 		updateTimeDisplays();
+	}
+
+	function togglePlayPause() {
+		if (video.paused) {
+			video.play();
+		} else {
+			video.pause();
+		}
 	}
 
 	function showExportModal() {
@@ -2082,6 +2129,9 @@ function loadShakaPlayer(filename, cachePath, context) {
 	// Event listeners for clipping controls
 	modal.querySelector('#toggle-clip-mode').addEventListener('click', toggleClipMode);
 	modal.querySelector('#exit-clip-mode').addEventListener('click', toggleClipMode);
+	
+	// Playback controls
+	modal.querySelector('#play-pause-btn').addEventListener('click', togglePlayPause);
 	
 	// Start time controls
 	modal.querySelector('#start-frame-back').addEventListener('click', () => stepFrame(-1, true));
