@@ -35,8 +35,7 @@ class AutoHlsGenerationJob extends TimedJob {
 		$this->jobList = $jobList;
 		$this->logger = $logger;
 
-		// Run every 60 minutes (reduced from 15 to prevent WebDAV conflicts)
-		$this->setInterval(60 * 60);
+		$this->setInterval(60 * 10);
 	}
 
 	protected function run($argument): void {
