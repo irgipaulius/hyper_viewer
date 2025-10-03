@@ -1042,7 +1042,7 @@ class CacheController extends Controller {
 					$dirName = basename($dir);
 					$activeJobs[] = [
 						'cachePath' => $folder->getPath() . '/' . $dirName,
-						'filename' => $dirName . '.MOV',
+						'filename' => $dirName,
 						'status' => 'processing'
 					];
 				}
@@ -1072,7 +1072,7 @@ class CacheController extends Controller {
 						// This is an active/pending job - just return the name
 						$activeJobs[] = [
 							'cachePath' => $node->getPath(),
-							'filename' => $node->getName() . '.MOV',
+							'filename' => $node->getName(),
 							'status' => 'processing'
 						];
 					}
