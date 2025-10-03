@@ -1690,106 +1690,99 @@ function loadShakaPlayer(filename, cachePath, context) {
     `;
 
 	modal.innerHTML = `
-        <div class="video-container" style="position: relative; display: flex; flex-direction: column; align-items: center;">
-            <video id="${videoId}" controls autoplay style="
-                width: min(90vw, 1200px); height: min(70vh, 600px); 
-                object-fit: contain; background: #000; border-radius: 8px;
+        <!-- Video Player Container (Shaka Player will be attached here) -->
+        <div id="video-player-container" style="
+            position: relative; width: min(90vw, 1200px); height: min(70vh, 600px);
+            background: #000; border-radius: 8px 8px 0 0; overflow: hidden;
+        ">
+            <video id="${videoId}" autoplay style="
+                width: 100%; height: 100%; object-fit: contain; background: #000;
             "></video>
+        </div>
+        
+        <!-- Clipping Controls Panel (Outside Shaka Player scope) -->
+        <div id="clipping-panel" style="
+            width: min(90vw, 1200px); background: rgba(20,20,20,0.95); border-radius: 0 0 8px 8px;
+            padding: 15px; display: none; border-top: 1px solid #444; position: relative; z-index: 10002;
+        ">
+            <!-- Clip Mode Toggle -->
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <h3 style="color: white; margin: 0; font-size: 16px;">📹 Video Clipping Mode</h3>
+                <button id="exit-clip-mode" style="
+                    background: #666; border: none; color: white; padding: 6px 12px; 
+                    border-radius: 4px; cursor: pointer; font-size: 12px;">Exit Clip Mode</button>
+            </div>
             
-            <!-- Clipping Controls Panel -->
-            <div id="clipping-panel" style="
-                width: min(90vw, 1200px); background: rgba(20,20,20,0.95); border-radius: 0 0 8px 8px;
-                padding: 15px; display: none; border-top: 1px solid #444;
-            ">
-                <!-- Clip Mode Toggle -->
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                    <h3 style="color: white; margin: 0; font-size: 16px;">📹 Video Clipping Mode</h3>
-                    <button id="exit-clip-mode" style="
-                        background: #666; border: none; color: white; padding: 6px 12px; 
-                        border-radius: 4px; cursor: pointer; font-size: 12px;">Exit Clip Mode</button>
+            <!-- Timeline with Clip Markers -->
+            <div style="margin-bottom: 20px;">
+                <div style="display: flex; justify-content: space-between; color: #ccc; font-size: 12px; margin-bottom: 5px;">
+                    <span>Timeline</span>
+                    <span id="clip-duration">Clip Duration: 0:00</span>
                 </div>
-                
-                <!-- Basic Playback Controls -->
-                <div style="display: flex; justify-content: center; align-items: center; gap: 15px; margin-bottom: 15px; padding: 10px; background: rgba(40,40,40,0.8); border-radius: 6px;">
-                    <button id="play-pause-btn" style="
-                        background: #2196F3; border: none; color: white; padding: 8px 12px; 
-                        border-radius: 4px; cursor: pointer; font-size: 14px;">⏸️ Pause</button>
-                    <span id="current-time-display" style="color: #ccc; font-family: monospace; font-size: 14px;">0:00.000</span>
-                    <span style="color: #666;">/</span>
-                    <span id="total-time-display" style="color: #ccc; font-family: monospace; font-size: 14px;">0:00.000</span>
+                <div id="timeline-container" style="position: relative; height: 40px; background: #333; border-radius: 4px; overflow: hidden; cursor: pointer;">
+                    <div id="timeline-progress" style="height: 100%; background: #555; width: 0%; transition: width 0.1s;"></div>
+                    <div id="start-marker" style="
+                        position: absolute; top: 0; left: 0%; width: 3px; height: 100%; 
+                        background: #4CAF50; cursor: ew-resize; z-index: 2;
+                    "></div>
+                    <div id="end-marker" style="
+                        position: absolute; top: 0; right: 0%; width: 3px; height: 100%; 
+                        background: #f44336; cursor: ew-resize; z-index: 2;
+                    "></div>
+                    <div id="clip-range" style="
+                        position: absolute; top: 0; left: 0%; right: 0%; height: 100%; 
+                        background: rgba(76, 175, 80, 0.2); z-index: 1;
+                    "></div>
                 </div>
-                
-                <!-- Timeline with Clip Markers -->
-                <div style="margin-bottom: 20px;">
-                    <div style="display: flex; justify-content: space-between; color: #ccc; font-size: 12px; margin-bottom: 5px;">
-                        <span>Timeline</span>
-                        <span id="clip-duration">Clip Duration: 0:00</span>
+            </div>
+            
+            <!-- Frame-Accurate Controls -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+                <!-- Start Time Controls -->
+                <div style="background: rgba(76, 175, 80, 0.1); padding: 12px; border-radius: 6px; border: 1px solid #4CAF50;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <label style="color: #4CAF50; font-weight: bold; font-size: 14px;">🟢 Start Time</label>
+                        <span id="start-time-display" style="color: white; font-family: monospace;">0:00.000</span>
                     </div>
-                    <div id="timeline-container" style="position: relative; height: 40px; background: #333; border-radius: 4px; overflow: hidden; cursor: pointer;">
-                        <div id="timeline-progress" style="height: 100%; background: #555; width: 0%; transition: width 0.1s;"></div>
-                        <div id="start-marker" style="
-                            position: absolute; top: 0; left: 0%; width: 3px; height: 100%; 
-                            background: #4CAF50; cursor: ew-resize; z-index: 2;
-                        "></div>
-                        <div id="end-marker" style="
-                            position: absolute; top: 0; right: 0%; width: 3px; height: 100%; 
-                            background: #f44336; cursor: ew-resize; z-index: 2;
-                        "></div>
-                        <div id="clip-range" style="
-                            position: absolute; top: 0; left: 0%; right: 0%; height: 100%; 
-                            background: rgba(76, 175, 80, 0.2); z-index: 1;
-                        "></div>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <button id="start-frame-back" style="background: #4CAF50; border: none; color: white; padding: 6px 8px; border-radius: 3px; cursor: pointer; font-size: 11px;">⏪ -1f</button>
+                        <button id="start-set-current" style="background: #4CAF50; border: none; color: white; padding: 6px 12px; border-radius: 3px; cursor: pointer; font-size: 11px;">Set Current</button>
+                        <button id="start-frame-forward" style="background: #4CAF50; border: none; color: white; padding: 6px 8px; border-radius: 3px; cursor: pointer; font-size: 11px;">+1f ⏩</button>
                     </div>
                 </div>
                 
-                <!-- Frame-Accurate Controls -->
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
-                    <!-- Start Time Controls -->
-                    <div style="background: rgba(76, 175, 80, 0.1); padding: 12px; border-radius: 6px; border: 1px solid #4CAF50;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                            <label style="color: #4CAF50; font-weight: bold; font-size: 14px;">🟢 Start Time</label>
-                            <span id="start-time-display" style="color: white; font-family: monospace;">0:00.000</span>
-                        </div>
-                        <div style="display: flex; gap: 8px; align-items: center;">
-                            <button id="start-frame-back" style="background: #4CAF50; border: none; color: white; padding: 6px 8px; border-radius: 3px; cursor: pointer; font-size: 11px;">⏪ -1f</button>
-                            <button id="start-set-current" style="background: #4CAF50; border: none; color: white; padding: 6px 12px; border-radius: 3px; cursor: pointer; font-size: 11px;">Set Current</button>
-                            <button id="start-frame-forward" style="background: #4CAF50; border: none; color: white; padding: 6px 8px; border-radius: 3px; cursor: pointer; font-size: 11px;">+1f ⏩</button>
-                        </div>
+                <!-- End Time Controls -->
+                <div style="background: rgba(244, 67, 54, 0.1); padding: 12px; border-radius: 6px; border: 1px solid #f44336;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <label style="color: #f44336; font-weight: bold; font-size: 14px;">🔴 End Time</label>
+                        <span id="end-time-display" style="color: white; font-family: monospace;">0:00.000</span>
                     </div>
-                    
-                    <!-- End Time Controls -->
-                    <div style="background: rgba(244, 67, 54, 0.1); padding: 12px; border-radius: 6px; border: 1px solid #f44336;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                            <label style="color: #f44336; font-weight: bold; font-size: 14px;">🔴 End Time</label>
-                            <span id="end-time-display" style="color: white; font-family: monospace;">0:00.000</span>
-                        </div>
-                        <div style="display: flex; gap: 8px; align-items: center;">
-                            <button id="end-frame-back" style="background: #f44336; border: none; color: white; padding: 6px 8px; border-radius: 3px; cursor: pointer; font-size: 11px;">⏪ -1f</button>
-                            <button id="end-set-current" style="background: #f44336; border: none; color: white; padding: 6px 12px; border-radius: 3px; cursor: pointer; font-size: 11px;">Set Current</button>
-                            <button id="end-frame-forward" style="background: #f44336; border: none; color: white; padding: 6px 8px; border-radius: 3px; cursor: pointer; font-size: 11px;">+1f ⏩</button>
-                        </div>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <button id="end-frame-back" style="background: #f44336; border: none; color: white; padding: 6px 8px; border-radius: 3px; cursor: pointer; font-size: 11px;">⏪ -1f</button>
+                        <button id="end-set-current" style="background: #f44336; border: none; color: white; padding: 6px 12px; border-radius: 3px; cursor: pointer; font-size: 11px;">Set Current</button>
+                        <button id="end-frame-forward" style="background: #f44336; border: none; color: white; padding: 6px 8px; border-radius: 3px; cursor: pointer; font-size: 11px;">+1f ⏩</button>
                     </div>
                 </div>
-                
-                <!-- Preview and Export Controls -->
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <div style="display: flex; gap: 10px;">
-                        <button id="preview-clip" style="
-                            background: #2196F3; border: none; color: white; padding: 8px 16px; 
-                            border-radius: 4px; cursor: pointer; font-size: 14px;">🎬 Preview Clip</button>
-                        <button id="reset-markers" style="
-                            background: #666; border: none; color: white; padding: 8px 16px; 
-                            border-radius: 4px; cursor: pointer; font-size: 14px;">🔄 Reset</button>
-                    </div>
-                    <button id="export-clip" style="
-                        background: #FF9800; border: none; color: white; padding: 10px 20px; 
-                        border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: bold;">📤 Export Clip</button>
+            </div>
+            
+            <!-- Preview and Export Controls -->
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div style="display: flex; gap: 10px;">
+                    <button id="preview-clip" style="
+                        background: #2196F3; border: none; color: white; padding: 8px 16px; 
+                        border-radius: 4px; cursor: pointer; font-size: 14px;">🎬 Preview Clip</button>
+                    <button id="reset-markers" style="
+                        background: #666; border: none; color: white; padding: 8px 16px; 
+                        border-radius: 4px; cursor: pointer; font-size: 14px;">🔄 Reset</button>
                 </div>
+                <button id="export-clip" style="
+                    background: #FF9800; border: none; color: white; padding: 10px 20px; 
+                    border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: bold;">📤 Export Clip</button>
             </div>
         </div>
         
-        <!-- Top Controls -->
-        <div style="position: absolute; top: 20px; right: 20px; display: flex; gap: 10px; z-index: 10001;">
+        <!-- Top Controls (Over video player) -->
+        <div style="position: absolute; top: 20px; right: 20px; display: flex; gap: 10px; z-index: 10003;">
             <button id="toggle-clip-mode" style="
                 background: rgba(255, 152, 0, 0.9); border: none; color: white; 
                 padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">✂️ Clip Video</button>
@@ -1838,8 +1831,9 @@ function loadShakaPlayer(filename, cachePath, context) {
 
 	if (shaka.Player.isBrowserSupported()) {
 		const player = new shaka.Player(video);
-		// Don't create Shaka UI overlay - use native video controls instead
-		
+		const videoContainer = modal.querySelector('#video-player-container');
+		const ui = new shaka.ui.Overlay(player, videoContainer, video); // eslint-disable-line no-unused-vars
+
 		// Build manifest URL
 		const encodedCachePath = encodeURIComponent(cachePath);
 		const masterUrl = `${OC.generateUrl(
@@ -1863,25 +1857,6 @@ function loadShakaPlayer(filename, cachePath, context) {
 		video.addEventListener('timeupdate', () => {
 			if (isClipMode) {
 				updateTimelineProgress();
-				updateTimeDisplays();
-			}
-		});
-
-		video.addEventListener('play', () => {
-			if (isClipMode) {
-				const playPauseBtn = modal.querySelector('#play-pause-btn');
-				if (playPauseBtn) {
-					playPauseBtn.textContent = '⏸️ Pause';
-				}
-			}
-		});
-
-		video.addEventListener('pause', () => {
-			if (isClipMode) {
-				const playPauseBtn = modal.querySelector('#play-pause-btn');
-				if (playPauseBtn) {
-					playPauseBtn.textContent = '▶️ Play';
-				}
 			}
 		});
 	}
@@ -1891,13 +1866,13 @@ function loadShakaPlayer(filename, cachePath, context) {
 		isClipMode = !isClipMode;
 		const panel = modal.querySelector('#clipping-panel');
 		const toggleBtn = modal.querySelector('#toggle-clip-mode');
+		const videoContainer = modal.querySelector('#video-player-container');
 		
 		if (isClipMode) {
 			panel.style.display = 'block';
+			videoContainer.style.borderRadius = '8px 8px 0 0';
 			toggleBtn.textContent = '✂️ Exit Clip Mode';
 			toggleBtn.style.background = 'rgba(244, 67, 54, 0.9)';
-			// Hide native video controls to avoid conflicts
-			video.controls = false;
 			// Initialize markers
 			startTime = 0;
 			endTime = videoDuration;
@@ -1905,10 +1880,9 @@ function loadShakaPlayer(filename, cachePath, context) {
 			updateTimeDisplays();
 		} else {
 			panel.style.display = 'none';
+			videoContainer.style.borderRadius = '8px';
 			toggleBtn.textContent = '✂️ Clip Video';
 			toggleBtn.style.background = 'rgba(255, 152, 0, 0.9)';
-			// Show native video controls when not in clip mode
-			video.controls = true;
 		}
 	}
 
@@ -1928,12 +1902,6 @@ function loadShakaPlayer(filename, cachePath, context) {
 		const durationSecs = Math.floor(duration % 60);
 		modal.querySelector('#clip-duration').textContent = 
 			`Clip Duration: ${durationMins}:${durationSecs.toString().padStart(2, '0')}`;
-		
-		// Update current time and total time displays
-		if (isClipMode) {
-			modal.querySelector('#current-time-display').textContent = formatTime(video.currentTime);
-			modal.querySelector('#total-time-display').textContent = formatTime(videoDuration);
-		}
 	}
 
 	function updateTimelineMarkers() {
@@ -2011,14 +1979,6 @@ function loadShakaPlayer(filename, cachePath, context) {
 		endTime = videoDuration;
 		updateTimelineMarkers();
 		updateTimeDisplays();
-	}
-
-	function togglePlayPause() {
-		if (video.paused) {
-			video.play();
-		} else {
-			video.pause();
-		}
 	}
 
 	function showExportModal() {
@@ -2129,9 +2089,6 @@ function loadShakaPlayer(filename, cachePath, context) {
 	// Event listeners for clipping controls
 	modal.querySelector('#toggle-clip-mode').addEventListener('click', toggleClipMode);
 	modal.querySelector('#exit-clip-mode').addEventListener('click', toggleClipMode);
-	
-	// Playback controls
-	modal.querySelector('#play-pause-btn').addEventListener('click', togglePlayPause);
 	
 	// Start time controls
 	modal.querySelector('#start-frame-back').addEventListener('click', () => stepFrame(-1, true));
