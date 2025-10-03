@@ -1721,18 +1721,24 @@ function loadShakaPlayer(filename, cachePath, context) {
                 </div>
                 <div id="timeline-container" style="position: relative; height: 40px; background: #333; border-radius: 4px; overflow: hidden; cursor: pointer;">
                     <div id="timeline-progress" style="height: 100%; background: #555; width: 0%; transition: width 0.1s;"></div>
-                    <div id="start-marker" style="
-                        position: absolute; top: 0; left: 0%; width: 3px; height: 100%; 
-                        background: #4CAF50; cursor: ew-resize; z-index: 2;
-                    "></div>
-                    <div id="end-marker" style="
-                        position: absolute; top: 0; right: 0%; width: 3px; height: 100%; 
-                        background: #f44336; cursor: ew-resize; z-index: 2;
-                    "></div>
                     <div id="clip-range" style="
                         position: absolute; top: 0; left: 0%; right: 0%; height: 100%; 
                         background: rgba(76, 175, 80, 0.2); z-index: 1;
                     "></div>
+                    <div id="playback-cursor" style="
+                        position: absolute; top: 0; left: 0%; width: 2px; height: 100%; 
+                        background: #fff; box-shadow: 0 0 4px rgba(255,255,255,0.8); z-index: 4;
+                    "></div>
+                    <div id="start-marker" style="
+                        position: absolute; top: -2px; left: 0%; width: 12px; height: 44px; 
+                        background: #4CAF50; cursor: ew-resize; z-index: 3; border-radius: 2px;
+                        display: flex; align-items: center; justify-content: center; color: white; font-size: 8px;
+                    ">S</div>
+                    <div id="end-marker" style="
+                        position: absolute; top: -2px; right: 0%; width: 12px; height: 44px; 
+                        background: #f44336; cursor: ew-resize; z-index: 3; border-radius: 2px;
+                        display: flex; align-items: center; justify-content: center; color: white; font-size: 8px;
+                    ">E</div>
                 </div>
             </div>
             
@@ -1821,6 +1827,9 @@ function loadShakaPlayer(filename, cachePath, context) {
 	let startTime = 0;
 	let endTime = 0;
 	let videoDuration = 0;
+	let selectedControl = null; // 'start' or 'end' for visual feedback
+	let isDragging = false;
+	let dragTarget = null;
 	const videoFrameRate = 30; // Default, will be updated when video loads
 
 	// Add close button event listener
@@ -1910,8 +1919,9 @@ function loadShakaPlayer(filename, cachePath, context) {
 		const startPercent = (startTime / videoDuration) * 100;
 		const endPercent = (endTime / videoDuration) * 100;
 		
-		modal.querySelector('#start-marker').style.left = `${startPercent}%`;
-		modal.querySelector('#end-marker').style.left = `${endPercent}%`;
+		// Update markers (adjust for marker width)
+		modal.querySelector('#start-marker').style.left = `calc(${startPercent}% - 6px)`;
+		modal.querySelector('#end-marker').style.left = `calc(${endPercent}% - 6px)`;
 		modal.querySelector('#clip-range').style.left = `${startPercent}%`;
 		modal.querySelector('#clip-range').style.width = `${endPercent - startPercent}%`;
 	}
@@ -1920,6 +1930,37 @@ function loadShakaPlayer(filename, cachePath, context) {
 		if (videoDuration === 0) return;
 		const progressPercent = (video.currentTime / videoDuration) * 100;
 		modal.querySelector('#timeline-progress').style.width = `${progressPercent}%`;
+		
+		// Update playback cursor
+		modal.querySelector('#playback-cursor').style.left = `calc(${progressPercent}% - 1px)`;
+	}
+
+	function updateControlSelection(selected) {
+		selectedControl = selected;
+		
+		// Update start control styling
+		const startControl = modal.querySelector('#start-time-display').closest('div').closest('div');
+		if (selected === 'start') {
+			startControl.style.background = 'rgba(76, 175, 80, 0.3)';
+			startControl.style.borderColor = '#4CAF50';
+			startControl.style.borderWidth = '2px';
+		} else {
+			startControl.style.background = 'rgba(76, 175, 80, 0.1)';
+			startControl.style.borderColor = '#4CAF50';
+			startControl.style.borderWidth = '1px';
+		}
+		
+		// Update end control styling
+		const endControl = modal.querySelector('#end-time-display').closest('div').closest('div');
+		if (selected === 'end') {
+			endControl.style.background = 'rgba(244, 67, 54, 0.3)';
+			endControl.style.borderColor = '#f44336';
+			endControl.style.borderWidth = '2px';
+		} else {
+			endControl.style.background = 'rgba(244, 67, 54, 0.1)';
+			endControl.style.borderColor = '#f44336';
+			endControl.style.borderWidth = '1px';
+		}
 	}
 
 	function stepFrame(direction, isStart = true) {
@@ -1942,8 +1983,10 @@ function loadShakaPlayer(filename, cachePath, context) {
 	function setCurrentTime(isStart = true) {
 		if (isStart) {
 			startTime = video.currentTime;
+			updateControlSelection('start');
 		} else {
 			endTime = video.currentTime;
+			updateControlSelection('end');
 		}
 		
 		// Ensure start < end
@@ -2013,21 +2056,21 @@ function loadShakaPlayer(filename, cachePath, context) {
 				</div>
 				
 				<div style="margin-bottom: 20px;">
-					<label style="display: block; margin-bottom: 12px; font-weight: bold;">Export Options:</label>
-					<div style="display: flex; flex-direction: column; gap: 8px;">
-						<label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-							<input type="checkbox" id="export-original" checked style="margin: 0;">
-							<span>📹 Export original quality (${filename})</span>
+					<label style="display: block; margin-bottom: 12px; font-weight: bold;">Export Quality:</label>
+					<div style="display: flex; gap: 12px; margin-bottom: 16px;">
+						<label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 8px 12px; border: 2px solid #4CAF50; border-radius: 6px; background: rgba(76, 175, 80, 0.1);">
+							<input type="radio" name="export-quality" value="original" checked style="margin: 0;">
+							<span style="color: #4CAF50; font-weight: bold;">📹 Original Quality</span>
 						</label>
-						<label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-							<input type="checkbox" id="export-720p" style="margin: 0;">
-							<span>🎬 Export compressed 720p MP4</span>
-						</label>
-						<label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-							<input type="checkbox" id="generate-proxy" checked style="margin: 0;">
-							<span>⚡ Generate HLS proxy for clip</span>
+						<label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 8px 12px; border: 2px solid #666; border-radius: 6px; background: rgba(100, 100, 100, 0.1);">
+							<input type="radio" name="export-quality" value="720p" style="margin: 0;">
+							<span style="color: #ccc;">🎬 720p MP4 (Compressed)</span>
 						</label>
 					</div>
+					<label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+						<input type="checkbox" id="generate-proxy" checked style="margin: 0;">
+						<span>⚡ Generate HLS proxy for clip</span>
+					</label>
 				</div>
 				
 				<div style="margin-bottom: 20px; padding: 12px; background: rgba(76, 175, 80, 0.1); border-radius: 4px; border: 1px solid #4CAF50;">
@@ -2057,10 +2100,38 @@ function loadShakaPlayer(filename, cachePath, context) {
 			exportModal.remove();
 		});
 		
+		// Radio button styling
+		const radioButtons = exportModal.querySelectorAll('input[name="export-quality"]');
+		radioButtons.forEach(radio => {
+			radio.addEventListener('change', () => {
+				radioButtons.forEach(r => {
+					const label = r.closest('label');
+					if (r.checked) {
+						label.style.border = '2px solid #4CAF50';
+						label.style.background = 'rgba(76, 175, 80, 0.1)';
+						label.querySelector('span').style.color = '#4CAF50';
+						label.querySelector('span').style.fontWeight = 'bold';
+					} else {
+						label.style.border = '2px solid #666';
+						label.style.background = 'rgba(100, 100, 100, 0.1)';
+						label.querySelector('span').style.color = '#ccc';
+						label.querySelector('span').style.fontWeight = 'normal';
+					}
+				});
+			});
+		});
+		
+		// Browse button functionality
+		exportModal.querySelector('#browse-location').addEventListener('click', () => {
+			// Use Nextcloud's file picker
+			OC.dialogs.filepicker('Select Export Directory', (path) => {
+				exportModal.querySelector('#export-path').value = path;
+			}, false, ['httpd/unix-directory'], true);
+		});
+		
 		exportModal.querySelector('#confirm-export').addEventListener('click', () => {
 			const exportPath = exportModal.querySelector('#export-path').value;
-			const exportOriginal = exportModal.querySelector('#export-original').checked;
-			const export720p = exportModal.querySelector('#export-720p').checked;
+			const exportQuality = exportModal.querySelector('input[name="export-quality"]:checked').value;
 			const generateProxy = exportModal.querySelector('#generate-proxy').checked;
 			
 			console.log('🚀 Export settings:', {
@@ -2069,8 +2140,7 @@ function loadShakaPlayer(filename, cachePath, context) {
 				endTime,
 				duration: endTime - startTime,
 				exportPath,
-				exportOriginal,
-				export720p,
+				exportQuality,
 				generateProxy
 			});
 			
@@ -2105,12 +2175,79 @@ function loadShakaPlayer(filename, cachePath, context) {
 	modal.querySelector('#reset-markers').addEventListener('click', resetMarkers);
 	modal.querySelector('#export-clip').addEventListener('click', showExportModal);
 
+	// Timeline interactions
+	const timelineContainer = modal.querySelector('#timeline-container');
+	const startMarker = modal.querySelector('#start-marker');
+	const endMarker = modal.querySelector('#end-marker');
+	
 	// Timeline click to seek
-	modal.querySelector('#timeline-container').addEventListener('click', (e) => {
-		const rect = e.target.getBoundingClientRect();
+	timelineContainer.addEventListener('click', (e) => {
+		if (isDragging) return; // Don't seek while dragging
+		
+		const rect = timelineContainer.getBoundingClientRect();
 		const clickX = e.clientX - rect.left;
-		const clickPercent = clickX / rect.width;
+		const clickPercent = Math.max(0, Math.min(1, clickX / rect.width));
 		const seekTime = clickPercent * videoDuration;
-		video.currentTime = Math.max(0, Math.min(videoDuration, seekTime));
+		video.currentTime = seekTime;
 	});
+	
+	// Marker dragging functionality
+	function setupMarkerDragging(marker, isStart) {
+		marker.addEventListener('mousedown', (e) => {
+			e.preventDefault();
+			e.stopPropagation();
+			isDragging = true;
+			dragTarget = isStart ? 'start' : 'end';
+			updateControlSelection(dragTarget);
+			
+			const handleMouseMove = (e) => {
+				if (!isDragging) return;
+				
+				const rect = timelineContainer.getBoundingClientRect();
+				const mouseX = e.clientX - rect.left;
+				const percent = Math.max(0, Math.min(1, mouseX / rect.width));
+				const newTime = percent * videoDuration;
+				
+				if (isStart) {
+					startTime = Math.min(newTime, endTime - 0.1); // Keep 0.1s minimum gap
+				} else {
+					endTime = Math.max(newTime, startTime + 0.1);
+				}
+				
+				// Update video position to show frame
+				video.currentTime = newTime;
+				
+				updateTimelineMarkers();
+				updateTimeDisplays();
+			};
+			
+			const handleMouseUp = () => {
+				isDragging = false;
+				dragTarget = null;
+				document.removeEventListener('mousemove', handleMouseMove);
+				document.removeEventListener('mouseup', handleMouseUp);
+			};
+			
+			document.addEventListener('mousemove', handleMouseMove);
+			document.addEventListener('mouseup', handleMouseUp);
+		});
+		
+		// Visual feedback on hover
+		marker.addEventListener('mouseenter', () => {
+			if (!isDragging) {
+				marker.style.transform = 'scale(1.1)';
+				marker.style.boxShadow = '0 0 8px rgba(255,255,255,0.5)';
+			}
+		});
+		
+		marker.addEventListener('mouseleave', () => {
+			if (!isDragging) {
+				marker.style.transform = 'scale(1)';
+				marker.style.boxShadow = 'none';
+			}
+		});
+	}
+	
+	setupMarkerDragging(startMarker, true);
+	setupMarkerDragging(endMarker, false);
 }
