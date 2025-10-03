@@ -192,7 +192,7 @@ export default {
 			lastRefresh: 'Never',
 			refreshInterval: null,
 			statsInterval: null,
-			progressIntervals: new Map(), // Track individual job progress polling
+			isPollingActive: false, // Track if centralized polling is running
 			showBackToTop: false
 		}
 	},
@@ -220,9 +220,8 @@ export default {
 		if (this.statsInterval) {
 			clearInterval(this.statsInterval)
 		}
-		// Clear all individual progress intervals
-		this.progressIntervals.forEach(intervalId => clearInterval(intervalId))
-		this.progressIntervals.clear()
+		// Stop centralized polling
+		this.isPollingActive = false
 		window.removeEventListener('scroll', this.handleScroll)
 	},
 	methods: {
@@ -277,78 +276,50 @@ export default {
 				const response = await axios.get(generateUrl('/apps/hyper_viewer/api/jobs/active'))
 				const newActiveJobs = response.data.jobs || []
 				
-				// Update the job list
-				const oldJobFilenames = new Set(this.activeJobs.map(job => job.filename))
-				const newJobFilenames = new Set(newActiveJobs.map(job => job.filename))
-				
-				// Stop polling for jobs that are no longer active
-				oldJobFilenames.forEach(filename => {
-					if (!newJobFilenames.has(filename) && this.progressIntervals.has(filename)) {
-						clearInterval(this.progressIntervals.get(filename))
-						this.progressIntervals.delete(filename)
-					}
-				})
-				
-				// Start polling for new jobs
-				newActiveJobs.forEach(job => {
-					if (!this.progressIntervals.has(job.filename)) {
-						this.startJobProgressPolling(job.filename)
-					}
-				})
-				
 				// Update the jobs list (merge with existing progress data)
 				this.activeJobs = newActiveJobs.map(newJob => {
 					const existingJob = this.activeJobs.find(j => j.filename === newJob.filename)
 					return existingJob ? { ...existingJob, ...newJob } : { ...newJob, progress: 0, frame: 0, fps: 0, speed: '0x', time: '00:00:00' }
 				})
 				
+				// Start centralized polling if we have jobs and it's not already running
+				if (this.activeJobs.length > 0 && !this.isPollingActive) {
+					this.startCentralizedPolling()
+				}
+				
 			} catch (error) {
 				console.error('❌ Failed to refresh active jobs:', error)
 			}
 		},
 
-		startJobProgressPolling(filename) {
-			// Add job to polling queue if not already there
-			if (!this.progressIntervals.has(filename)) {
-				this.progressIntervals.set(filename, true)
-				
-				// Start sequential polling if this is the first job
-				if (this.progressIntervals.size === 1) {
-					this.startSequentialPolling()
-				}
+		async startCentralizedPolling() {
+			if (this.isPollingActive) {
+				return // Already polling
 			}
-		},
-
-		async startSequentialPolling() {
+			
+			this.isPollingActive = true
+			console.log('🔄 Starting centralized job polling')
+			
 			// Sequential polling loop that processes one job at a time
-			while (this.progressIntervals.size > 0) {
-				const filenames = Array.from(this.progressIntervals.keys())
-				
-				for (const filename of filenames) {
-					// Skip if job was removed during iteration
-					if (!this.progressIntervals.has(filename)) {
-						continue
-					}
+			while (this.activeJobs.length > 0 && this.isPollingActive) {
+				// Process each active job sequentially
+				for (let i = 0; i < this.activeJobs.length; i++) {
+					if (!this.isPollingActive) break
+					
+					const job = this.activeJobs[i]
+					if (!job) continue
 					
 					try {
-						const response = await axios.get(generateUrl(`/apps/hyper_viewer/api/jobs/active/${filename}`))
+						const response = await axios.get(generateUrl(`/apps/hyper_viewer/api/jobs/active/${job.filename}`))
 						
 						// Update the specific job in the array
-						const jobIndex = this.activeJobs.findIndex(job => job.filename === filename)
-						if (jobIndex !== -1) {
-							this.$set(this.activeJobs, jobIndex, { ...this.activeJobs[jobIndex], ...response.data })
-						}
+						this.$set(this.activeJobs, i, { ...this.activeJobs[i], ...response.data })
 						
 					} catch (error) {
 						if (error.response?.status === 404) {
-							// Job no longer active, remove from polling
-							this.progressIntervals.delete(filename)
-							
-							// Remove completed job from active list
-							const jobIndex = this.activeJobs.findIndex(job => job.filename === filename)
-							if (jobIndex !== -1) {
-								this.activeJobs.splice(jobIndex, 1)
-							}
+							// Job no longer active, remove from list
+							this.activeJobs.splice(i, 1)
+							i-- // Adjust index after removal
 						}
 					}
 					
@@ -356,11 +327,12 @@ export default {
 					await new Promise(resolve => setTimeout(resolve, 500))
 				}
 				
-				// If no jobs left, exit the loop
-				if (this.progressIntervals.size === 0) {
-					break
-				}
+				// Wait a bit before next cycle
+				await new Promise(resolve => setTimeout(resolve, 2000))
 			}
+			
+			this.isPollingActive = false
+			console.log('⏹️ Stopped centralized job polling')
 		},
 
 		editAutoGeneration(dir) {
