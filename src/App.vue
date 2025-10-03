@@ -308,34 +308,59 @@ export default {
 		},
 
 		startJobProgressPolling(filename) {
-			// Poll individual job progress every 2 seconds
-			const intervalId = setInterval(async () => {
-				try {
-					const response = await axios.get(generateUrl(`/apps/hyper_viewer/api/jobs/active/${filename}`))
-					
-					// Update the specific job in the array IMMEDIATELY
-					const jobIndex = this.activeJobs.findIndex(job => job.filename === filename)
-					if (jobIndex !== -1) {
-						// Use Vue.set to ensure reactivity
-						this.$set(this.activeJobs, jobIndex, { ...this.activeJobs[jobIndex], ...response.data })
+			// Add job to polling queue if not already there
+			if (!this.progressIntervals.has(filename)) {
+				this.progressIntervals.set(filename, true)
+				
+				// Start sequential polling if this is the first job
+				if (this.progressIntervals.size === 1) {
+					this.startSequentialPolling()
+				}
+			}
+		},
+
+		async startSequentialPolling() {
+			// Sequential polling loop that processes one job at a time
+			while (this.progressIntervals.size > 0) {
+				const filenames = Array.from(this.progressIntervals.keys())
+				
+				for (const filename of filenames) {
+					// Skip if job was removed during iteration
+					if (!this.progressIntervals.has(filename)) {
+						continue
 					}
 					
-				} catch (error) {
-					if (error.response?.status === 404) {
-						// Job no longer active, stop polling and remove from list
-						clearInterval(intervalId)
-						this.progressIntervals.delete(filename)
+					try {
+						const response = await axios.get(generateUrl(`/apps/hyper_viewer/api/jobs/active/${filename}`))
 						
-						// Remove completed job from active list
+						// Update the specific job in the array
 						const jobIndex = this.activeJobs.findIndex(job => job.filename === filename)
 						if (jobIndex !== -1) {
-							this.activeJobs.splice(jobIndex, 1)
+							this.$set(this.activeJobs, jobIndex, { ...this.activeJobs[jobIndex], ...response.data })
+						}
+						
+					} catch (error) {
+						if (error.response?.status === 404) {
+							// Job no longer active, remove from polling
+							this.progressIntervals.delete(filename)
+							
+							// Remove completed job from active list
+							const jobIndex = this.activeJobs.findIndex(job => job.filename === filename)
+							if (jobIndex !== -1) {
+								this.activeJobs.splice(jobIndex, 1)
+							}
 						}
 					}
+					
+					// Wait 500ms before next request (max 2 requests per second)
+					await new Promise(resolve => setTimeout(resolve, 500))
 				}
-			}, 1500) // Poll every 1.5 seconds for faster updates
-			
-			this.progressIntervals.set(filename, intervalId)
+				
+				// If no jobs left, exit the loop
+				if (this.progressIntervals.size === 0) {
+					break
+				}
+			}
 		},
 
 		editAutoGeneration(dir) {
