@@ -52,6 +52,9 @@ class TranscodeController extends Controller {
 		if (!$path) {
 			return new JSONResponse(['error' => 'Missing path parameter'], Http::STATUS_BAD_REQUEST);
 		}
+		
+		// Decode the URL-encoded path
+		$path = urldecode($path);
 
 		$user = $this->userSession->getUser();
 		if (!$user) {
