@@ -35,13 +35,12 @@ function initializeFilesIntegration() {
 		displayName: t("hyper_viewer", "Generate HLS Cache"),
 		mime: "video/quicktime",
 		permissions: OC.PERMISSION_UPDATE,
-		iconClass: "icon-category-multimedia",
 		actionHandler(filename, context) {
 			console.log(
-				"🚀 Generate HLS Cache action triggered for MOV:",
+				"Generate HLS Cache action triggered for MOV:",
 				filename
 			);
-			console.log("📁 Context:", context);
+			console.log("Context:", context);
 			openCacheGenerationDialog([{ filename, context }]);
 		}
 	});
@@ -57,11 +56,19 @@ function initializeFilesIntegration() {
 			console.log("🎬 Play with HLS triggered for MOV:", filename);
 			const directory =
 				context?.dir || context?.fileList?.getCurrentDirectory() || "/";
-			await playWithHls(filename, directory, context);
+			
+			// Check if live transcode mode is enabled
+			const isLiveTranscodeEnabled = window.isLiveTranscodeEnabled && window.isLiveTranscodeEnabled();
+			
+			if (isLiveTranscodeEnabled && filename.toLowerCase().endsWith('.mov')) {
+				console.log('⚡ Starting live transcode for:', filename);
+				await playWithLiveTranscode(filename, directory, context);
+			} else {
+				await playWithHls(filename, directory, context);
+			}
 		}
 	});
 
-	// Register "Generate HLS Cache" action for MP4 files
 	OCA.Files.fileActions.registerAction({
 		name: "generateHlsCacheMp4",
 		displayName: t("hyper_viewer", "Generate HLS Cache"),
@@ -1669,6 +1676,173 @@ async function playWithHls(filename, directory, context) {
 			"Error"
 		);
 	}
+}
+
+/**
+ * Play video with live transcoding
+ *
+ * @param filename
+ * @param directory
+ * @param context
+ */
+async function playWithLiveTranscode(filename, directory, context) {
+	console.log(`⚡ Starting live transcode for: ${filename}`);
+
+	try {
+		// Build the transcode URL
+		const filePath = directory === '/' ? `/${filename}` : `${directory}/${filename}`;
+		const transcodeUrl = OC.generateUrl('/apps/hyper_viewer/api/transcode') + 
+			`?path=${encodeURIComponent(filePath)}&resolution=720p`;
+		
+		console.log(`🎬 Transcode URL: ${transcodeUrl}`);
+		
+		// Load player with live transcode stream
+		loadLiveTranscodePlayer(filename, transcodeUrl, context);
+		
+	} catch (error) {
+		console.error("Error starting live transcode:", error);
+		OC.dialogs.alert(
+			"Failed to start live transcoding. Please try again or use standard HLS cache.",
+			"Live Transcode Error"
+		);
+	}
+}
+
+/**
+ * Load live transcode player in a modal
+ *
+ * @param {string} filename - Video filename
+ * @param {string} transcodeUrl - Live transcode URL
+ * @param {object} context - File context
+ */
+function loadLiveTranscodePlayer(filename, transcodeUrl, context) {
+	const videoId = `liveTranscodeVideo_${Date.now()}`;
+
+	// Create enhanced modal for live transcoding
+	const modal = document.createElement("div");
+	modal.style.cssText = `
+        position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 10000;
+        background: rgba(0,0,0,0.9); display: flex; flex-direction: column; align-items: center; justify-content: center;
+        padding: 20px; box-sizing: border-box;
+    `;
+
+	modal.innerHTML = `
+        <div style="
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            border-radius: 12px 12px 0 0; padding: 15px 20px; width: 100%; max-width: 1200px;
+            display: flex; justify-content: space-between; align-items: center; color: white;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        ">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="font-size: 1.2em;">⚡</span>
+                <div>
+                    <h3 style="margin: 0; font-size: 1.1em; font-weight: 600;">${filename}</h3>
+                    <p style="margin: 0; font-size: 0.9em; opacity: 0.8;">Live Transcode - 720p Streaming</p>
+                </div>
+            </div>
+            <button id="close-live-transcode" style="
+                background: rgba(255,255,255,0.2); border: none; color: white; width: 30px; height: 30px;
+                border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center;
+                font-size: 16px; transition: background 0.2s;
+            " title="Close">✕</button>
+        </div>
+        
+        <div style="
+            background: #000; width: 100%; max-width: 1200px; position: relative;
+            border-radius: 0 0 12px 12px; overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        ">
+            <video id="${videoId}" 
+                   controls 
+                   preload="none"
+                   style="width: 100%; height: auto; display: block; background: #000;"
+                   poster="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect fill='%23000'/%3E%3Ctext x='50' y='50' text-anchor='middle' fill='%23fff' font-size='8'%3E⚡ Loading...%3C/text%3E%3C/svg%3E">
+                <source src="${transcodeUrl}" type="video/mp4">
+                Your browser does not support the video tag.
+            </video>
+            
+            <div id="loading-${videoId}" style="
+                position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                color: white; text-align: center; z-index: 1;
+            ">
+                <div style="
+                    width: 40px; height: 40px; border: 3px solid rgba(255,255,255,0.3);
+                    border-top: 3px solid white; border-radius: 50%; animation: spin 1s linear infinite;
+                    margin: 0 auto 15px;
+                "></div>
+                <p style="margin: 0; font-size: 0.9em;">⚡ Starting live transcode...</p>
+                <p style="margin: 5px 0 0; font-size: 0.8em; opacity: 0.7;">This may take a few seconds</p>
+            </div>
+        </div>
+        
+        <style>
+            @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+        </style>
+    `;
+
+	document.body.appendChild(modal);
+
+	const video = document.getElementById(videoId);
+	const loadingDiv = document.getElementById(`loading-${videoId}`);
+	const closeButton = document.getElementById('close-live-transcode');
+
+	// Handle video events
+	video.addEventListener('loadstart', () => {
+		console.log('⚡ Live transcode stream starting...');
+		loadingDiv.style.display = 'block';
+	});
+
+	video.addEventListener('canplay', () => {
+		console.log('✅ Live transcode stream ready');
+		loadingDiv.style.display = 'none';
+	});
+
+	video.addEventListener('error', (e) => {
+		console.error('❌ Live transcode stream error:', e);
+		loadingDiv.innerHTML = `
+			<div style="color: #ff6b6b; text-align: center;">
+				<p style="margin: 0; font-size: 0.9em;">❌ Live transcode failed</p>
+				<p style="margin: 5px 0 0; font-size: 0.8em; opacity: 0.7;">Please try again or use standard HLS cache</p>
+			</div>
+		`;
+	});
+
+	// Close modal functionality
+	const closeModal = () => {
+		console.log('🔒 Closing live transcode modal');
+		if (video && !video.paused) {
+			video.pause();
+		}
+		document.body.removeChild(modal);
+		document.body.style.overflow = '';
+	};
+
+	closeButton.addEventListener('click', closeModal);
+
+	// Close on escape key
+	const escapeHandler = (e) => {
+		if (e.key === 'Escape') {
+			closeModal();
+			document.removeEventListener('keydown', escapeHandler);
+		}
+	};
+	document.addEventListener('keydown', escapeHandler);
+
+	// Close on background click
+	modal.addEventListener('click', (e) => {
+		if (e.target === modal) {
+			closeModal();
+		}
+	});
+
+	// Prevent body scrolling
+	document.body.style.overflow = 'hidden';
+
+	// Start loading the video
+	video.load();
 }
 
 /**

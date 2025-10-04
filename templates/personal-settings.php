@@ -35,4 +35,25 @@ style('hyper_viewer', 'settings');
 			<li><code>/mnt/cache/.cached_hls/</code> - <?php p($l->t('Absolute path (e.g., mounted storage)')); ?></li>
 		</ul>
 	</div>
+	
+	<div class="prototype-features">
+		<h3><?php p($l->t('⚡ Prototype Features')); ?></h3>
+		<p class="settings-hint"><?php p($l->t('Experimental features for testing and development')); ?></p>
+		
+		<div class="prototype-toggle">
+			<input type="checkbox" id="live-transcode-enabled" class="checkbox" />
+			<label for="live-transcode-enabled">
+				<strong><?php p($l->t('Live Transcode Mode')); ?></strong>
+				<br>
+				<span class="prototype-description">
+					<?php p($l->t('Stream .MOV files at 720p on-the-fly without generating .m3u8 files. Uses more server resources but provides instant playback.')); ?>
+				</span>
+			</label>
+		</div>
+		
+		<div class="prototype-status" id="transcode-status" style="display: none;">
+			<p><strong><?php p($l->t('Status:')); ?></strong> <span id="status-text"></span></p>
+			<p><strong><?php p($l->t('Active processes:')); ?></strong> <span id="active-processes">0</span> / <span id="max-processes">1</span></p>
+		</div>
+	</div>
 </div>
