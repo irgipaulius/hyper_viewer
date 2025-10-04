@@ -1738,6 +1738,11 @@ async function playProgressive(filename, directory, context) {
 
 		if (result.url) {
 			console.log(`✅ Progressive MP4 ready: ${result.url}`);
+			if (result.debug) {
+				console.log(`📊 Debug info:`, result.debug);
+				console.log(`📁 File size: ${result.debug.fileSize} bytes`);
+				console.log(`💾 Cache hit: ${result.debug.cacheHit}`);
+			}
 			// Create and show video modal with the transcoded URL
 			showProgressiveVideoModal(filename, result.url);
 		} else {

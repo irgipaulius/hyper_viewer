@@ -42,13 +42,14 @@ class TranscodeController extends Controller {
 
     /**
      * @NoAdminRequired
-     * @NoCSRFRequired
      */
     public function proxyTranscode(string $path): JSONResponse {
         try {
             $user = $this->userSession->getUser();
             if (!$user) {
-                return new JSONResponse(['error' => 'User not authenticated'], Http::STATUS_UNAUTHORIZED);
+                return new JSONResponse([
+                    'error' => 'User not authenticated'
+                ], Http::STATUS_UNAUTHORIZED);
             }
 
             // Get the file from Nextcloud
@@ -67,7 +68,12 @@ class TranscodeController extends Controller {
             if (file_exists($tempFile)) {
                 $this->logger->debug('Reusing cached transcode for: ' . $path, ['app' => 'hyper_viewer']);
                 return new JSONResponse([
-                    'url' => '/apps/hyper_viewer/api/proxy-stream?id=' . $fileId
+                    'url' => '/apps/hyper_viewer/api/proxy-stream?id=' . $fileId,
+                    'debug' => [
+                        'fileSize' => filesize($tempFile),
+                        'tempFile' => basename($tempFile),
+                        'cacheHit' => true
+                    ]
                 ]);
             }
 
@@ -92,7 +98,12 @@ class TranscodeController extends Controller {
             $this->logger->info('Completed 480p transcode for: ' . $path, ['app' => 'hyper_viewer']);
 
             return new JSONResponse([
-                'url' => '/apps/hyper_viewer/api/proxy-stream?id=' . $fileId
+                'url' => '/apps/hyper_viewer/api/proxy-stream?id=' . $fileId,
+                'debug' => [
+                    'fileSize' => filesize($tempFile),
+                    'tempFile' => basename($tempFile),
+                    'cacheHit' => false
+                ]
             ]);
 
         } catch (NotFoundException $e) {
@@ -110,26 +121,34 @@ class TranscodeController extends Controller {
      * @NoCSRFRequired
      */
     public function proxyStream(string $id): Response {
-        $tempFile = $this->tempDir . '/' . $id . '.mp4';
-        
-        if (!file_exists($tempFile)) {
-            $response = new Response();
-            $response->setStatus(Http::STATUS_NOT_FOUND);
+        try {
+            $tempFile = $this->tempDir . '/' . $id . '.mp4';
+            
+            if (!file_exists($tempFile)) {
+                $response = new Response('File not found: ' . $id);
+                $response->setStatus(Http::STATUS_NOT_FOUND);
+                $response->addHeader('Content-Type', 'text/plain');
+                return $response;
+            }
+
+            // Clean up old files
+            $this->cleanupOldFiles();
+
+            $fileSize = filesize($tempFile);
+            $rangeHeader = $this->request->getHeader('Range');
+
+            if ($rangeHeader) {
+                // Handle range requests for seeking
+                return $this->handleRangeRequest($tempFile, $fileSize, $rangeHeader);
+            } else {
+                // Serve entire file
+                return $this->serveFile($tempFile, $fileSize);
+            }
+        } catch (\Exception $e) {
+            $response = new Response('Stream error: ' . $e->getMessage());
+            $response->setStatus(Http::STATUS_INTERNAL_SERVER_ERROR);
+            $response->addHeader('Content-Type', 'text/plain');
             return $response;
-        }
-
-        // Clean up old files
-        $this->cleanupOldFiles();
-
-        $fileSize = filesize($tempFile);
-        $rangeHeader = $this->request->getHeader('Range');
-
-        if ($rangeHeader) {
-            // Handle range requests for seeking
-            return $this->handleRangeRequest($tempFile, $fileSize, $rangeHeader);
-        } else {
-            // Serve entire file
-            return $this->serveFile($tempFile, $fileSize);
         }
     }
 
@@ -182,60 +201,65 @@ class TranscodeController extends Controller {
     }
 
     private function handleRangeRequest(string $filePath, int $fileSize, string $rangeHeader): Response {
-        $this->logger->debug('Range request: ' . $rangeHeader . ' for file size: ' . $fileSize, ['app' => 'hyper_viewer']);
-        
-        // Parse Range header (e.g., "bytes=0-1023" or "bytes=0-")
-        if (!preg_match('/bytes=(\d+)-(\d*)/', $rangeHeader, $matches)) {
-            $this->logger->error('Invalid range header: ' . $rangeHeader, ['app' => 'hyper_viewer']);
-            $response = new Response();
-            $response->setStatus(Http::STATUS_REQUESTED_RANGE_NOT_SATISFIABLE);
+        try {
+            // Parse Range header (e.g., "bytes=0-1023" or "bytes=0-")
+            if (!preg_match('/bytes=(\d+)-(\d*)/', $rangeHeader, $matches)) {
+                $response = new Response('Invalid range header: ' . $rangeHeader);
+                $response->setStatus(Http::STATUS_REQUESTED_RANGE_NOT_SATISFIABLE);
+                $response->addHeader('Content-Type', 'text/plain');
+                return $response;
+            }
+
+            $start = (int)$matches[1];
+            $end = $matches[2] !== '' ? (int)$matches[2] : $fileSize - 1;
+
+            // Validate range
+            if ($start >= $fileSize || $end >= $fileSize || $start > $end) {
+                $response = new Response('Invalid range: ' . $start . '-' . $end . ' for file size ' . $fileSize);
+                $response->setStatus(Http::STATUS_REQUESTED_RANGE_NOT_SATISFIABLE);
+                $response->addHeader('Content-Range', 'bytes */' . $fileSize);
+                $response->addHeader('Content-Type', 'text/plain');
+                return $response;
+            }
+
+            $contentLength = $end - $start + 1;
+
+            // Read the exact range requested
+            $handle = fopen($filePath, 'rb');
+            if (!$handle) {
+                $response = new Response('Cannot open file: ' . $filePath);
+                $response->setStatus(Http::STATUS_INTERNAL_SERVER_ERROR);
+                $response->addHeader('Content-Type', 'text/plain');
+                return $response;
+            }
+
+            fseek($handle, $start);
+            $content = fread($handle, $contentLength);
+            fclose($handle);
+
+            if ($content === false) {
+                $response = new Response('Cannot read file range');
+                $response->setStatus(Http::STATUS_INTERNAL_SERVER_ERROR);
+                $response->addHeader('Content-Type', 'text/plain');
+                return $response;
+            }
+
+            $response = new Response($content);
+            $response->setStatus(Http::STATUS_PARTIAL_CONTENT);
+            $response->addHeader('Content-Type', 'video/mp4');
+            $response->addHeader('Accept-Ranges', 'bytes');
+            $response->addHeader('Content-Length', (string)strlen($content));
+            $response->addHeader('Content-Range', 'bytes ' . $start . '-' . $end . '/' . $fileSize);
+            $response->addHeader('Cache-Control', 'public, max-age=3600');
+
             return $response;
-        }
-
-        $start = (int)$matches[1];
-        $end = $matches[2] !== '' ? (int)$matches[2] : $fileSize - 1;
-        
-        $this->logger->debug('Parsed range: start=' . $start . ', end=' . $end . ', fileSize=' . $fileSize, ['app' => 'hyper_viewer']);
-
-        // Validate range
-        if ($start >= $fileSize || $end >= $fileSize || $start > $end) {
-            $response = new Response();
-            $response->setStatus(Http::STATUS_REQUESTED_RANGE_NOT_SATISFIABLE);
-            $response->addHeader('Content-Range', 'bytes */' . $fileSize);
-            return $response;
-        }
-
-        $contentLength = $end - $start + 1;
-
-        // Read the exact range requested
-        $handle = fopen($filePath, 'rb');
-        if (!$handle) {
-            $response = new Response();
+            
+        } catch (\Exception $e) {
+            $response = new Response('Range request error: ' . $e->getMessage());
             $response->setStatus(Http::STATUS_INTERNAL_SERVER_ERROR);
+            $response->addHeader('Content-Type', 'text/plain');
             return $response;
         }
-
-        fseek($handle, $start);
-        $content = fread($handle, $contentLength);
-        fclose($handle);
-
-        if ($content === false) {
-            $response = new Response();
-            $response->setStatus(Http::STATUS_INTERNAL_SERVER_ERROR);
-            return $response;
-        }
-
-        $response = new Response($content);
-        $response->setStatus(Http::STATUS_PARTIAL_CONTENT);
-        $response->addHeader('Content-Type', 'video/mp4');
-        $response->addHeader('Accept-Ranges', 'bytes');
-        $response->addHeader('Content-Length', (string)strlen($content));
-        $response->addHeader('Content-Range', 'bytes ' . $start . '-' . $end . '/' . $fileSize);
-        $response->addHeader('Cache-Control', 'public, max-age=3600');
-
-        $this->logger->debug('Serving range: bytes ' . $start . '-' . $end . '/' . $fileSize . ', content length: ' . strlen($content), ['app' => 'hyper_viewer']);
-        
-        return $response;
     }
 
     private function serveFile(string $filePath, int $fileSize): Response {
