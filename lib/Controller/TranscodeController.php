@@ -182,8 +182,11 @@ class TranscodeController extends Controller {
     }
 
     private function handleRangeRequest(string $filePath, int $fileSize, string $rangeHeader): Response {
-        // Parse Range header (e.g., "bytes=0-1023")
+        $this->logger->debug('Range request: ' . $rangeHeader . ' for file size: ' . $fileSize, ['app' => 'hyper_viewer']);
+        
+        // Parse Range header (e.g., "bytes=0-1023" or "bytes=0-")
         if (!preg_match('/bytes=(\d+)-(\d*)/', $rangeHeader, $matches)) {
+            $this->logger->error('Invalid range header: ' . $rangeHeader, ['app' => 'hyper_viewer']);
             $response = new Response();
             $response->setStatus(Http::STATUS_REQUESTED_RANGE_NOT_SATISFIABLE);
             return $response;
@@ -191,6 +194,8 @@ class TranscodeController extends Controller {
 
         $start = (int)$matches[1];
         $end = $matches[2] !== '' ? (int)$matches[2] : $fileSize - 1;
+        
+        $this->logger->debug('Parsed range: start=' . $start . ', end=' . $end . ', fileSize=' . $fileSize, ['app' => 'hyper_viewer']);
 
         // Validate range
         if ($start >= $fileSize || $end >= $fileSize || $start > $end) {
@@ -228,6 +233,8 @@ class TranscodeController extends Controller {
         $response->addHeader('Content-Range', 'bytes ' . $start . '-' . $end . '/' . $fileSize);
         $response->addHeader('Cache-Control', 'public, max-age=3600');
 
+        $this->logger->debug('Serving range: bytes ' . $start . '-' . $end . '/' . $fileSize . ', content length: ' . strlen($content), ['app' => 'hyper_viewer']);
+        
         return $response;
     }
 
