@@ -2144,7 +2144,18 @@ function loadShakaPlayer(filename, cachePath, context) {
 						modal: true,
 						multiselect: false,
 						type: 'folder',
-						allowNewFolder: true
+						allowNewFolder: true,
+						allowDirectories: true,
+						enableUpload: false,
+						// Additional options for directory creation
+						buttons: [{
+							label: 'Create New Folder',
+							type: 'primary',
+							callback: () => {
+								// This should trigger the new folder creation
+								return true;
+							}
+						}]
 					});
 					
 					picker.open().then(items => {
@@ -2188,15 +2199,9 @@ function loadShakaPlayer(filename, cachePath, context) {
 				}
 			}
 			
-			// Tier 3: Manual input fallback
-			console.log('🎯 Using manual input fallback');
-			const currentPath = exportModal.querySelector('#export-path').value || '/';
-			const manualPath = prompt('Enter export directory path (e.g., /Documents/Videos):', currentPath);
-			if (manualPath && manualPath.trim()) {
-				const normalizedPath = manualPath.trim().startsWith('/') ? manualPath.trim() : '/' + manualPath.trim();
-				exportModal.querySelector('#export-path').value = normalizedPath;
-				console.log('📁 Manual export path set:', normalizedPath);
-			}
+			// Tier 3: Enhanced manual directory selector with creation option
+			console.log('🎯 Using enhanced manual directory selector');
+			showEnhancedDirectorySelector(exportModal);
 		});
 		
 		exportModal.querySelector('#confirm-export').addEventListener('click', () => {
@@ -2320,4 +2325,216 @@ function loadShakaPlayer(filename, cachePath, context) {
 	
 	setupMarkerDragging(startMarker, true);
 	setupMarkerDragging(endMarker, false);
+}
+
+/**
+ * Enhanced directory selector with create directory functionality
+ */
+function showEnhancedDirectorySelector(exportModal) {
+	const selectorModal = document.createElement('div');
+	selectorModal.style.cssText = `
+		position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 999999;
+		background: rgba(0, 0, 0, 0.8); backdrop-filter: blur(5px);
+		display: flex; align-items: center; justify-content: center;
+	`;
+	
+	selectorModal.innerHTML = `
+		<div style="
+			background: white; border-radius: 12px; width: 600px; max-width: 90vw;
+			box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3); overflow: hidden;
+		">
+			<div style="
+				background: linear-gradient(135deg, #0082c9 0%, #667eea 100%);
+				color: white; padding: 20px; display: flex; justify-content: space-between; align-items: center;
+			">
+				<h3 style="margin: 0; font-size: 1.3em;">📁 Select or Create Export Directory</h3>
+				<button id="close-enhanced-selector" style="
+					background: rgba(255, 255, 255, 0.2); border: none; color: white;
+					width: 30px; height: 30px; border-radius: 50%; cursor: pointer; font-size: 16px;
+				">✕</button>
+			</div>
+			<div style="padding: 25px;">
+				<div style="margin-bottom: 20px;">
+					<label style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">
+						Directory Path:
+					</label>
+					<input type="text" id="directory-path-input" placeholder="/Documents/Videos" style="
+						width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px;
+						font-size: 14px; font-family: 'Monaco', 'Menlo', monospace;
+						box-sizing: border-box;
+					">
+				</div>
+				
+				<div style="margin-bottom: 20px;">
+					<p style="margin: 0 0 12px 0; font-size: 0.9em; color: #666; font-weight: 600;">Quick Paths:</p>
+					<div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 15px;">
+						<button class="quick-path-btn" data-path="/" style="
+							background: #f8f9fa; border: 1px solid #ddd; padding: 8px 12px;
+							border-radius: 6px; cursor: pointer; font-size: 0.85em; transition: all 0.2s;
+						">🏠 Root</button>
+						<button class="quick-path-btn" data-path="/Documents" style="
+							background: #f8f9fa; border: 1px solid #ddd; padding: 8px 12px;
+							border-radius: 6px; cursor: pointer; font-size: 0.85em; transition: all 0.2s;
+						">📄 Documents</button>
+						<button class="quick-path-btn" data-path="/Videos" style="
+							background: #f8f9fa; border: 1px solid #ddd; padding: 8px 12px;
+							border-radius: 6px; cursor: pointer; font-size: 0.85em; transition: all 0.2s;
+						">🎬 Videos</button>
+						<button class="quick-path-btn" data-path="/Downloads" style="
+							background: #f8f9fa; border: 1px solid #ddd; padding: 8px 12px;
+							border-radius: 6px; cursor: pointer; font-size: 0.85em; transition: all 0.2s;
+						">⬇️ Downloads</button>
+					</div>
+				</div>
+				
+				<div style="
+					background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 8px; 
+					padding: 15px; margin-bottom: 20px;
+				">
+					<p style="margin: 0 0 10px 0; font-size: 0.9em; color: #495057; font-weight: 600;">
+						💡 Create New Directory:
+					</p>
+					<p style="margin: 0 0 12px 0; font-size: 0.85em; color: #6c757d;">
+						Enter a path that doesn't exist yet, and we'll create it for you automatically.
+					</p>
+					<div style="display: flex; gap: 10px; align-items: center;">
+						<input type="text" id="new-directory-input" placeholder="e.g., /Videos/Exports/2024" style="
+							flex: 1; padding: 8px 12px; border: 1px solid #ced4da; border-radius: 6px;
+							font-size: 0.9em; font-family: 'Monaco', 'Menlo', monospace;
+						">
+						<button id="create-directory-btn" style="
+							background: #28a745; color: white; border: none; padding: 8px 16px;
+							border-radius: 6px; cursor: pointer; font-size: 0.9em; font-weight: 600;
+						">Create</button>
+					</div>
+				</div>
+				
+				<div style="display: flex; gap: 12px; justify-content: flex-end;">
+					<button id="cancel-enhanced-selector" style="
+						background: #6c757d; color: white; border: none; padding: 12px 24px;
+						border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600;
+					">Cancel</button>
+					<button id="select-enhanced-directory" style="
+						background: #0082c9; color: white; border: none; padding: 12px 24px;
+						border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600;
+					">Select Directory</button>
+				</div>
+			</div>
+		</div>
+	`;
+	
+	document.body.appendChild(selectorModal);
+	
+	const pathInput = selectorModal.querySelector('#directory-path-input');
+	const newDirInput = selectorModal.querySelector('#new-directory-input');
+	
+	// Set current value if exists
+	const currentPath = exportModal.querySelector('#export-path').value;
+	if (currentPath) {
+		pathInput.value = currentPath;
+	}
+	
+	// Focus the input
+	setTimeout(() => pathInput.focus(), 100);
+	
+	// Quick path buttons
+	selectorModal.querySelectorAll('.quick-path-btn').forEach(button => {
+		button.addEventListener('click', () => {
+			pathInput.value = button.dataset.path;
+			pathInput.focus();
+		});
+		
+		button.addEventListener('mouseenter', () => {
+			button.style.background = '#e9ecef';
+			button.style.transform = 'translateY(-1px)';
+		});
+		
+		button.addEventListener('mouseleave', () => {
+			button.style.background = '#f8f9fa';
+			button.style.transform = 'translateY(0)';
+		});
+	});
+	
+	// Create directory functionality
+	selectorModal.querySelector('#create-directory-btn').addEventListener('click', async () => {
+		const newPath = newDirInput.value.trim();
+		if (!newPath) {
+			alert('Please enter a directory path to create.');
+			return;
+		}
+		
+		const normalizedPath = newPath.startsWith('/') ? newPath : '/' + newPath;
+		
+		try {
+			// Try to create the directory via WebDAV
+			const response = await fetch(window.location.origin + '/remote.php/dav/files/' + OC.getCurrentUser().uid + normalizedPath, {
+				method: 'MKCOL',
+				headers: {
+					requesttoken: OC.requestToken
+				}
+			});
+			
+			if (response.ok || response.status === 405) { // 405 = already exists
+				pathInput.value = normalizedPath;
+				newDirInput.value = '';
+				alert('✅ Directory created successfully!\\nPath: ' + normalizedPath);
+			} else {
+				throw new Error('HTTP ' + response.status);
+			}
+		} catch (error) {
+			console.warn('Directory creation failed:', error);
+			// Still allow user to use the path - maybe it will be created during export
+			pathInput.value = normalizedPath;
+			newDirInput.value = '';
+			alert('⚠️ Could not create directory automatically.\\nYou can still use this path: ' + normalizedPath);
+		}
+	});
+	
+	// Event handlers
+	selectorModal.querySelector('#close-enhanced-selector').addEventListener('click', () => {
+		document.body.removeChild(selectorModal);
+	});
+	
+	selectorModal.querySelector('#cancel-enhanced-selector').addEventListener('click', () => {
+		document.body.removeChild(selectorModal);
+	});
+	
+	selectorModal.querySelector('#select-enhanced-directory').addEventListener('click', () => {
+		const selectedPath = pathInput.value.trim();
+		if (selectedPath) {
+			const normalizedPath = selectedPath.startsWith('/') ? selectedPath : '/' + selectedPath;
+			exportModal.querySelector('#export-path').value = normalizedPath;
+			console.log('📁 Enhanced directory selector - selected path:', normalizedPath);
+		}
+		document.body.removeChild(selectorModal);
+	});
+	
+	// Enter key handlers
+	pathInput.addEventListener('keypress', (e) => {
+		if (e.key === 'Enter') {
+			selectorModal.querySelector('#select-enhanced-directory').click();
+		}
+	});
+	
+	newDirInput.addEventListener('keypress', (e) => {
+		if (e.key === 'Enter') {
+			selectorModal.querySelector('#create-directory-btn').click();
+		}
+	});
+	
+	// Escape key to cancel
+	const escapeHandler = (e) => {
+		if (e.key === 'Escape') {
+			document.body.removeChild(selectorModal);
+			document.removeEventListener('keydown', escapeHandler);
+		}
+	};
+	document.addEventListener('keydown', escapeHandler);
+	
+	// Close on background click
+	selectorModal.addEventListener('click', (e) => {
+		if (e.target === selectorModal) {
+			document.body.removeChild(selectorModal);
+		}
+	});
 }
