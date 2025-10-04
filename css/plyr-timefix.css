@@ -1,0 +1,126 @@
+/**
+ * Plyr Time Display Fix CSS for Nextcloud HyperViewer
+ * 
+ * Styles for the custom YouTube-style time display format
+ * 
+ * @copyright Copyright (c) 2024 HyperViewer
+ * @license GNU AGPL version 3 or any later version
+ */
+
+/* Custom time display container */
+.plyr__time--custom {
+    display: flex !important;
+    align-items: center;
+    font-variant-numeric: tabular-nums;
+    font-size: inherit;
+    line-height: inherit;
+    color: inherit;
+}
+
+/* Current time styling */
+.plyr__time-current {
+    font-weight: 500;
+    color: inherit;
+}
+
+/* Time divider styling */
+.plyr__time-divider {
+    opacity: 0.7;
+    margin: 0 3px;
+    font-weight: 400;
+    color: inherit;
+    user-select: none;
+    transition: opacity 0.2s ease;
+}
+
+/* Duration styling */
+.plyr__time-duration {
+    font-weight: 400;
+    opacity: 0.9;
+    color: inherit;
+}
+
+/* Hover effects for better interactivity */
+.plyr__controls:hover .plyr__time-divider {
+    opacity: 0.8;
+}
+
+/* Ensure proper spacing in different Plyr themes */
+.plyr--video .plyr__time--custom,
+.plyr--audio .plyr__time--custom {
+    margin: 0;
+    padding: 0;
+}
+
+/* Hide original remaining time element globally */
+.plyr__time--remaining {
+    display: none !important;
+}
+
+/* Ensure consistent font rendering across browsers */
+.plyr__time--custom,
+.plyr__time-current,
+.plyr__time-duration {
+    font-feature-settings: "tnum";
+    -webkit-font-feature-settings: "tnum";
+    -moz-font-feature-settings: "tnum";
+}
+
+/* Dark theme adjustments */
+.plyr--dark .plyr__time-divider {
+    opacity: 0.6;
+}
+
+.plyr--dark .plyr__time-duration {
+    opacity: 0.8;
+}
+
+/* Light theme adjustments */
+.plyr--light .plyr__time-divider {
+    opacity: 0.7;
+}
+
+.plyr--light .plyr__time-duration {
+    opacity: 0.9;
+}
+
+/* Responsive adjustments for smaller screens */
+@media (max-width: 768px) {
+    .plyr__time-divider {
+        margin: 0 2px;
+    }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+    .plyr__time-divider,
+    .plyr__time-duration {
+        opacity: 1;
+    }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+    .plyr__time-divider {
+        transition: none;
+    }
+}
+
+/* Focus styles for accessibility */
+.plyr__time--custom:focus-within {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
+    border-radius: 2px;
+}
+
+/* Print styles */
+@media print {
+    .plyr__time--custom {
+        color: black !important;
+    }
+    
+    .plyr__time-divider,
+    .plyr__time-duration {
+        opacity: 1 !important;
+    }
+}

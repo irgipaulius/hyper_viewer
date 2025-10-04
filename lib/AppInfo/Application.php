@@ -34,6 +34,10 @@ class Application extends App implements IBootstrap {
 		// Always inject our Files integration JS
 		Util::addScript(self::APP_ID, 'files-integration');
 		
+		// Inject global Plyr time display fix
+		Util::addScript(self::APP_ID, 'plyr-timefix');
+		Util::addStyle(self::APP_ID, 'plyr-timefix');
+		
 		// Register auto-generation cron job
 		$jobList = $context->getServerContainer()->get(\OCP\BackgroundJob\IJobList::class);
 		if (!$jobList->has(AutoHlsGenerationJob::class, null)) {
