@@ -50,7 +50,7 @@ function initializeFilesIntegration() {
 		name: "playHlsMov",
 		displayName: t("hyper_viewer", "Play Progressive (720p)"),
 		mime: "video/quicktime",
-		permissions: OC.permission_READ,
+		permissions: OC.PERMISSION_READ,
 		iconClass: "icon-play",
 		async actionHandler(filename, context) {
 			console.log("Play with HLS triggered for MOV:", filename);
