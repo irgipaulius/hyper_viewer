@@ -2123,6 +2123,23 @@ function loadShakaPlayer(filename, cachePath, context) {
 		
 		// Browse button functionality - Tiered file picker approach
 		exportModal.querySelector('#browse-location').addEventListener('click', () => {
+			// Fix z-index issues for file picker dialogs
+			const style = document.createElement('style');
+			style.innerHTML = `
+				.oc-dialog { z-index: 999999 !important; }
+				.oc-dialog-dim { z-index: 999998 !important; }
+				.files-picker { z-index: 999999 !important; }
+				.files-picker .modal { z-index: 999999 !important; }
+			`;
+			document.head.appendChild(style);
+			
+			// Clean up style after 30 seconds to avoid accumulation
+			setTimeout(() => {
+				if (style.parentNode) {
+					style.parentNode.removeChild(style);
+				}
+			}, 30000);
+			
 			// Tier 1: Modern Files app picker (Nextcloud 25+)
 			if (window.OCA?.Files?.FilePicker) {
 				console.log('🎯 Using modern OCA.Files.FilePicker');
