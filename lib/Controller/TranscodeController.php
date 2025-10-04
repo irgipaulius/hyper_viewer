@@ -123,8 +123,8 @@ class TranscodeController extends Controller {
 				$this->originalPath = $originalPath;
 				$this->logger = $logger;
 				
-				// Set appropriate headers for MP4 streaming
-				$this->addHeader('Content-Type', 'video/mp4');
+				// Set appropriate headers for WebM streaming
+				$this->addHeader('Content-Type', 'video/webm');
 				$this->addHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
 				$this->addHeader('Pragma', 'no-cache');
 				$this->addHeader('Expires', '0');
@@ -261,7 +261,7 @@ class TranscodeController extends Controller {
 	private function buildFFmpegCommand(string $inputPath, string $resolution): string {
 		$height = $this->getHeightFromResolution($resolution);
 		
-		// Simplified command for debugging
+		// Browser-compatible streaming format
 		$cmd = [
 			'ffmpeg',
 			'-i', escapeshellarg($inputPath),
@@ -269,8 +269,7 @@ class TranscodeController extends Controller {
 			'-c:v', 'libx264',
 			'-preset', 'ultrafast',
 			'-c:a', 'aac',
-			'-f', 'mp4',
-			'-movflags', 'frag_keyframe+empty_moov',
+			'-f', 'webm',
 			'pipe:1'
 		];
 		

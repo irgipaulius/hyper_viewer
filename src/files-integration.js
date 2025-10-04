@@ -1735,7 +1735,7 @@ function loadLiveTranscodePlayer(filename, transcodeUrl, context) {
                 <span style="font-size: 1.2em;">⚡</span>
                 <div>
                     <h3 style="margin: 0; font-size: 1.1em; font-weight: 600;">${filename}</h3>
-                    <p style="margin: 0; font-size: 0.9em; opacity: 0.8;">Live Transcode - 240p Streaming</p>
+                    <p style="margin: 0; font-size: 0.9em; opacity: 0.8;">Live Transcode - 240p WebM</p>
                 </div>
             </div>
             <button id="close-live-transcode" style="
