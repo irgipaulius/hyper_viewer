@@ -261,14 +261,14 @@ class TranscodeController extends Controller {
 	private function buildFFmpegCommand(string $inputPath, string $resolution): string {
 		$height = $this->getHeightFromResolution($resolution);
 		
-		// Browser-compatible streaming format
+		// WebM with proper codecs
 		$cmd = [
 			'ffmpeg',
 			'-i', escapeshellarg($inputPath),
 			'-vf', "scale=-2:{$height}",
-			'-c:v', 'libx264',
-			'-preset', 'ultrafast',
-			'-c:a', 'aac',
+			'-c:v', 'libvpx',
+			'-b:v', '500k',
+			'-c:a', 'libvorbis',
 			'-f', 'webm',
 			'pipe:1'
 		];
