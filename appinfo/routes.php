@@ -37,6 +37,7 @@ return [
 		// Progressive MP4 Proxy Transcoding
 		['name' => 'transcode#proxyTranscode', 'url' => '/api/proxy-transcode', 'verb' => 'GET'],
 		['name' => 'transcode#proxyStream', 'url' => '/api/proxy-stream', 'verb' => 'GET'],
+		['name' => 'transcode#testStream', 'url' => '/api/test-stream', 'verb' => 'GET'],
 		
 		// Management Dashboard API
 		['name' => 'cache#getActiveJobs', 'url' => '/api/jobs/active', 'verb' => 'GET'],
