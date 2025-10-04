@@ -138,14 +138,16 @@ class TranscodeController extends Controller {
         $input = escapeshellarg($inputPath);
         $output = escapeshellarg($outputPath);
 
-        // FFmpeg command for 480p ultrafast transcoding
+        // FFmpeg command for 480p ultrafast transcoding with web-compatible settings
         $cmd = sprintf(
             '/usr/local/bin/ffmpeg -y -threads 3 -i %s ' .
             '-vf "scale=-2:480:flags=fast_bilinear" ' .
-            '-preset ultrafast -tune zerolatency ' .
-            '-c:v libx264 -crf 30 ' .
-            '-c:a aac -b:a 96k ' .
-            '-movflags +faststart ' .
+            '-c:v libx264 -preset ultrafast -tune zerolatency ' .
+            '-profile:v baseline -level 3.0 -pix_fmt yuv420p ' .
+            '-crf 28 -maxrate 1200k -bufsize 2400k ' .
+            '-c:a aac -b:a 128k -ar 44100 ' .
+            '-movflags +faststart+frag_keyframe+empty_moov ' .
+            '-f mp4 ' .
             '%s 2>&1',
             $input,
             $output
