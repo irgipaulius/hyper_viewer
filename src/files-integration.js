@@ -93,6 +93,38 @@ function initializeFilesIntegration() {
 		}
 	});
 
+	// Register "Play Progressive (480p)" action for MOV files
+	OCA.Files.fileActions.registerAction({
+		name: "playProgressiveMov",
+		displayName: t("hyper_viewer", "Play Progressive (480p)"),
+		mime: "video/quicktime",
+		permissions: OC.PERMISSION_READ,
+		iconClass: "icon-play",
+		priority: 100,
+		async actionHandler(filename, context) {
+			console.log("🎬 Play Progressive (480p) triggered for MOV:", filename);
+			const directory =
+				context?.dir || context?.fileList?.getCurrentDirectory() || "/";
+			await playProgressive(filename, directory, context);
+		}
+	});
+
+	// Register "Play Progressive (480p)" action for MP4 files
+	OCA.Files.fileActions.registerAction({
+		name: "playProgressiveMp4",
+		displayName: t("hyper_viewer", "Play Progressive (480p)"),
+		mime: "video/mp4",
+		permissions: OC.PERMISSION_READ,
+		iconClass: "icon-play",
+		priority: 100,
+		async actionHandler(filename, context) {
+			console.log("🎬 Play Progressive (480p) triggered for MP4:", filename);
+			const directory =
+				context?.dir || context?.fileList?.getCurrentDirectory() || "/";
+			await playProgressive(filename, directory, context);
+		}
+	});
+
 	// Register "Generate HLS Cache" action for directories
 	OCA.Files.fileActions.registerAction({
 		name: "generateHlsCacheDirectory",
@@ -1669,6 +1701,327 @@ async function playWithHls(filename, directory, context) {
 			"Error"
 		);
 	}
+}
+
+/**
+ * Play video with progressive MP4 transcoding (480p)
+ *
+ * @param filename
+ * @param directory
+ * @param context
+ */
+async function playProgressive(filename, directory, context) {
+	console.log(`🎬 Starting progressive MP4 playback for: ${filename}`);
+
+	try {
+		// Show "Preparing preview..." overlay
+		const loadingOverlay = showLoadingOverlay(filename);
+
+		// Get the full file path
+		const filePath = directory === "/" ? `/${filename}` : `${directory}/${filename}`;
+
+		// Call the proxy-transcode endpoint
+		const response = await fetch(
+			OC.generateUrl("/apps/hyper_viewer/api/proxy-transcode") + `?path=${encodeURIComponent(filePath)}`,
+			{
+				method: "GET",
+				headers: {
+					requesttoken: OC.requestToken
+				}
+			}
+		);
+
+		const result = await response.json();
+
+		// Hide loading overlay
+		hideLoadingOverlay(loadingOverlay);
+
+		if (result.url) {
+			console.log(`✅ Progressive MP4 ready: ${result.url}`);
+			// Create and show video modal with the transcoded URL
+			showProgressiveVideoModal(filename, result.url);
+		} else {
+			throw new Error(result.error || "Failed to prepare progressive MP4");
+		}
+	} catch (error) {
+		console.error("Error preparing progressive MP4:", error);
+		// Hide loading overlay if it exists
+		const existingOverlay = document.querySelector('.hyper-viewer-loading-overlay');
+		if (existingOverlay) {
+			hideLoadingOverlay(existingOverlay);
+		}
+		OC.dialogs.alert(
+			`Failed to prepare progressive MP4: ${error.message}`,
+			"Transcoding Error"
+		);
+	}
+}
+
+/**
+ * Show loading overlay while preparing video
+ */
+function showLoadingOverlay(filename) {
+	const overlay = document.createElement("div");
+	overlay.className = "hyper-viewer-loading-overlay";
+	overlay.innerHTML = `
+		<div class="hyper-viewer-loading-content">
+			<div class="hyper-viewer-spinner"></div>
+			<h3>Preparing Preview...</h3>
+			<p>Transcoding "${filename}" to 480p MP4</p>
+			<p class="loading-note">This may take a moment for large files</p>
+		</div>
+		
+		<style>
+			.hyper-viewer-loading-overlay {
+				position: fixed;
+				top: 0;
+				left: 0;
+				right: 0;
+				bottom: 0;
+				z-index: 10001;
+				background: rgba(0, 0, 0, 0.8);
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				backdrop-filter: blur(4px);
+			}
+			
+			.hyper-viewer-loading-content {
+				background: #1a1a1a;
+				border-radius: 12px;
+				padding: 40px;
+				text-align: center;
+				color: #ffffff;
+				max-width: 400px;
+				box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+			}
+			
+			.hyper-viewer-spinner {
+				width: 40px;
+				height: 40px;
+				border: 4px solid #333;
+				border-top: 4px solid #4a9eff;
+				border-radius: 50%;
+				animation: spin 1s linear infinite;
+				margin: 0 auto 20px auto;
+			}
+			
+			@keyframes spin {
+				0% { transform: rotate(0deg); }
+				100% { transform: rotate(360deg); }
+			}
+			
+			.hyper-viewer-loading-content h3 {
+				margin: 0 0 10px 0;
+				font-size: 18px;
+				font-weight: 600;
+			}
+			
+			.hyper-viewer-loading-content p {
+				margin: 8px 0;
+				color: #cccccc;
+			}
+			
+			.loading-note {
+				font-size: 14px;
+				color: #999999 !important;
+			}
+		</style>
+	`;
+
+	document.body.appendChild(overlay);
+	document.body.style.overflow = "hidden";
+	
+	return overlay;
+}
+
+/**
+ * Hide loading overlay
+ */
+function hideLoadingOverlay(overlay) {
+	if (overlay && overlay.parentNode) {
+		document.body.style.overflow = "";
+		overlay.parentNode.removeChild(overlay);
+	}
+}
+
+/**
+ * Show progressive video modal with HTML5 video player
+ */
+function showProgressiveVideoModal(filename, videoUrl) {
+	const modal = document.createElement("div");
+	modal.className = "hyper-viewer-progressive-modal";
+	modal.innerHTML = `
+		<div class="hyper-viewer-overlay"></div>
+		<div class="hyper-viewer-progressive-container">
+			<div class="hyper-viewer-progressive-header">
+				<h3 class="hyper-viewer-progressive-title">${filename}</h3>
+				<button class="hyper-viewer-close" aria-label="Close video">
+					<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<line x1="18" y1="6" x2="6" y2="18"></line>
+						<line x1="6" y1="6" x2="18" y2="18"></line>
+					</svg>
+				</button>
+			</div>
+			<div class="hyper-viewer-progressive-content">
+				<video 
+					controls 
+					autoplay 
+					preload="metadata"
+					class="hyper-viewer-progressive-video"
+					src="${videoUrl}">
+					Your browser does not support the video tag.
+				</video>
+			</div>
+		</div>
+		
+		<style>
+			.hyper-viewer-progressive-modal {
+				position: fixed;
+				top: 0;
+				left: 0;
+				right: 0;
+				bottom: 0;
+				z-index: 10000;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				padding: 20px;
+				box-sizing: border-box;
+				opacity: 0;
+				visibility: hidden;
+				transition: opacity 0.3s ease, visibility 0.3s ease;
+			}
+			
+			.hyper-viewer-progressive-modal.show {
+				opacity: 1;
+				visibility: visible;
+			}
+			
+			.hyper-viewer-overlay {
+				position: absolute;
+				top: 0;
+				left: 0;
+				right: 0;
+				bottom: 0;
+				background: rgba(0, 0, 0, 0.9);
+				backdrop-filter: blur(4px);
+			}
+			
+			.hyper-viewer-progressive-container {
+				position: relative;
+				background: #1a1a1a;
+				border-radius: 12px;
+				box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+				max-width: 90vw;
+				max-height: 90vh;
+				width: auto;
+				height: auto;
+				display: flex;
+				flex-direction: column;
+				overflow: hidden;
+				transform: scale(0.95);
+				transition: transform 0.3s ease;
+			}
+			
+			.hyper-viewer-progressive-modal.show .hyper-viewer-progressive-container {
+				transform: scale(1);
+			}
+			
+			.hyper-viewer-progressive-header {
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				padding: 16px 20px;
+				background: #2a2a2a;
+				border-bottom: 1px solid #3a3a3a;
+			}
+			
+			.hyper-viewer-progressive-title {
+				margin: 0;
+				color: #ffffff;
+				font-size: 16px;
+				font-weight: 600;
+				white-space: nowrap;
+				overflow: hidden;
+				text-overflow: ellipsis;
+				max-width: calc(100% - 60px);
+			}
+			
+			.hyper-viewer-progressive-content {
+				padding: 0;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				background: #000000;
+			}
+			
+			.hyper-viewer-progressive-video {
+				width: 100%;
+				height: auto;
+				max-width: 100%;
+				max-height: calc(90vh - 60px);
+				display: block;
+			}
+			
+			.hyper-viewer-close {
+				background: transparent;
+				border: none;
+				color: #ffffff;
+				cursor: pointer;
+				padding: 8px;
+				border-radius: 6px;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				transition: background-color 0.2s ease, color 0.2s ease;
+			}
+			
+			.hyper-viewer-close:hover {
+				background: rgba(255, 255, 255, 0.1);
+				color: #ff6b6b;
+			}
+		</style>
+	`;
+
+	// Add modal to DOM
+	document.body.appendChild(modal);
+	document.body.style.overflow = "hidden";
+
+	// Show modal with animation
+	requestAnimationFrame(() => {
+		modal.classList.add("show");
+	});
+
+	// Handle escape key
+	const handleKeydown = (e) => {
+		if (e.key === "Escape") {
+			closeModal();
+		}
+	};
+
+	// Close functionality
+	const closeModal = () => {
+		modal.classList.remove("show");
+		document.removeEventListener("keydown", handleKeydown);
+		setTimeout(() => {
+			document.body.style.overflow = "";
+			if (modal.parentNode) {
+				modal.parentNode.removeChild(modal);
+			}
+		}, 300);
+	};
+
+	// Event listeners
+	modal.querySelector(".hyper-viewer-close").addEventListener("click", closeModal);
+	modal.querySelector(".hyper-viewer-overlay").addEventListener("click", closeModal);
+	
+	// Prevent video container clicks from closing modal
+	modal.querySelector(".hyper-viewer-progressive-content").addEventListener("click", (e) => {
+		e.stopPropagation();
+	});
+
+	document.addEventListener("keydown", handleKeydown);
 }
 
 /**

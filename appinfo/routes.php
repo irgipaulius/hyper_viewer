@@ -34,6 +34,10 @@ return [
 		['name' => 'cache#registerAutoGeneration', 'url' => '/cache/register-auto-generation', 'verb' => 'POST'],
 		['name' => 'cache#serveHlsFile', 'url' => '/hls/{cachePath}/{filename}', 'verb' => 'GET', 'requirements' => ['cachePath' => '.+', 'filename' => '.+']],
 		
+		// Progressive MP4 Proxy Transcoding
+		['name' => 'transcode#proxyTranscode', 'url' => '/api/proxy-transcode', 'verb' => 'GET'],
+		['name' => 'transcode#proxyStream', 'url' => '/api/proxy-stream', 'verb' => 'GET'],
+		
 		// Management Dashboard API
 		['name' => 'cache#getActiveJobs', 'url' => '/api/jobs/active', 'verb' => 'GET'],
 		['name' => 'cache#getJobProgress', 'url' => '/api/jobs/active/{filename}', 'verb' => 'GET'],
