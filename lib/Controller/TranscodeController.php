@@ -197,255 +197,28 @@ class TranscodeController extends Controller {
 		$response->setOutput($buffer);
 		return $response;
 	}
-				$this->addHeader('Expires', '0');
-				$this->addHeader('Accept-Ranges', 'none');
-			}
-
-			public function output() {
-				$startTime = microtime(true);
-				
-				// Register this process
-				TranscodeController::registerProcess($this->processId, $this->userId, getmypid());
-				
-				// Set up process descriptors
-				$descriptors = [
-					0 => ['pipe', 'r'],  // stdin
-					1 => ['pipe', 'w'],  // stdout
-					2 => ['pipe', 'w']   // stderr
-				];
-
-				// Start FFmpeg process
-				$this->process = proc_open($this->ffmpegCmd, $descriptors, $pipes);
-				
-				if (!is_resource($this->process)) {
-					echo "Error: Could not start FFmpeg process";
-					return;
-				}
-				
-				// Test if FFmpeg actually started by checking process status
-				$status = proc_get_status($this->process);
-				if (!$status['running']) {
-					$error = stream_get_contents($pipes[2]);
-					echo "FFmpeg failed to start. Error: " . $error;
-					return;
-				}
-
-				// Close stdin
-				fclose($pipes[0]);
-
-				// Set streams to non-blocking
-				stream_set_blocking($pipes[1], false);
-				stream_set_blocking($pipes[2], false);
-
-				$this->logger->info("⚡ Live transcode started for {$this->originalPath}", ['app' => 'hyper_viewer']);
-
-				// Stream output to client
-				$lastActivity = time();
-				$bytesStreamed = 0;
-				
-				while (true) {
-					// Check if client disconnected
-					if (connection_aborted()) {
-						$this->logger->info("🔌 Client disconnected, stopping transcode", ['app' => 'hyper_viewer']);
-						break;
-					}
-
-					// Read from stdout
-					$data = fread($pipes[1], 8192);
-					if ($data !== false && strlen($data) > 0) {
-						echo $data;
-						flush();
-						$bytesStreamed += strlen($data);
-						$lastActivity = time();
-					}
-
-					// Check for errors
-					$error = fread($pipes[2], 1024);
-					if ($error !== false && strlen($error) > 0) {
-						$this->logger->debug("FFmpeg stderr: " . trim($error), ['app' => 'hyper_viewer']);
-					}
-
-					// Check if process is still running
-					$status = proc_get_status($this->process);
-					if (!$status['running']) {
-						$this->logger->info("🏁 FFmpeg process finished", ['app' => 'hyper_viewer']);
-						break;
-					}
-
-					// Timeout check
-					if (time() - $lastActivity > TranscodeController::PROCESS_TIMEOUT) {
-						$this->logger->warning("⏰ Transcode timeout, terminating process", ['app' => 'hyper_viewer']);
-						break;
-					}
-
-					// Small delay to prevent CPU spinning
-					usleep(10000); // 10ms
-				}
-
-				// Cleanup
-				$this->cleanup($pipes);
-				
-				$duration = round(microtime(true) - $startTime, 2);
-				$mbStreamed = round($bytesStreamed / 1024 / 1024, 2);
-				$this->logger->info("✅ Transcode completed: {$duration}s, {$mbStreamed}MB streamed", ['app' => 'hyper_viewer']);
-			}
-
-			private function cleanup($pipes) {
-				// Close pipes
-				foreach ($pipes as $pipe) {
-					if (is_resource($pipe)) {
-						fclose($pipe);
-					}
-				}
-
-				// Terminate process if still running
-				if (is_resource($this->process)) {
-					$status = proc_get_status($this->process);
-					if ($status['running']) {
-						proc_terminate($this->process, SIGTERM);
-						// Wait a bit, then force kill if necessary
-						sleep(2);
-						$status = proc_get_status($this->process);
-						if ($status['running']) {
-							proc_terminate($this->process, SIGKILL);
-						}
-					}
-					proc_close($this->process);
-				}
-
-				// Unregister process
-				TranscodeController::unregisterProcess($this->processId);
-			}
-
-			public function __destruct() {
-				if (isset($this->process) && is_resource($this->process)) {
-					$this->cleanup([]);
-				}
-			}
-		};
-	}
-
-	/**
-	 * Build FFmpeg command for live transcoding
-	 */
-	private function buildFFmpegCommand(string $inputPath, string $resolution): string {
-		$height = $this->getHeightFromResolution($resolution);
-		
-		// WebM with proper codecs
-		$cmd = [
-			'ffmpeg',
-			'-i', escapeshellarg($inputPath),
-			'-vf', "scale=-2:{$height}",
-			'-c:v', 'libvpx',
-			'-b:v', '500k',
-			'-c:a', 'libvorbis',
-			'-f', 'webm',
-			'pipe:1'
-		];
-		
-		return implode(' ', $cmd);
-	}
 
 	/**
 	 * Get height from resolution string
 	 */
 	private function getHeightFromResolution(string $resolution): int {
 		switch ($resolution) {
-			case '1080p':
-				return 1080;
-			case '720p':
-				return 720;
-			case '480p':
-				return 480;
-			case '360p':
-				return 360;
-			case '240p':
-				return 240;
-			default:
-				return 240; // Default to 240p
+			case '1080p': return 1080;
+			case '720p': return 720;
+			case '480p': return 480;
+			case '360p': return 360;
+			case '240p': return 240;
+			default: return 720;
 		}
 	}
 
 	/**
-	 * Get bitrate from resolution string
-	 */
-	private function getBitrateFromResolution(string $resolution): string {
-		switch ($resolution) {
-			case '1080p':
-				return '4000k';
-			case '720p':
-				return '2500k';
-			case '480p':
-				return '1200k';
-			case '360p':
-				return '800k';
-			case '240p':
-				return '500k';
-			default:
-				return '500k'; // Default to 240p bitrate
-		}
-	}
-
-	/**
-	 * Get buffer size from bitrate (2x bitrate for good buffering)
-	 */
-	private function getBufferSize(string $bitrate): string {
-		$numeric = (int) str_replace('k', '', $bitrate);
-		return ($numeric * 2) . 'k';
-	}
-
-	/**
-	 * Register an active process
-	 */
-	public static function registerProcess(string $processId, string $userId, int $pid): void {
-		self::$activeProcesses[$processId] = [
-			'user_id' => $userId,
-			'pid' => $pid,
-			'start_time' => time()
-		];
-	}
-
-	/**
-	 * Unregister a process
-	 */
-	public static function unregisterProcess(string $processId): void {
-		unset(self::$activeProcesses[$processId]);
-	}
-
-	/**
-	 * Get count of active processes for a user
-	 */
-	private function getUserActiveProcessCount(string $userId): int {
-		$count = 0;
-		foreach (self::$activeProcesses as $process) {
-			if ($process['user_id'] === $userId) {
-				$count++;
-			}
-		}
-		return $count;
-	}
-
-	/**
-	 * Clean up stale processes
-	 */
-	private function cleanupStaleProcesses(): void {
-		$now = time();
-		foreach (self::$activeProcesses as $processId => $process) {
-			// Remove processes older than timeout
-			if ($now - $process['start_time'] > self::PROCESS_TIMEOUT * 2) {
-				$this->logger->info("🧹 Cleaning up stale process {$processId}", ['app' => 'hyper_viewer']);
-				unset(self::$activeProcesses[$processId]);
-			}
-		}
-	}
-
-	/**
-	 * Get transcode status
+	 * Get process status
 	 * 
 	 * @NoAdminRequired
 	 * @NoCSRFRequired
 	 */
-	public function status(): JSONResponse {
+	public function getProcessStatus(): JSONResponse {
 		$user = $this->userSession->getUser();
 		if (!$user) {
 			return new JSONResponse(['error' => 'User not authenticated'], Http::STATUS_UNAUTHORIZED);
@@ -459,5 +232,58 @@ class TranscodeController extends Controller {
 			'max_processes' => self::MAX_PROCESSES_PER_USER,
 			'timeout_seconds' => self::PROCESS_TIMEOUT
 		]);
+	}
+
+	/**
+	 * Constants for process management
+	 */
+	private const MAX_PROCESSES_PER_USER = 3;
+	private const PROCESS_TIMEOUT = 1800; // 30 minutes
+
+	/**
+	 * Clean up stale processes
+	 */
+	private function cleanupStaleProcesses(): void {
+		// Implementation for cleaning up stale processes
+	}
+
+	/**
+	 * Start background transcoding process
+	 */
+	private function startBackgroundTranscode(string $inputPath, string $outputPath, string $resolution, string $preset, string $uuid): void {
+		$height = $this->getHeightFromResolution($resolution);
+		
+		// Build FFmpeg command for progressive MP4
+		$cmd = [
+			'ffmpeg',
+			'-threads', '3',
+			'-i', escapeshellarg($inputPath),
+			'-vf', "scale=-2:{$height}",
+			'-c:v', 'libx264',
+			'-preset', $preset,
+			'-crf', '28',
+			'-maxrate', '2400k',
+			'-bufsize', '4800k',
+			'-c:a', 'aac',
+			'-b:a', '128k',
+			'-movflags', '+faststart',
+			'-f', 'mp4',
+			escapeshellarg($outputPath),
+			'>/dev/null', '2>&1', '&'
+		];
+		
+		$command = implode(' ', $cmd);
+		$this->logger->info("🎬 Starting background transcode: {$command}", ['app' => 'hyper_viewer']);
+		
+		// Execute in background
+		exec($command);
+	}
+
+	/**
+	 * Get active process count for user
+	 */
+	private function getUserActiveProcessCount(string $userId): int {
+		// Implementation for getting active process count
+		return 0;
 	}
 }

@@ -52,6 +52,7 @@ function initializeFilesIntegration() {
 		mime: "video/quicktime",
 		permissions: OC.PERMISSION_READ,
 		iconClass: "icon-play",
+		priority: 100,
 		async actionHandler(filename, context) {
 			console.log("Play with HLS triggered for MOV:", filename);
 			const directory =
@@ -90,6 +91,7 @@ function initializeFilesIntegration() {
 		mime: "video/mp4",
 		permissions: OC.PERMISSION_READ,
 		iconClass: "icon-play",
+		priority: 100,
 		async actionHandler(filename, context) {
 			console.log("🎬 Play with HLS triggered for MP4:", filename);
 			const directory =
