@@ -48,12 +48,12 @@ function initializeFilesIntegration() {
 	// Register "Play Live" action for MOV files (higher priority)
 	OCA.Files.fileActions.registerAction({
 		name: "playHlsMov",
-		displayName: t("hyper_viewer", "⚡ Play Live (240p)"),
+		displayName: t("hyper_viewer", "Play Progressive (720p)"),
 		mime: "video/quicktime",
-		permissions: OC.PERMISSION_READ,
+		permissions: OC.permission_READ,
 		iconClass: "icon-play",
 		async actionHandler(filename, context) {
-			console.log("🎬 Play with HLS triggered for MOV:", filename);
+			console.log("Play with HLS triggered for MOV:", filename);
 			const directory =
 				context?.dir || context?.fileList?.getCurrentDirectory() || "/";
 			
@@ -1684,36 +1684,48 @@ async function playWithHls(filename, directory, context) {
  * @param context
  */
 async function playWithLiveTranscode(filename, directory, context) {
-	console.log(`⚡ Starting live transcode for: ${filename}`);
+	console.log(`⚡ Starting progressive transcode for: ${filename}`);
 
 	try {
-		// Build the transcode URL
+		// Build the proxy transcode URL
 		const filePath = directory === '/' ? `/${filename}` : `${directory}/${filename}`;
-		const transcodeUrl = OC.generateUrl('/apps/hyper_viewer/api/transcode') + 
-			`?path=${encodeURIComponent(filePath)}&resolution=240p`;
+		const proxyUrl = OC.generateUrl('/apps/hyper_viewer/api/proxy-transcode') + 
+			`?path=${encodeURIComponent(filePath)}&resolution=720p`;
 		
-		console.log(`🎬 Transcode URL: ${transcodeUrl}`);
+		console.log(`🎬 Proxy URL: ${proxyUrl}`);
 		
-		// Load player with live transcode stream
-		loadLiveTranscodePlayer(filename, transcodeUrl, context);
+		// Show preparing overlay
+		showPreparingOverlay(filename);
+		
+		// Fetch the stream URL
+		const response = await fetch(proxyUrl);
+		const data = await response.json();
+		
+		if (data.error) {
+			throw new Error(data.error);
+		}
+		
+		// Load player with progressive MP4 stream
+		loadProgressivePlayer(filename, data.url, context);
 		
 	} catch (error) {
-		console.error("Error starting live transcode:", error);
+		console.error("Error starting progressive transcode:", error);
+		hidePreparingOverlay();
 		OC.dialogs.alert(
-			"Failed to start live transcoding. Please try again or use standard HLS cache.",
-			"Live Transcode Error"
+			"Failed to start progressive transcoding. Please try again or use standard HLS cache.",
+			"Progressive Transcode Error"
 		);
 	}
 }
 
 /**
- * Load live transcode player in a modal
+ * Load progressive MP4 player in a modal
  *
  * @param {string} filename - Video filename
- * @param {string} transcodeUrl - Live transcode URL
+ * @param {string} streamUrl - Progressive stream URL
  * @param {object} context - File context
  */
-function loadLiveTranscodePlayer(filename, transcodeUrl, context) {
+function loadProgressivePlayer(filename, streamUrl, context) {
 	const videoId = `liveTranscodeVideo_${Date.now()}`;
 
 	// Create enhanced modal for live transcoding
@@ -1735,7 +1747,7 @@ function loadLiveTranscodePlayer(filename, transcodeUrl, context) {
                 <span style="font-size: 1.2em;">⚡</span>
                 <div>
                     <h3 style="margin: 0; font-size: 1.1em; font-weight: 600;">${filename}</h3>
-                    <p style="margin: 0; font-size: 0.9em; opacity: 0.8;">Live Transcode - 240p WebM</p>
+                    <p style="margin: 0; font-size: 0.9em; opacity: 0.8;">Progressive MP4 - 720p</p>
                 </div>
             </div>
             <button id="close-live-transcode" style="
@@ -1839,8 +1851,54 @@ function loadLiveTranscodePlayer(filename, transcodeUrl, context) {
 	document.body.style.overflow = 'hidden';
 
 	// Set the video source and start loading
-	video.src = transcodeUrl;
+	// Hide preparing overlay
+	hidePreparingOverlay();
+	
+	video.src = OC.generateUrl(streamUrl);
 	video.load();
+}
+
+/**
+ * Show preparing overlay
+ */
+function showPreparingOverlay(filename) {
+	const overlay = document.createElement("div");
+	overlay.id = "preparing-overlay";
+	overlay.style.cssText = `
+		position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 9999;
+		background: rgba(0,0,0,0.8); display: flex; flex-direction: column; 
+		align-items: center; justify-content: center; color: white;
+	`;
+	
+	overlay.innerHTML = `
+		<div style="text-align: center;">
+			<div style="
+				width: 60px; height: 60px; border: 4px solid rgba(255,255,255,0.3);
+				border-top: 4px solid white; border-radius: 50%; animation: spin 1s linear infinite;
+				margin: 0 auto 20px;
+			"></div>
+			<h3 style="margin: 0 0 10px; font-size: 1.2em;">Preparing preview...</h3>
+			<p style="margin: 0; opacity: 0.8;">${filename}</p>
+		</div>
+		<style>
+			@keyframes spin {
+				0% { transform: rotate(0deg); }
+				100% { transform: rotate(360deg); }
+			}
+		</style>
+	`;
+	
+	document.body.appendChild(overlay);
+}
+
+/**
+ * Hide preparing overlay
+ */
+function hidePreparingOverlay() {
+	const overlay = document.getElementById("preparing-overlay");
+	if (overlay) {
+		document.body.removeChild(overlay);
+	}
 }
 
 /**

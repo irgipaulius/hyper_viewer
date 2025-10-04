@@ -34,9 +34,9 @@ return [
 		['name' => 'cache#registerAutoGeneration', 'url' => '/cache/register-auto-generation', 'verb' => 'POST'],
 		['name' => 'cache#serveHlsFile', 'url' => '/hls/{cachePath}/{filename}', 'verb' => 'GET', 'requirements' => ['cachePath' => '.+', 'filename' => '.+']],
 		
-		// Live Transcoding API
-		['name' => 'transcode#stream', 'url' => '/api/transcode', 'verb' => 'GET'],
-		['name' => 'transcode#status', 'url' => '/api/transcode/status', 'verb' => 'GET'],
+		// Progressive MP4 Proxy API
+		['name' => 'transcode#proxyTranscode', 'url' => '/api/proxy-transcode', 'verb' => 'GET'],
+		['name' => 'transcode#proxyStream', 'url' => '/api/proxy-stream', 'verb' => 'GET'],
 		
 		// Management Dashboard API
 		['name' => 'cache#getActiveJobs', 'url' => '/api/jobs/active', 'verb' => 'GET'],

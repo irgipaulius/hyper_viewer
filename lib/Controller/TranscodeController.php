@@ -4,27 +4,20 @@ declare(strict_types=1);
 
 namespace OCA\HyperViewer\Controller;
 
-use OCP\IRequest;
-use OCP\AppFramework\Http;
-use OCP\AppFramework\Http\Response;
-use OCP\AppFramework\Http\StreamResponse;
 use OCP\AppFramework\Controller;
+use OCP\AppFramework\Http\JSONResponse;
+use OCP\AppFramework\Http\Response;
+use OCP\Files\File;
 use OCP\Files\IRootFolder;
+use OCP\IRequest;
 use OCP\IUserSession;
 use OCP\ILogger;
-use OCP\AppFramework\Http\JSONResponse;
+use OCP\AppFramework\Http;
 
-/**
- * Controller for live transcoding of video files
- */
 class TranscodeController extends Controller {
-	
 	private IRootFolder $rootFolder;
 	private IUserSession $userSession;
 	private ILogger $logger;
-	private static array $activeProcesses = [];
-	private const MAX_PROCESSES_PER_USER = 1;
-	private const PROCESS_TIMEOUT = 60; // 60 seconds
 	
 	public function __construct(
 		string $appName,
@@ -40,14 +33,15 @@ class TranscodeController extends Controller {
 	}
 
 	/**
-	 * Live transcode a video file to MP4 stream
+	 * Start on-demand transcoding and return proxy URL
 	 * 
 	 * @NoAdminRequired
 	 * @NoCSRFRequired
 	 */
-	public function stream(): Response {
+	public function proxyTranscode(): JSONResponse {
 		$path = $this->request->getParam('path');
-		$resolution = $this->request->getParam('resolution', '240p');
+		$resolution = $this->request->getParam('resolution', '720p');
+		$preset = $this->request->getParam('preset', 'ultrafast');
 		
 		if (!$path) {
 			return new JSONResponse(['error' => 'Missing path parameter'], Http::STATUS_BAD_REQUEST);
@@ -62,71 +56,147 @@ class TranscodeController extends Controller {
 		}
 
 		$userId = $user->getUID();
-		
-		// Check if user already has active processes
-		$this->cleanupStaleProcesses();
-		if ($this->getUserActiveProcessCount($userId) >= self::MAX_PROCESSES_PER_USER) {
-			$this->logger->warning("🚫 User {$userId} exceeded max transcode processes", ['app' => 'hyper_viewer']);
-			return new JSONResponse(['error' => 'Too many active transcoding processes'], Http::STATUS_TOO_MANY_REQUESTS);
-		}
 
 		try {
+			// Validate file access
 			$userFolder = $this->rootFolder->getUserFolder($userId);
 			$file = $userFolder->get($path);
 			
-			if (!$file->isReadable()) {
-				return new JSONResponse(['error' => 'File not accessible'], Http::STATUS_FORBIDDEN);
+			if (!$file instanceof File) {
+				return new JSONResponse(['error' => 'File not found'], Http::STATUS_NOT_FOUND);
 			}
 
 			$realPath = $file->getStorage()->getLocalFile($file->getInternalPath());
 			if (!$realPath || !file_exists($realPath)) {
-				return new JSONResponse(['error' => 'File not found on disk'], Http::STATUS_NOT_FOUND);
+				return new JSONResponse(['error' => 'File not accessible'], Http::STATUS_NOT_FOUND);
 			}
 
-			$this->logger->info("🚀 Starting live transcode for file {$path} ({$resolution})", ['app' => 'hyper_viewer']);
-
-			return $this->streamTranscode($realPath, $resolution, $userId, $path);
+			// Generate unique ID for this transcode
+			$uuid = uniqid('transcode_', true);
+			$tempDir = '/tmp/hypertranscode';
+			$tempFile = $tempDir . '/' . $uuid . '.mp4';
+			
+			// Ensure temp directory exists
+			if (!is_dir($tempDir)) {
+				mkdir($tempDir, 0755, true);
+			}
+			
+			// Check if we already have a fresh version
+			if (file_exists($tempFile) && (time() - filemtime($tempFile)) < 7200) { // 2 hours
+				$this->logger->info("🔄 Reusing existing transcode: {$uuid}", ['app' => 'hyper_viewer']);
+				return new JSONResponse(['url' => "/apps/hyper_viewer/api/proxy-stream?id={$uuid}"]);
+			}
+			
+			// Start background transcoding
+			$this->startBackgroundTranscode($realPath, $tempFile, $resolution, $preset, $uuid);
+			
+			$this->logger->info("🎬 Started transcode: {$uuid} for {$path}", ['app' => 'hyper_viewer']);
+			
+			return new JSONResponse(['url' => "/apps/hyper_viewer/api/proxy-stream?id={$uuid}"]);
 
 		} catch (\Exception $e) {
-			$this->logger->error("❌ Transcode error: " . $e->getMessage(), ['app' => 'hyper_viewer']);
+			$this->logger->error("❌ Proxy transcode error: " . $e->getMessage(), ['app' => 'hyper_viewer']);
 			return new JSONResponse(['error' => 'Internal server error'], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}
 
 	/**
-	 * Stream transcoded video using FFmpeg
+	 * Stream progressive MP4 file
+	 * 
+	 * @NoAdminRequired
+	 * @NoCSRFRequired
 	 */
-	private function streamTranscode(string $filePath, string $resolution, string $userId, string $originalPath): Response {
-		$processId = uniqid('transcode_', true);
+	public function proxyStream(): Response {
+		$id = $this->request->getParam('id');
 		
-		// Build FFmpeg command
-		$ffmpegCmd = $this->buildFFmpegCommand($filePath, $resolution);
+		if (!$id) {
+			return new JSONResponse(['error' => 'Missing id parameter'], Http::STATUS_BAD_REQUEST);
+		}
 		
+		$tempFile = '/tmp/hypertranscode/' . $id . '.mp4';
+		
+		if (!file_exists($tempFile)) {
+			return new JSONResponse(['error' => 'Transcode not found or not ready'], Http::STATUS_NOT_FOUND);
+		}
+		
+		return $this->streamProgressiveMP4($tempFile);
+	}
+
+	/**
+	 * Start background transcoding process
+	 */
+	private function startBackgroundTranscode(string $inputPath, string $outputPath, string $resolution, string $preset, string $uuid): void {
+		$height = $this->getHeightFromResolution($resolution);
+		
+		// Build FFmpeg command for progressive MP4
+		$cmd = [
+			'ffmpeg',
+			'-threads', '3',
+			'-i', escapeshellarg($inputPath),
+			'-vf', "scale=-2:{$height}",
+			'-c:v', 'libx264',
+			'-preset', $preset,
+			'-crf', '28',
+			'-c:a', 'aac',
+			'-b:a', '128k',
+			'-movflags', '+faststart',
+			escapeshellarg($outputPath)
+		];
+		
+		$ffmpegCmd = implode(' ', $cmd);
+		$this->logger->info("🎬 Starting background transcode: {$uuid}", ['app' => 'hyper_viewer']);
 		$this->logger->info("🎬 FFmpeg command: {$ffmpegCmd}", ['app' => 'hyper_viewer']);
-		$this->logger->info("🎬 Input file exists: " . (file_exists($filePath) ? 'YES' : 'NO'), ['app' => 'hyper_viewer']);
-		$this->logger->info("🎬 Input file size: " . (file_exists($filePath) ? filesize($filePath) : 'N/A') . ' bytes', ['app' => 'hyper_viewer']);
+		
+		// Start FFmpeg in background
+		exec($ffmpegCmd . ' > /dev/null 2>&1 &');
+	}
 
-		// Create custom response that handles the streaming
-		return new class($ffmpegCmd, $processId, $userId, $originalPath, $this->logger) extends Response {
-			private string $ffmpegCmd;
-			private string $processId;
-			private string $userId;
-			private string $originalPath;
-			private ILogger $logger;
-			private $process;
-
-			public function __construct(string $ffmpegCmd, string $processId, string $userId, string $originalPath, ILogger $logger) {
-				parent::__construct();
-				$this->ffmpegCmd = $ffmpegCmd;
-				$this->processId = $processId;
-				$this->userId = $userId;
-				$this->originalPath = $originalPath;
-				$this->logger = $logger;
-				
-				// Set appropriate headers for WebM streaming
-				$this->addHeader('Content-Type', 'video/webm');
-				$this->addHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-				$this->addHeader('Pragma', 'no-cache');
+	/**
+	 * Stream progressive MP4 file with range support
+	 */
+	private function streamProgressiveMP4(string $filePath): Response {
+		$fileSize = filesize($filePath);
+		$range = $this->request->getHeader('Range');
+		
+		// Handle range requests for seeking
+		if ($range) {
+			preg_match('/bytes=(\d+)-(\d*)/', $range, $matches);
+			$start = intval($matches[1]);
+			$end = $matches[2] ? intval($matches[2]) : $fileSize - 1;
+			$length = $end - $start + 1;
+			
+			$response = new Response();
+			$response->setStatus(206); // Partial Content
+			$response->addHeader('Content-Type', 'video/mp4');
+			$response->addHeader('Accept-Ranges', 'bytes');
+			$response->addHeader('Content-Length', (string)$length);
+			$response->addHeader('Content-Range', "bytes {$start}-{$end}/{$fileSize}");
+			$response->addHeader('Cache-Control', 'no-cache');
+			
+			// Stream the requested range
+			$handle = fopen($filePath, 'rb');
+			fseek($handle, $start);
+			$buffer = fread($handle, $length);
+			fclose($handle);
+			
+			$response->setOutput($buffer);
+			return $response;
+		}
+		
+		// Normal full file response
+		$response = new Response();
+		$response->addHeader('Content-Type', 'video/mp4');
+		$response->addHeader('Content-Length', (string)$fileSize);
+		$response->addHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+		
+		// Stream the full file
+		$handle = fopen($filePath, 'rb');
+		$buffer = fread($handle, $fileSize);
+		fclose($handle);
+		
+		$response->setOutput($buffer);
+		return $response;
+	}
 				$this->addHeader('Expires', '0');
 				$this->addHeader('Accept-Ranges', 'none');
 			}
