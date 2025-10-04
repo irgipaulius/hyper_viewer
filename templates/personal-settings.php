@@ -35,5 +35,4 @@ style('hyper_viewer', 'settings');
 			<li><code>/mnt/cache/.cached_hls/</code> - <?php p($l->t('Absolute path (e.g., mounted storage)')); ?></li>
 		</ul>
 	</div>
-	
 </div>

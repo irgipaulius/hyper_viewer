@@ -41,7 +41,6 @@ document.addEventListener('DOMContentLoaded', function() {
 			e.target.closest('.cache-location-item').remove()
 		}
 	})
-
 })
 
 /**
