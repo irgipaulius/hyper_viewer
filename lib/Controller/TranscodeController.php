@@ -134,46 +134,6 @@ class TranscodeController extends Controller {
         }
     }
 
-    /**
-     * @NoAdminRequired
-     * @NoCSRFRequired
-     */
-    public function testHello() {
-        return new Response('Hello World - Controller is working!', Http::STATUS_OK, [
-            'Content-Type' => 'text/plain'
-        ]);
-    }
-
-    /**
-     * @NoAdminRequired
-     * @NoCSRFRequired
-     */
-    public function testStream($id) {
-        $tempFile = $this->tempDir . '/' . $id . '.mp4';
-        
-        $info = [
-            'file_exists' => file_exists($tempFile),
-            'file_size' => file_exists($tempFile) ? filesize($tempFile) : 0,
-            'is_readable' => file_exists($tempFile) ? is_readable($tempFile) : false,
-            'temp_dir' => $this->tempDir,
-            'full_path' => $tempFile
-        ];
-        
-        if (file_exists($tempFile)) {
-            // Try to read first 100 bytes
-            $handle = fopen($tempFile, 'rb');
-            if ($handle) {
-                $firstBytes = fread($handle, 100);
-                fclose($handle);
-                $info['first_bytes_hex'] = bin2hex($firstBytes);
-                $info['starts_with_mp4'] = strpos($firstBytes, 'ftyp') !== false;
-            }
-        }
-        
-        return new Response(json_encode($info, JSON_PRETTY_PRINT), Http::STATUS_OK, [
-            'Content-Type' => 'application/json'
-        ]);
-    }
 
     /**
      * @NoAdminRequired
