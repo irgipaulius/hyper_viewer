@@ -565,6 +565,9 @@ class CacheController extends Controller {
 		}
 
 		try {
+			// URL decode the filename to handle Cyrillic and other special characters
+			$decodedFilename = urldecode($filename);
+			
 			$userFolder = $this->rootFolder->getUserFolder($user->getUID());
 			
 			// Look for the job in cache directories
@@ -577,8 +580,8 @@ class CacheController extends Controller {
 				if ($userFolder->nodeExists($cacheLocation)) {
 					$cacheFolder = $userFolder->get($cacheLocation);
 					if ($cacheFolder instanceof \OCP\Files\Folder) {
-						// Try to find the specific job directory
-						$jobDirName = pathinfo($filename, PATHINFO_FILENAME); // Remove extension
+						// Try to find the specific job directory using decoded filename
+						$jobDirName = pathinfo($decodedFilename, PATHINFO_FILENAME); // Remove extension
 						if ($cacheFolder->nodeExists($jobDirName)) {
 							$jobFolder = $cacheFolder->get($jobDirName);
 							if ($jobFolder instanceof \OCP\Files\Folder && $jobFolder->nodeExists('progress.json')) {
@@ -592,7 +595,7 @@ class CacheController extends Controller {
 										
 										return new JSONResponse([
 											'cachePath' => $jobFolder->getPath(),
-											'filename' => $filename,
+											'filename' => $decodedFilename, // Return decoded filename
 											'progress' => $progressData['progress'] ?? 0,
 											'status' => $progressData['status'] ?? 'unknown',
 											'frame' => $progressData['frame'] ?? 0,
