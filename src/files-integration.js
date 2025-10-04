@@ -1866,8 +1866,8 @@ function showProgressiveVideoModal(filename, videoUrl) {
 			<div class="hyper-viewer-progressive-content">
 				<video 
 					controls 
-					autoplay 
-					preload="metadata"
+					preload="auto"
+					playsinline
 					class="hyper-viewer-progressive-video"
 					src="${videoUrl}">
 					Your browser does not support the video tag.
@@ -1961,7 +1961,10 @@ function showProgressiveVideoModal(filename, videoUrl) {
 				height: auto;
 				max-width: 100%;
 				max-height: calc(90vh - 60px);
+				min-height: 300px;
 				display: block;
+				background: #000;
+				object-fit: contain;
 			}
 			
 			.hyper-viewer-close {
@@ -2019,6 +2022,61 @@ function showProgressiveVideoModal(filename, videoUrl) {
 	// Prevent video container clicks from closing modal
 	modal.querySelector(".hyper-viewer-progressive-content").addEventListener("click", (e) => {
 		e.stopPropagation();
+	});
+
+	// Get video element and add event handlers
+	const video = modal.querySelector(".hyper-viewer-progressive-video");
+	
+	// Add video event listeners for debugging and functionality
+	video.addEventListener("loadstart", () => {
+		console.log("🎬 Video load started");
+	});
+	
+	video.addEventListener("loadedmetadata", () => {
+		console.log("🎬 Video metadata loaded");
+		console.log("Video duration:", video.duration);
+		console.log("Video dimensions:", video.videoWidth, "x", video.videoHeight);
+	});
+	
+	video.addEventListener("loadeddata", () => {
+		console.log("🎬 Video data loaded");
+	});
+	
+	video.addEventListener("canplay", () => {
+		console.log("🎬 Video can start playing");
+		// Try to play the video
+		video.play().catch(error => {
+			console.error("🎬 Video play failed:", error);
+		});
+	});
+	
+	video.addEventListener("canplaythrough", () => {
+		console.log("🎬 Video can play through without buffering");
+	});
+	
+	video.addEventListener("play", () => {
+		console.log("🎬 Video started playing");
+	});
+	
+	video.addEventListener("playing", () => {
+		console.log("🎬 Video is playing");
+	});
+	
+	video.addEventListener("pause", () => {
+		console.log("🎬 Video paused");
+	});
+	
+	video.addEventListener("error", (e) => {
+		console.error("🎬 Video error:", e);
+		console.error("Video error details:", video.error);
+	});
+	
+	video.addEventListener("stalled", () => {
+		console.log("🎬 Video stalled");
+	});
+	
+	video.addEventListener("waiting", () => {
+		console.log("🎬 Video waiting for data");
 	});
 
 	document.addEventListener("keydown", handleKeydown);
