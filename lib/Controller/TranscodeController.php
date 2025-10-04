@@ -137,9 +137,12 @@ class TranscodeController extends Controller {
 			'-c:v', 'libx264',
 			'-preset', $preset,
 			'-crf', '28',
+			'-maxrate', '2400k',
+			'-bufsize', '4800k',
 			'-c:a', 'aac',
 			'-b:a', '128k',
 			'-movflags', '+faststart',
+			'-f', 'mp4',
 			escapeshellarg($outputPath)
 		];
 		
@@ -245,38 +248,6 @@ class TranscodeController extends Controller {
 	 */
 	private function cleanupStaleProcesses(): void {
 		// Implementation for cleaning up stale processes
-	}
-
-	/**
-	 * Start background transcoding process
-	 */
-	private function startBackgroundTranscode(string $inputPath, string $outputPath, string $resolution, string $preset, string $uuid): void {
-		$height = $this->getHeightFromResolution($resolution);
-		
-		// Build FFmpeg command for progressive MP4
-		$cmd = [
-			'ffmpeg',
-			'-threads', '3',
-			'-i', escapeshellarg($inputPath),
-			'-vf', "scale=-2:{$height}",
-			'-c:v', 'libx264',
-			'-preset', $preset,
-			'-crf', '28',
-			'-maxrate', '2400k',
-			'-bufsize', '4800k',
-			'-c:a', 'aac',
-			'-b:a', '128k',
-			'-movflags', '+faststart',
-			'-f', 'mp4',
-			escapeshellarg($outputPath),
-			'>/dev/null', '2>&1', '&'
-		];
-		
-		$command = implode(' ', $cmd);
-		$this->logger->info("🎬 Starting background transcode: {$command}", ['app' => 'hyper_viewer']);
-		
-		// Execute in background
-		exec($command);
 	}
 
 	/**
