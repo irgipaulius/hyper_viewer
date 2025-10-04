@@ -100,6 +100,8 @@ class TranscodeController extends Controller {
 		$ffmpegCmd = $this->buildFFmpegCommand($filePath, $resolution);
 		
 		$this->logger->info("🎬 FFmpeg command: {$ffmpegCmd}", ['app' => 'hyper_viewer']);
+		$this->logger->info("🎬 Input file exists: " . (file_exists($filePath) ? 'YES' : 'NO'), ['app' => 'hyper_viewer']);
+		$this->logger->info("🎬 Input file size: " . (file_exists($filePath) ? filesize($filePath) : 'N/A') . ' bytes', ['app' => 'hyper_viewer']);
 
 		// Create custom response that handles the streaming
 		return new class($ffmpegCmd, $processId, $userId, $originalPath, $this->logger) extends Response {
