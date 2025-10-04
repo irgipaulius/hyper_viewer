@@ -41,6 +41,13 @@ class AutoHlsGenerationJob extends TimedJob {
 	protected function run($argument): void {
 		$this->logger->info('🤖 Auto HLS generation job started');
 
+		// Check for job lock to prevent concurrent execution
+		$lockFile = '/tmp/hyper_hls_autogen.lock';
+		if (!$this->acquireJobLock($lockFile)) {
+			$this->logger->info('Auto HLS generation job already running, skipping execution');
+			return;
+		}
+
 		try {
 			// Get all registered auto-generation directories
 			$autoGenDirs = $this->getAutoGenerationDirectories();
@@ -63,6 +70,9 @@ class AutoHlsGenerationJob extends TimedJob {
 				'error' => $e->getMessage(),
 				'trace' => $e->getTraceAsString()
 			]);
+		} finally {
+			// Always release the lock
+			$this->releaseJobLock($lockFile);
 		}
 	}
 
@@ -272,6 +282,54 @@ class AutoHlsGenerationJob extends TimedJob {
 				$settings['disabledAt'] = time();
 				$this->config->setAppValue('hyper_viewer', $configKey, json_encode($settings));
 			}
+		}
+	}
+
+	/**
+	 * Acquire job lock to prevent concurrent execution
+	 */
+	private function acquireJobLock(string $lockFile): bool {
+		// Check if lock file exists and is recent (within last hour)
+		if (file_exists($lockFile)) {
+			$lockTime = filemtime($lockFile);
+			$currentTime = time();
+			
+			// If lock is less than 1 hour old, skip execution
+			if (($currentTime - $lockTime) < 3600) {
+				$this->logger->info('Auto-generation job ran recently, skipping', [
+					'lockTime' => date('Y-m-d H:i:s', $lockTime),
+					'timeSinceLastRun' => $currentTime - $lockTime
+				]);
+				return false;
+			}
+			
+			// Lock is stale, remove it
+			unlink($lockFile);
+		}
+
+		// Create lock file with current timestamp
+		$success = file_put_contents($lockFile, json_encode([
+			'pid' => getmypid(),
+			'startTime' => time(),
+			'hostname' => gethostname()
+		]));
+
+		if ($success === false) {
+			$this->logger->error('Failed to create auto-generation lock file', ['lockFile' => $lockFile]);
+			return false;
+		}
+
+		$this->logger->info('Acquired auto-generation job lock', ['lockFile' => $lockFile]);
+		return true;
+	}
+
+	/**
+	 * Release job lock
+	 */
+	private function releaseJobLock(string $lockFile): void {
+		if (file_exists($lockFile)) {
+			unlink($lockFile);
+			$this->logger->info('Released auto-generation job lock', ['lockFile' => $lockFile]);
 		}
 	}
 }

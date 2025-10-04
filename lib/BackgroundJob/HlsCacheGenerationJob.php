@@ -73,25 +73,22 @@ class HlsCacheGenerationJob extends QueuedJob {
 
 			$videoFile = $userFolder->get($videoPath);
 			$videoLocalPath = $videoFile->getStorage()->getLocalFile($videoFile->getInternalPath());
-
 			if (!$videoLocalPath || !file_exists($videoLocalPath)) {
 				throw new \Exception("Cannot access video file locally: $filename");
 			}
 
 			// Determine cache output path
-			$cacheOutputPath = $this->determineCacheOutputPath(
-				$userFolder, 
-				$filename, 
-				$directory, 
-				$cacheLocation, 
-				$customPath
-			);
+		$cacheOutputPath = $this->determineCacheOutputPath(
+			$userFolder, 
+			$filename,
+			$directory, 
+			$cacheLocation, 
+			$customPath
+		);
 
-			// Generate HLS cache with adaptive bitrate ladder
-			$resolutions = $argument['resolutions'] ?? ['720p', '480p', '240p'];
-			$this->generateHlsCache($videoLocalPath, $cacheOutputPath, $filename, $overwriteExisting, $userId, $resolutions);
-
-			$this->logger->info('HLS cache generation completed', [
+		// Check if cache already exists and skip if not overwriting
+		if (!$overwriteExisting && $this->cacheAlreadyExists($userFolder, $cacheOutputPath)) {
+			$this->logger->info('HLS cache already exists, skipping generation', [
 				'jobId' => $jobId,
 				'filename' => $filename,
 				'cachePath' => $cacheOutputPath
@@ -101,6 +98,23 @@ class HlsCacheGenerationJob extends QueuedJob {
 			if ($notifyCompletion) {
 				$this->sendCompletionNotification($user, $filename, true);
 			}
+			return;
+		}
+
+		// Generate HLS cache with adaptive bitrate ladder
+		$resolutions = $argument['resolutions'] ?? ['720p', '480p', '240p'];
+		$this->generateHlsCache($videoLocalPath, $cacheOutputPath, $filename, $overwriteExisting, $userId, $resolutions);
+
+		$this->logger->info('HLS cache generation completed', [
+			'jobId' => $jobId,
+			'filename' => $filename,
+			'cachePath' => $cacheOutputPath
+		]);
+
+		// Send notification if requested
+		if ($notifyCompletion) {
+			$this->sendCompletionNotification($user, $filename, true);
+		}
 
 		} catch (\Exception $e) {
 			$this->logger->error('HLS cache generation failed', [
@@ -182,6 +196,12 @@ class HlsCacheGenerationJob extends QueuedJob {
 			throw new \Exception("Cannot access cache directory locally");
 		}
 
+		// Acquire FFmpeg concurrency lock with retry mechanism
+		$ffmpegLockId = $this->acquireFFmpegLock();
+		if ($ffmpegLockId === false) {
+			throw new \Exception("Failed to acquire FFmpeg concurrency lock after maximum retries");
+		}
+
 		// Generate adaptive bitrate HLS ladder with fallback
 		try {
 			$this->generateAdaptiveHls($videoLocalPath, $cacheLocalPath, $filename, $resolutions);
@@ -193,6 +213,9 @@ class HlsCacheGenerationJob extends QueuedJob {
 			
 			// Fallback to single bitrate (720p)
 			$this->generateSingleHls($videoLocalPath, $cacheLocalPath, $filename);
+		} finally {
+			// Always release the FFmpeg lock
+			$this->releaseFFmpegLock($ffmpegLockId);
 		}
 	}
 
@@ -814,6 +837,119 @@ class HlsCacheGenerationJob extends QueuedJob {
 				$progressData['status'] = 'processing';
 			}
 			file_put_contents($progressFile, json_encode($progressData, JSON_PRETTY_PRINT));
+		}
+	}
+
+	/**
+	 * Check if HLS cache already exists for the given path
+	 */
+	private function cacheAlreadyExists($userFolder, string $cacheOutputPath): bool {
+		try {
+			if ($userFolder->nodeExists($cacheOutputPath)) {
+				$cacheFolder = $userFolder->get($cacheOutputPath);
+				if ($cacheFolder instanceof \OCP\Files\Folder) {
+					// Check for master.m3u8 (adaptive streaming) or playlist.m3u8 (single bitrate)
+					return $cacheFolder->nodeExists('master.m3u8') || $cacheFolder->nodeExists('playlist.m3u8');
+				}
+			}
+		} catch (\Exception $e) {
+			$this->logger->debug('Error checking cache existence', ['error' => $e->getMessage()]);
+		}
+		return false;
+	}
+
+	/**
+	 * Acquire FFmpeg concurrency lock (max 4 simultaneous processes)
+	 */
+	private function acquireFFmpegLock(): string|false {
+		$lockDir = '/tmp/hyper_ffmpeg_locks';
+		$maxConcurrency = 4;
+		$maxRetries = 18; // 18 * 10 seconds = 3 minutes max wait
+		$retryDelay = 10; // seconds
+
+		// Create lock directory if it doesn't exist
+		if (!is_dir($lockDir)) {
+			mkdir($lockDir, 0755, true);
+		}
+
+		for ($attempt = 0; $attempt < $maxRetries; $attempt++) {
+			// Clean up stale locks (older than 4 hours)
+			$this->cleanupStaleLocks($lockDir);
+
+			// Count current active locks
+			$activeLocks = glob($lockDir . '/ffmpeg_*.lock');
+			$currentCount = count($activeLocks);
+
+			if ($currentCount < $maxConcurrency) {
+				// Create new lock
+				$lockId = uniqid('ffmpeg_' . getmypid() . '_', true);
+				$lockFile = $lockDir . '/' . $lockId . '.lock';
+				
+				$lockData = [
+					'pid' => getmypid(),
+					'startTime' => time(),
+					'hostname' => gethostname(),
+					'lockId' => $lockId
+				];
+
+				if (file_put_contents($lockFile, json_encode($lockData)) !== false) {
+					$this->logger->info('Acquired FFmpeg concurrency lock', [
+						'lockId' => $lockId,
+						'currentConcurrency' => $currentCount + 1,
+						'maxConcurrency' => $maxConcurrency
+					]);
+					return $lockId;
+				}
+			}
+
+			// Wait before retrying if we haven't reached max concurrency
+			if ($attempt < $maxRetries - 1) {
+				$this->logger->info('FFmpeg concurrency limit reached, waiting for slot', [
+					'currentConcurrency' => $currentCount,
+					'maxConcurrency' => $maxConcurrency,
+					'attempt' => $attempt + 1,
+					'waitTime' => $retryDelay
+				]);
+				sleep($retryDelay);
+			}
+		}
+
+		$this->logger->error('Failed to acquire FFmpeg lock after maximum retries', [
+			'maxRetries' => $maxRetries,
+			'totalWaitTime' => $maxRetries * $retryDelay
+		]);
+		return false;
+	}
+
+	/**
+	 * Release FFmpeg concurrency lock
+	 */
+	private function releaseFFmpegLock(string $lockId): void {
+		$lockDir = '/tmp/hyper_ffmpeg_locks';
+		$lockFile = $lockDir . '/' . $lockId . '.lock';
+
+		if (file_exists($lockFile)) {
+			unlink($lockFile);
+			$this->logger->info('Released FFmpeg concurrency lock', ['lockId' => $lockId]);
+		}
+	}
+
+	/**
+	 * Clean up stale FFmpeg locks (older than 4 hours)
+	 */
+	private function cleanupStaleLocks(string $lockDir): void {
+		$staleThreshold = time() - (4 * 3600); // 4 hours
+		$lockFiles = glob($lockDir . '/ffmpeg_*.lock');
+
+		foreach ($lockFiles as $lockFile) {
+			$mtime = filemtime($lockFile);
+			if ($mtime && $mtime < $staleThreshold) {
+				$this->logger->info('Removing stale FFmpeg lock', [
+					'lockFile' => basename($lockFile),
+					'age' => time() - $mtime
+				]);
+				unlink($lockFile);
+			}
 		}
 	}
 }
