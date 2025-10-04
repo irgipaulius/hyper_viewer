@@ -2121,86 +2121,11 @@ function loadShakaPlayer(filename, cachePath, context) {
 			});
 		});
 		
-		// Browse button functionality - Tiered file picker approach
+		// Browse button functionality - Enhanced directory selector with native picker fallback
 		exportModal.querySelector('#browse-location').addEventListener('click', () => {
-			// Fix z-index issues for file picker dialogs (add only once)
-			if (!document.getElementById('hyper-viewer-filepicker-zindex-fix')) {
-				const style = document.createElement('style');
-				style.id = 'hyper-viewer-filepicker-zindex-fix';
-				style.innerHTML = `
-					.oc-dialog { z-index: 999999 !important; }
-					.oc-dialog-dim { z-index: 999998 !important; }
-					.files-picker { z-index: 999999 !important; }
-					.files-picker .modal { z-index: 999999 !important; }
-				`;
-				document.head.appendChild(style);
-			}
-			
-			// Tier 1: Modern Files app picker (Nextcloud 25+)
-			if (window.OCA?.Files?.FilePicker) {
-				console.log('🎯 Using modern OCA.Files.FilePicker');
-				try {
-					const picker = new window.OCA.Files.FilePicker({
-						modal: true,
-						multiselect: false,
-						type: 'folder',
-						allowNewFolder: true,
-						allowDirectories: true,
-						enableUpload: false,
-						// Additional options for directory creation
-						buttons: [{
-							label: 'Create New Folder',
-							type: 'primary',
-							callback: () => {
-								// This should trigger the new folder creation
-								return true;
-							}
-						}]
-					});
-					
-					picker.open().then(items => {
-						// Handle both array and single item responses
-						const selected = Array.isArray(items) ? items[0] : items;
-						const path = selected?.path || selected;
-						if (path) {
-							exportModal.querySelector('#export-path').value = path;
-							console.log('📁 Selected export path (modern):', path);
-						}
-					}).catch(error => {
-						console.log('📁 File picker canceled or error:', error);
-					});
-					return;
-				} catch (error) {
-					console.warn('⚠️ Modern file picker failed:', error);
-				}
-			}
-			
-			// Tier 2: Legacy OC.dialogs.filepicker
-			if (window.OC?.dialogs?.filepicker) {
-				console.log('🎯 Using legacy OC.dialogs.filepicker');
-				try {
-					window.OC.dialogs.filepicker(
-						'Select Export Directory',
-						(pathOrArray) => {
-							// Handle both array and string responses
-							const path = Array.isArray(pathOrArray) ? pathOrArray[0] : pathOrArray;
-							if (path) {
-								exportModal.querySelector('#export-path').value = path;
-								console.log('📁 Selected export path (legacy):', path);
-							}
-						},
-						false, // multiselect
-						['httpd/unix-directory'], // directories only
-						true // modal
-					);
-					return;
-				} catch (error) {
-					console.warn('⚠️ Legacy file picker failed:', error);
-				}
-			}
-			
-			// Tier 3: Enhanced manual directory selector with creation option
-			console.log('🎯 Using enhanced manual directory selector');
+			// Show our enhanced directory selector directly (with create functionality)
+			// This provides the best UX since native pickers often don't support folder creation properly
+			console.log('🎯 Using enhanced directory selector with create functionality');
 			showEnhancedDirectorySelector(exportModal);
 		});
 		
