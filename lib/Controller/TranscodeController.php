@@ -47,7 +47,7 @@ class TranscodeController extends Controller {
 	 */
 	public function stream(): Response {
 		$path = $this->request->getParam('path');
-		$resolution = $this->request->getParam('resolution', '720p');
+		$resolution = $this->request->getParam('resolution', '240p');
 		
 		if (!$path) {
 			return new JSONResponse(['error' => 'Missing path parameter'], Http::STATUS_BAD_REQUEST);
@@ -248,23 +248,37 @@ class TranscodeController extends Controller {
 	 */
 	private function buildFFmpegCommand(string $inputPath, string $resolution): string {
 		$height = $this->getHeightFromResolution($resolution);
+		$bitrate = $this->getBitrateFromResolution($resolution);
 		
 		$cmd = [
 			'ffmpeg',
 			'-threads', '3',
+			'-fflags', '+genpts',
+			'-avoid_negative_ts', 'make_zero',
 			'-i', escapeshellarg($inputPath),
-			'-vf', "scale=-2:{$height}",
+			'-vf', "scale=-2:{$height}:flags=fast_bilinear",
 			'-preset', 'ultrafast',
 			'-tune', 'zerolatency',
 			'-c:v', 'libx264',
-			'-b:v', '2500k',
+			'-profile:v', 'baseline',
+			'-level', '3.0',
+			'-crf', '28',
+			'-maxrate', $bitrate,
+			'-bufsize', $this->getBufferSize($bitrate),
+			'-g', '30',
+			'-keyint_min', '30',
+			'-sc_threshold', '0',
 			'-c:a', 'aac',
 			'-b:a', '128k',
+			'-ac', '2',
+			'-ar', '44100',
 			'-f', 'mp4',
-			'-movflags', 'frag_keyframe+empty_moov',
+			'-movflags', 'frag_keyframe+empty_moov+default_base_moof',
+			'-frag_duration', '1000000',
+			'-min_frag_duration', '1000000',
 			'pipe:1'
 		];
-
+		
 		return implode(' ', $cmd);
 	}
 
@@ -281,9 +295,39 @@ class TranscodeController extends Controller {
 				return 480;
 			case '360p':
 				return 360;
+			case '240p':
+				return 240;
 			default:
-				return 720;
+				return 240; // Default to 240p
 		}
+	}
+
+	/**
+	 * Get bitrate from resolution string
+	 */
+	private function getBitrateFromResolution(string $resolution): string {
+		switch ($resolution) {
+			case '1080p':
+				return '4000k';
+			case '720p':
+				return '2500k';
+			case '480p':
+				return '1200k';
+			case '360p':
+				return '800k';
+			case '240p':
+				return '500k';
+			default:
+				return '500k'; // Default to 240p bitrate
+		}
+	}
+
+	/**
+	 * Get buffer size from bitrate (2x bitrate for good buffering)
+	 */
+	private function getBufferSize(string $bitrate): string {
+		$numeric = (int) str_replace('k', '', $bitrate);
+		return ($numeric * 2) . 'k';
 	}
 
 	/**

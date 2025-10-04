@@ -48,7 +48,7 @@ function initializeFilesIntegration() {
 	// Register "Play Live" action for MOV files (higher priority)
 	OCA.Files.fileActions.registerAction({
 		name: "playHlsMov",
-		displayName: t("hyper_viewer", "⚡ Play Live (720p)"),
+		displayName: t("hyper_viewer", "⚡ Play Live (240p)"),
 		mime: "video/quicktime",
 		permissions: OC.PERMISSION_READ,
 		iconClass: "icon-play",
@@ -1690,7 +1690,7 @@ async function playWithLiveTranscode(filename, directory, context) {
 		// Build the transcode URL
 		const filePath = directory === '/' ? `/${filename}` : `${directory}/${filename}`;
 		const transcodeUrl = OC.generateUrl('/apps/hyper_viewer/api/transcode') + 
-			`?path=${encodeURIComponent(filePath)}&resolution=720p`;
+			`?path=${encodeURIComponent(filePath)}&resolution=240p`;
 		
 		console.log(`🎬 Transcode URL: ${transcodeUrl}`);
 		
@@ -1735,7 +1735,7 @@ function loadLiveTranscodePlayer(filename, transcodeUrl, context) {
                 <span style="font-size: 1.2em;">⚡</span>
                 <div>
                     <h3 style="margin: 0; font-size: 1.1em; font-weight: 600;">${filename}</h3>
-                    <p style="margin: 0; font-size: 0.9em; opacity: 0.8;">Live Transcode - 720p Streaming</p>
+                    <p style="margin: 0; font-size: 0.9em; opacity: 0.8;">Live Transcode - 240p Streaming</p>
                 </div>
             </div>
             <button id="close-live-transcode" style="
