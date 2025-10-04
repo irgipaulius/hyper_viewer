@@ -581,9 +581,20 @@ class CacheController extends Controller {
 					$cacheFolder = $userFolder->get($cacheLocation);
 					if ($cacheFolder instanceof \OCP\Files\Folder) {
 						// Try to find the specific job directory using decoded filename
-						$jobDirName = pathinfo($decodedFilename, PATHINFO_FILENAME); // Remove extension
-						if ($cacheFolder->nodeExists($jobDirName)) {
-							$jobFolder = $cacheFolder->get($jobDirName);
+						// First try exact match (directory name matches filename exactly)
+						if ($cacheFolder->nodeExists($decodedFilename)) {
+							$jobFolder = $cacheFolder->get($decodedFilename);
+						} else {
+							// Fallback: try with extension removed (for files with extensions)
+							$jobDirName = pathinfo($decodedFilename, PATHINFO_FILENAME);
+							if ($cacheFolder->nodeExists($jobDirName)) {
+								$jobFolder = $cacheFolder->get($jobDirName);
+							} else {
+								continue; // Try next cache location
+							}
+						}
+						
+						if (isset($jobFolder)) {
 							if ($jobFolder instanceof \OCP\Files\Folder && $jobFolder->nodeExists('progress.json')) {
 								try {
 									$progressFile = $jobFolder->get('progress.json');
@@ -620,7 +631,18 @@ class CacheController extends Controller {
 				}
 			}
 
-			return new JSONResponse(['error' => 'Job not found or not active'], 404);
+			// Debug info: return what we searched for
+			$debugInfo = [
+				'error' => 'Job not found or not active',
+				'debug' => [
+					'originalFilename' => $filename,
+					'decodedFilename' => $decodedFilename,
+					'searchedLocations' => $cacheLocations,
+					'userId' => $user->getUID()
+				]
+			];
+			
+			return new JSONResponse($debugInfo, 404);
 
 		} catch (\Exception $e) {
 			$this->logger->error('Error getting job progress', ['error' => $e->getMessage(), 'filename' => $filename]);
