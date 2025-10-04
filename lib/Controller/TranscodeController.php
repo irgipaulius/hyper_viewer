@@ -134,6 +134,16 @@ class TranscodeController extends Controller {
      * @NoAdminRequired
      * @NoCSRFRequired
      */
+    public function testHello(): Response {
+        return new Response('Hello World - Controller is working!', Http::STATUS_OK, [
+            'Content-Type' => 'text/plain'
+        ]);
+    }
+
+    /**
+     * @NoAdminRequired
+     * @NoCSRFRequired
+     */
     public function testStream(string $id): Response {
         $tempFile = $this->tempDir . '/' . $id . '.mp4';
         
