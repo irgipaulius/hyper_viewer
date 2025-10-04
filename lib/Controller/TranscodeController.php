@@ -165,7 +165,20 @@ class TranscodeController extends Controller {
             return false;
         }
 
-        return file_exists($outputPath);
+        // Check if file exists and has reasonable size
+        if (!file_exists($outputPath)) {
+            $this->logger->error('FFmpeg completed but output file does not exist: ' . $outputPath, ['app' => 'hyper_viewer']);
+            return false;
+        }
+
+        $fileSize = filesize($outputPath);
+        if ($fileSize < 1024) { // Less than 1KB is probably an error
+            $this->logger->error('FFmpeg output file is too small (' . $fileSize . ' bytes): ' . $outputPath, ['app' => 'hyper_viewer']);
+            return false;
+        }
+
+        $this->logger->debug('FFmpeg transcoding successful. Output file size: ' . $fileSize . ' bytes', ['app' => 'hyper_viewer']);
+        return true;
     }
 
     private function handleRangeRequest(string $filePath, int $fileSize, string $rangeHeader): Response {
@@ -189,7 +202,7 @@ class TranscodeController extends Controller {
 
         $contentLength = $end - $start + 1;
 
-        // Read the requested range
+        // Read the exact range requested
         $handle = fopen($filePath, 'rb');
         if (!$handle) {
             $response = new Response();
@@ -201,13 +214,19 @@ class TranscodeController extends Controller {
         $content = fread($handle, $contentLength);
         fclose($handle);
 
+        if ($content === false) {
+            $response = new Response();
+            $response->setStatus(Http::STATUS_INTERNAL_SERVER_ERROR);
+            return $response;
+        }
+
         $response = new Response($content);
         $response->setStatus(Http::STATUS_PARTIAL_CONTENT);
         $response->addHeader('Content-Type', 'video/mp4');
         $response->addHeader('Accept-Ranges', 'bytes');
-        $response->addHeader('Content-Length', (string)$contentLength);
+        $response->addHeader('Content-Length', (string)strlen($content));
         $response->addHeader('Content-Range', 'bytes ' . $start . '-' . $end . '/' . $fileSize);
-        $response->addHeader('Cache-Control', 'no-cache');
+        $response->addHeader('Cache-Control', 'public, max-age=3600');
 
         return $response;
     }
