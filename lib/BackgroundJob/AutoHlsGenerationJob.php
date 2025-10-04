@@ -84,7 +84,7 @@ class AutoHlsGenerationJob extends TimedJob {
 		$allAppValues = $this->config->getAppKeys('hyper_viewer');
 
 		foreach ($allAppValues as $key) {
-			if (str_starts_with($key, 'auto_gen_')) {
+			if (strpos($key, 'auto_gen_') === 0) {
 				$settingsJson = $this->config->getAppValue('hyper_viewer', $key, '');
 				if (!empty($settingsJson)) {
 					$settings = json_decode($settingsJson, true);
@@ -203,7 +203,7 @@ class AutoHlsGenerationJob extends TimedJob {
 			} elseif ($node instanceof \OCP\Files\Folder) {
 				// Skip hidden directories and cache directories
 				$folderName = $node->getName();
-				if (!str_starts_with($folderName, '.')) {
+				if (strpos($folderName, '.') !== 0) {
 					$subPath = $basePath === '/' ? '/' . $folderName : $basePath . '/' . $folderName;
 					$this->scanForNewVideos($node, $subPath, $supportedMimes, $userFolder, $newFiles);
 				}

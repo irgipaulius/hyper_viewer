@@ -149,7 +149,7 @@ class HlsCacheGenerationJob extends QueuedJob {
 				}
 				// Ensure custom path ends with .cached_hls
 				$customPath = rtrim($customPath, '/');
-				if (!str_ends_with($customPath, '.cached_hls')) {
+				if (substr($customPath, -11) !== '.cached_hls') {
 					$customPath .= '/.cached_hls';
 				}
 				return $customPath . '/' . $baseFilename;

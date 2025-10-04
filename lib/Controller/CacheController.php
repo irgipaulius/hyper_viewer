@@ -422,7 +422,7 @@ class CacheController extends Controller {
 			} elseif ($node instanceof \OCP\Files\Folder) {
 				// Skip hidden directories and cache directories
 				$folderName = $node->getName();
-				if (!str_starts_with($folderName, '.')) {
+				if (strpos($folderName, '.') !== 0) {
 					$subPath = $basePath === '/' ? '/' . $folderName : $basePath . '/' . $folderName;
 					$this->scanFolderRecursively($node, $subPath, $supportedMimes, $videoFiles);
 				}
@@ -641,7 +641,7 @@ class CacheController extends Controller {
 			$allAppValues = $this->config->getAppKeys('hyper_viewer');
 
 			foreach ($allAppValues as $key) {
-				if (str_starts_with($key, 'auto_gen_')) {
+				if (strpos($key, 'auto_gen_') === 0) {
 					$settingsJson = $this->config->getAppValue('hyper_viewer', $key, '');
 					if (!empty($settingsJson)) {
 						$settings = json_decode($settingsJson, true);
@@ -800,7 +800,7 @@ class CacheController extends Controller {
 			// Count auto-generation directories
 			$allAppValues = $this->config->getAppKeys('hyper_viewer');
 			foreach ($allAppValues as $key) {
-				if (str_starts_with($key, 'auto_gen_')) {
+				if (strpos($key, 'auto_gen_') === 0) {
 					$settingsJson = $this->config->getAppValue('hyper_viewer', $key, '');
 					if (!empty($settingsJson)) {
 						$settings = json_decode($settingsJson, true);
