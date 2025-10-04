@@ -95,10 +95,13 @@ class TranscodeController extends Controller {
             // Start transcoding
             $this->logger->info('Starting 480p transcode for: ' . $path, ['app' => 'hyper_viewer']);
             
-            $success = $this->startTranscode($inputPath, $tempFile);
+            $transcodeResult = $this->startTranscode($inputPath, $tempFile);
             
-            if (!$success) {
-                return new JSONResponse(['error' => 'Transcoding failed'], Http::STATUS_INTERNAL_SERVER_ERROR);
+            if (!$transcodeResult['success']) {
+                return new JSONResponse([
+                    'error' => 'Transcoding failed',
+                    'debug' => $transcodeResult
+                ], Http::STATUS_INTERNAL_SERVER_ERROR);
             }
 
             $this->logger->info('Completed 480p transcode for: ' . $path, ['app' => 'hyper_viewer']);
@@ -108,7 +111,12 @@ class TranscodeController extends Controller {
                 'debug' => [
                     'fileSize' => filesize($tempFile),
                     'tempFile' => basename($tempFile),
-                    'cacheHit' => false
+                    'cacheHit' => false,
+                    'ffmpegOutput' => $transcodeResult['output'],
+                    'isValidMP4' => $this->isValidMP4File($tempFile),
+                    'fileExists' => file_exists($tempFile),
+                    'tempDir' => $this->tempDir,
+                    'returnCode' => $transcodeResult['returnCode']
                 ]
             ]);
 
@@ -189,7 +197,7 @@ class TranscodeController extends Controller {
         }
     }
 
-    private function startTranscode(string $inputPath, string $outputPath): bool {
+    private function startTranscode(string $inputPath, string $outputPath): array {
         // Escape shell arguments
         $input = escapeshellarg($inputPath);
         $output = escapeshellarg($outputPath);
@@ -219,36 +227,51 @@ class TranscodeController extends Controller {
         // Check if transcoding was actually successful (don't rely only on return code)
         $outputString = implode('\n', $output_lines);
         
+        $result = [
+            'success' => false,
+            'output' => $outputString,
+            'returnCode' => $return_code,
+            'fileExists' => file_exists($outputPath),
+            'fileSize' => file_exists($outputPath) ? filesize($outputPath) : 0,
+            'isValidMP4' => false,
+            'cmd' => $cmd
+        ];
+        
         if ($return_code !== 0) {
             // Check if it's actually successful despite non-zero return code
             if ($this->isFFmpegOutputSuccessful($outputString, $outputPath)) {
                 $this->logger->debug('FFmpeg returned non-zero code but output appears successful: ' . $return_code, ['app' => 'hyper_viewer']);
             } else {
                 $this->logger->error('FFmpeg failed with code ' . $return_code . ': ' . $outputString, ['app' => 'hyper_viewer']);
-                return false;
+                return $result;
             }
         }
 
         // Check if file exists and has reasonable size
         if (!file_exists($outputPath)) {
             $this->logger->error('FFmpeg completed but output file does not exist: ' . $outputPath, ['app' => 'hyper_viewer']);
-            return false;
+            return $result;
         }
 
         $fileSize = filesize($outputPath);
         if ($fileSize < 1024) { // Less than 1KB is probably an error
             $this->logger->error('FFmpeg output file is too small (' . $fileSize . ' bytes): ' . $outputPath, ['app' => 'hyper_viewer']);
-            return false;
+            return $result;
         }
 
         // Verify it's actually a valid MP4 file
         if (!$this->isValidMP4File($outputPath)) {
             $this->logger->error('FFmpeg output is not a valid MP4 file: ' . $outputPath, ['app' => 'hyper_viewer']);
-            return false;
+            return $result;
         }
 
         $this->logger->debug('FFmpeg transcoding successful. Output file size: ' . $fileSize . ' bytes', ['app' => 'hyper_viewer']);
-        return true;
+        
+        $result['success'] = true;
+        $result['fileSize'] = $fileSize;
+        $result['isValidMP4'] = true;
+        
+        return $result;
     }
 
     private function handleRangeRequest(string $filePath, int $fileSize, string $rangeHeader): Response {
