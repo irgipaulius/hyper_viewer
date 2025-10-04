@@ -889,8 +889,9 @@ class HlsCacheGenerationJob extends QueuedJob {
 
 	/**
 	 * Acquire FFmpeg concurrency lock (max 4 simultaneous processes)
+	 * @return string|false Lock ID on success, false on failure
 	 */
-	private function acquireFFmpegLock(): string|false {
+	private function acquireFFmpegLock() {
 		$lockDir = '/tmp/hyper_ffmpeg_locks';
 		$maxConcurrency = 4;
 		$maxRetries = 18; // 18 * 10 seconds = 3 minutes max wait
