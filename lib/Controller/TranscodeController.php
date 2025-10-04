@@ -145,8 +145,15 @@ class TranscodeController extends Controller {
 				$this->process = proc_open($this->ffmpegCmd, $descriptors, $pipes);
 				
 				if (!is_resource($this->process)) {
-					$this->logger->error("❌ Failed to start FFmpeg process", ['app' => 'hyper_viewer']);
-					echo "Error: Could not start transcoding process";
+					echo "Error: Could not start FFmpeg process";
+					return;
+				}
+				
+				// Test if FFmpeg actually started by checking process status
+				$status = proc_get_status($this->process);
+				if (!$status['running']) {
+					$error = stream_get_contents($pipes[2]);
+					echo "FFmpeg failed to start. Error: " . $error;
 					return;
 				}
 
@@ -250,34 +257,17 @@ class TranscodeController extends Controller {
 	 */
 	private function buildFFmpegCommand(string $inputPath, string $resolution): string {
 		$height = $this->getHeightFromResolution($resolution);
-		$bitrate = $this->getBitrateFromResolution($resolution);
 		
+		// Simplified command for debugging
 		$cmd = [
 			'ffmpeg',
-			'-threads', '3',
-			'-fflags', '+genpts',
-			'-avoid_negative_ts', 'make_zero',
 			'-i', escapeshellarg($inputPath),
-			'-vf', "scale=-2:{$height}:flags=fast_bilinear",
-			'-preset', 'ultrafast',
-			'-tune', 'zerolatency',
+			'-vf', "scale=-2:{$height}",
 			'-c:v', 'libx264',
-			'-profile:v', 'baseline',
-			'-level', '3.0',
-			'-crf', '28',
-			'-maxrate', $bitrate,
-			'-bufsize', $this->getBufferSize($bitrate),
-			'-g', '30',
-			'-keyint_min', '30',
-			'-sc_threshold', '0',
+			'-preset', 'ultrafast',
 			'-c:a', 'aac',
-			'-b:a', '128k',
-			'-ac', '2',
-			'-ar', '44100',
 			'-f', 'mp4',
-			'-movflags', 'frag_keyframe+empty_moov+default_base_moof',
-			'-frag_duration', '1000000',
-			'-min_frag_duration', '1000000',
+			'-movflags', 'frag_keyframe+empty_moov',
 			'pipe:1'
 		];
 		
