@@ -141,7 +141,7 @@ class TranscodeController extends Controller {
 
         // FFmpeg command for 480p ultrafast transcoding
         $cmd = sprintf(
-            'ffmpeg -y -threads 3 -i %s ' .
+            '/usr/local/bin/ffmpeg -y -threads 3 -i %s ' .
             '-vf "scale=-2:480:flags=fast_bilinear" ' .
             '-preset ultrafast -tune zerolatency ' .
             '-c:v libx264 -crf 30 ' .
