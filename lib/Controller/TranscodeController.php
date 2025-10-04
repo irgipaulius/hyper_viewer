@@ -16,13 +16,17 @@ use OCP\Files\NotFoundException;
 use OCP\Files\NotPermittedException;
 
 class TranscodeController extends Controller {
-    private IRootFolder $rootFolder;
-    private IUserSession $userSession;
-    private ILogger $logger;
-    private string $tempDir;
+    /** @var IRootFolder */
+    private $rootFolder;
+    /** @var IUserSession */
+    private $userSession;
+    /** @var ILogger */
+    private $logger;
+    /** @var string */
+    private $tempDir;
 
     public function __construct(
-        string $appName,
+        $appName,
         IRequest $request,
         IRootFolder $rootFolder,
         IUserSession $userSession,
@@ -43,7 +47,7 @@ class TranscodeController extends Controller {
     /**
      * @NoAdminRequired
      */
-    public function proxyTranscode(string $path, bool $force = false): JSONResponse {
+    public function proxyTranscode($path, $force = false) {
         try {
             $user = $this->userSession->getUser();
             if (!$user) {
@@ -134,7 +138,7 @@ class TranscodeController extends Controller {
      * @NoAdminRequired
      * @NoCSRFRequired
      */
-    public function testHello(): Response {
+    public function testHello() {
         return new Response('Hello World - Controller is working!', Http::STATUS_OK, [
             'Content-Type' => 'text/plain'
         ]);
@@ -144,7 +148,7 @@ class TranscodeController extends Controller {
      * @NoAdminRequired
      * @NoCSRFRequired
      */
-    public function testStream(string $id): Response {
+    public function testStream($id) {
         $tempFile = $this->tempDir . '/' . $id . '.mp4';
         
         $info = [
@@ -175,7 +179,7 @@ class TranscodeController extends Controller {
      * @NoAdminRequired
      * @NoCSRFRequired
      */
-    public function proxyStream(string $id): Response {
+    public function proxyStream($id) {
         try {
             $tempFile = $this->tempDir . '/' . $id . '.mp4';
             
@@ -207,7 +211,7 @@ class TranscodeController extends Controller {
         }
     }
 
-    private function startTranscode(string $inputPath, string $outputPath): array {
+    private function startTranscode($inputPath, $outputPath) {
         // Escape shell arguments
         $input = escapeshellarg($inputPath);
         $output = escapeshellarg($outputPath);
