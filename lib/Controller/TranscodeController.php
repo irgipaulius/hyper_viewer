@@ -8,7 +8,6 @@ use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\JSONResponse;
 use OCP\AppFramework\Http\Response;
-use OCP\AppFramework\Http\StreamResponse;
 use OCP\Files\IRootFolder;
 use OCP\IRequest;
 use OCP\IUserSession;
@@ -167,10 +166,10 @@ class TranscodeController extends Controller {
         return file_exists($outputPath);
     }
 
-    private function handleRangeRequest(string $filePath, int $fileSize, string $rangeHeader): StreamResponse {
+    private function handleRangeRequest(string $filePath, int $fileSize, string $rangeHeader): Response {
         // Parse Range header (e.g., "bytes=0-1023")
         if (!preg_match('/bytes=(\d+)-(\d*)/', $rangeHeader, $matches)) {
-            $response = new StreamResponse($filePath);
+            $response = new Response();
             $response->setStatus(Http::STATUS_REQUESTED_RANGE_NOT_SATISFIABLE);
             return $response;
         }
@@ -180,7 +179,7 @@ class TranscodeController extends Controller {
 
         // Validate range
         if ($start >= $fileSize || $end >= $fileSize || $start > $end) {
-            $response = new StreamResponse($filePath);
+            $response = new Response();
             $response->setStatus(Http::STATUS_REQUESTED_RANGE_NOT_SATISFIABLE);
             $response->addHeader('Content-Range', 'bytes */' . $fileSize);
             return $response;
@@ -188,7 +187,19 @@ class TranscodeController extends Controller {
 
         $contentLength = $end - $start + 1;
 
-        $response = new StreamResponse($filePath);
+        // Read the requested range
+        $handle = fopen($filePath, 'rb');
+        if (!$handle) {
+            $response = new Response();
+            $response->setStatus(Http::STATUS_INTERNAL_SERVER_ERROR);
+            return $response;
+        }
+
+        fseek($handle, $start);
+        $content = fread($handle, $contentLength);
+        fclose($handle);
+
+        $response = new Response($content);
         $response->setStatus(Http::STATUS_PARTIAL_CONTENT);
         $response->addHeader('Content-Type', 'video/mp4');
         $response->addHeader('Accept-Ranges', 'bytes');
@@ -196,29 +207,19 @@ class TranscodeController extends Controller {
         $response->addHeader('Content-Range', 'bytes ' . $start . '-' . $end . '/' . $fileSize);
         $response->addHeader('Cache-Control', 'no-cache');
 
-        // Set callback to stream the range
-        $response->setCallback(function() use ($filePath, $start, $contentLength) {
-            $handle = fopen($filePath, 'rb');
-            if ($handle) {
-                fseek($handle, $start);
-                $remaining = $contentLength;
-                while ($remaining > 0 && !feof($handle)) {
-                    $chunkSize = min(8192, $remaining);
-                    $chunk = fread($handle, $chunkSize);
-                    if ($chunk === false) break;
-                    echo $chunk;
-                    $remaining -= strlen($chunk);
-                    flush();
-                }
-                fclose($handle);
-            }
-        });
-
         return $response;
     }
 
-    private function serveFile(string $filePath, int $fileSize): StreamResponse {
-        $response = new StreamResponse($filePath);
+    private function serveFile(string $filePath, int $fileSize): Response {
+        // For large files, we should use streaming, but for now use simple response
+        $content = file_get_contents($filePath);
+        if ($content === false) {
+            $response = new Response();
+            $response->setStatus(Http::STATUS_INTERNAL_SERVER_ERROR);
+            return $response;
+        }
+
+        $response = new Response($content);
         $response->addHeader('Content-Type', 'video/mp4');
         $response->addHeader('Accept-Ranges', 'bytes');
         $response->addHeader('Content-Length', (string)$fileSize);
