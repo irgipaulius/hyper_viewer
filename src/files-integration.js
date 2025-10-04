@@ -81,7 +81,7 @@ function initializeFilesIntegration() {
 	// Register "Play with HLS" action for MP4 files (higher priority)
 	OCA.Files.fileActions.registerAction({
 		name: "playHlsMp4",
-		displayName: t("hyper_viewer", "Play with HLS"),
+		displayName: t("hyper_viewer", "> Play with HLS"),
 		mime: "video/mp4",
 		permissions: OC.PERMISSION_READ,
 		iconClass: "icon-play",
