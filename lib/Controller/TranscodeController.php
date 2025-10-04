@@ -43,7 +43,7 @@ class TranscodeController extends Controller {
     /**
      * @NoAdminRequired
      */
-    public function proxyTranscode(string $path): JSONResponse {
+    public function proxyTranscode(string $path, bool $force = false): JSONResponse {
         try {
             $user = $this->userSession->getUser();
             if (!$user) {
@@ -64,8 +64,8 @@ class TranscodeController extends Controller {
             $fileId = md5($user->getUID() . ':' . $path . ':' . $file->getMTime());
             $tempFile = $this->tempDir . '/' . $fileId . '.mp4';
 
-            // Check if already transcoded
-            if (file_exists($tempFile)) {
+            // Check if already transcoded (unless force is true)
+            if (!$force && file_exists($tempFile)) {
                 $this->logger->debug('Reusing cached transcode for: ' . $path, ['app' => 'hyper_viewer']);
                 return new JSONResponse([
                     'url' => '/apps/hyper_viewer/api/proxy-stream?id=' . $fileId,
@@ -75,6 +75,12 @@ class TranscodeController extends Controller {
                         'cacheHit' => true
                     ]
                 ]);
+            }
+            
+            // If forcing, delete existing file
+            if ($force && file_exists($tempFile)) {
+                unlink($tempFile);
+                $this->logger->debug('Deleted existing transcode due to force flag: ' . $path, ['app' => 'hyper_viewer']);
             }
 
             // Clean up old files (older than 2 hours)
@@ -210,9 +216,17 @@ class TranscodeController extends Controller {
         $return_code = 0;
         exec($cmd, $output_lines, $return_code);
 
+        // Check if transcoding was actually successful (don't rely only on return code)
+        $outputString = implode('\n', $output_lines);
+        
         if ($return_code !== 0) {
-            $this->logger->error('FFmpeg failed with code ' . $return_code . ': ' . implode('\n', $output_lines), ['app' => 'hyper_viewer']);
-            return false;
+            // Check if it's actually successful despite non-zero return code
+            if ($this->isFFmpegOutputSuccessful($outputString, $outputPath)) {
+                $this->logger->debug('FFmpeg returned non-zero code but output appears successful: ' . $return_code, ['app' => 'hyper_viewer']);
+            } else {
+                $this->logger->error('FFmpeg failed with code ' . $return_code . ': ' . $outputString, ['app' => 'hyper_viewer']);
+                return false;
+            }
         }
 
         // Check if file exists and has reasonable size
@@ -224,6 +238,12 @@ class TranscodeController extends Controller {
         $fileSize = filesize($outputPath);
         if ($fileSize < 1024) { // Less than 1KB is probably an error
             $this->logger->error('FFmpeg output file is too small (' . $fileSize . ' bytes): ' . $outputPath, ['app' => 'hyper_viewer']);
+            return false;
+        }
+
+        // Verify it's actually a valid MP4 file
+        if (!$this->isValidMP4File($outputPath)) {
+            $this->logger->error('FFmpeg output is not a valid MP4 file: ' . $outputPath, ['app' => 'hyper_viewer']);
             return false;
         }
 
@@ -308,6 +328,61 @@ class TranscodeController extends Controller {
         $response->addHeader('Content-Length', (string)$fileSize);
         $response->addHeader('Cache-Control', 'no-cache');
         return $response;
+    }
+
+    private function isFFmpegOutputSuccessful(string $output, string $outputPath): bool {
+        // Check for successful completion indicators
+        $successIndicators = [
+            'muxing overhead:',
+            'kb/s:',
+            'video:',
+            'audio:',
+            'global headers:'
+        ];
+        
+        foreach ($successIndicators as $indicator) {
+            if (strpos($output, $indicator) !== false) {
+                return true;
+            }
+        }
+        
+        // Check for error patterns
+        $errorPatterns = [
+            'No such file or directory',
+            'Permission denied',
+            'Invalid data found',
+            'Conversion failed',
+            'Error while',
+            'Unable to find'
+        ];
+        
+        foreach ($errorPatterns as $pattern) {
+            if (strpos($output, $pattern) !== false) {
+                return false;
+            }
+        }
+        
+        // If no clear success/error indicators, check file existence
+        return file_exists($outputPath);
+    }
+    
+    private function isValidMP4File(string $filePath): bool {
+        $handle = fopen($filePath, 'rb');
+        if (!$handle) {
+            return false;
+        }
+        
+        // Read first 32 bytes to check MP4 signature
+        $header = fread($handle, 32);
+        fclose($handle);
+        
+        if ($header === false || strlen($header) < 8) {
+            return false;
+        }
+        
+        // Check for MP4 file signature (ftyp box)
+        // MP4 files start with a box size (4 bytes) followed by "ftyp"
+        return strpos($header, 'ftyp') !== false;
     }
 
     private function cleanupOldFiles(): void {

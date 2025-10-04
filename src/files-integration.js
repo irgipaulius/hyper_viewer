@@ -1720,9 +1720,9 @@ async function playProgressive(filename, directory, context) {
 		// Get the full file path
 		const filePath = directory === "/" ? `/${filename}` : `${directory}/${filename}`;
 
-		// Call the proxy-transcode endpoint
+		// Call the proxy-transcode endpoint (force fresh transcode)
 		const response = await fetch(
-			OC.generateUrl("/apps/hyper_viewer/api/proxy-transcode") + `?path=${encodeURIComponent(filePath)}`,
+			OC.generateUrl("/apps/hyper_viewer/api/proxy-transcode") + `?path=${encodeURIComponent(filePath)}&force=1`,
 			{
 				method: "GET",
 				headers: {
@@ -1742,6 +1742,19 @@ async function playProgressive(filename, directory, context) {
 				console.log(`📊 Debug info:`, result.debug);
 				console.log(`📁 File size: ${result.debug.fileSize} bytes`);
 				console.log(`💾 Cache hit: ${result.debug.cacheHit}`);
+				
+				// Test the file directly
+				const testUrl = result.url.replace('/api/proxy-stream', '/api/test-stream');
+				console.log(`🔍 Test file info at: ${testUrl}`);
+				
+				fetch(testUrl)
+					.then(response => response.json())
+					.then(data => {
+						console.log(`📋 File test results:`, data);
+					})
+					.catch(error => {
+						console.error(`❌ File test failed:`, error);
+					});
 			}
 			// Create and show video modal with the transcoded URL
 			showProgressiveVideoModal(filename, result.url);
