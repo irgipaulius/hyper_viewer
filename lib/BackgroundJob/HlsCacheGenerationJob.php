@@ -254,6 +254,35 @@ class HlsCacheGenerationJob extends QueuedJob {
 		// Add flags to reduce file locking issues with WebDAV
 		$ffmpegCmd = '/usr/local/bin/ffmpeg -y -fflags +genpts -avoid_negative_ts make_zero -i ' . escapeshellarg($inputPath);
 		
+		// Detect input format and add format-specific optimization flags
+		$fileExtension = strtolower(pathinfo($inputPath, PATHINFO_EXTENSION));
+		
+		if ($fileExtension === 'mp4') {
+			// MP4-specific optimizations: corruption handling, frame rate stabilization, GOP structure
+			$ffmpegCmd .= ' -threads 2 -fflags +discardcorrupt -err_detect ignore_err -use_wallclock_as_timestamps 1 -vf fps=30 -g 180 -keyint_min 60';
+			$this->logger->info('Applied MP4-specific FFmpeg optimizations', [
+				'threads' => 2,
+				'corruption_handling' => true,
+				'fps_stabilization' => '30fps',
+				'gop_structure' => '180/60'
+			]);
+		} elseif ($fileExtension === 'mov') {
+			// MOV-specific optimizations: enhanced probing for complex QuickTime structures
+			$ffmpegCmd .= ' -threads 4 -probesize 50M -analyzeduration 100M';
+			$this->logger->info('Applied MOV-specific FFmpeg optimizations', [
+				'threads' => 4,
+				'probesize' => '50MB',
+				'analyzeduration' => '100MB'
+			]);
+		} else {
+			// Default optimizations for other formats
+			$ffmpegCmd .= ' -threads 2';
+			$this->logger->info('Applied default FFmpeg optimizations', [
+				'format' => $fileExtension,
+				'threads' => 2
+			]);
+		}
+		
 		// Map video and audio streams for each variant (separate audio per variant for FFmpeg 4.4.x)
 		$streamIndex = 0;
 		foreach ($variants as $name => $variant) {
