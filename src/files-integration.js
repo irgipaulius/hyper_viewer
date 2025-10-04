@@ -1755,7 +1755,6 @@ function loadLiveTranscodePlayer(filename, transcodeUrl, context) {
                    preload="none"
                    style="width: 100%; height: auto; display: block; background: #000;"
                    poster="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect fill='%23000'/%3E%3Ctext x='50' y='50' text-anchor='middle' fill='%23fff' font-size='8'%3E⚡ Loading...%3C/text%3E%3C/svg%3E">
-                <source src="${transcodeUrl}" type="video/mp4">
                 Your browser does not support the video tag.
             </video>
             
@@ -1839,7 +1838,8 @@ function loadLiveTranscodePlayer(filename, transcodeUrl, context) {
 	// Prevent body scrolling
 	document.body.style.overflow = 'hidden';
 
-	// Start loading the video
+	// Set the video source and start loading
+	video.src = transcodeUrl;
 	video.load();
 }
 
