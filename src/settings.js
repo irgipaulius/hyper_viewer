@@ -42,8 +42,6 @@ document.addEventListener('DOMContentLoaded', function() {
 		}
 	})
 
-	// Prototype features
-	initializePrototypeFeatures()
 })
 
 /**
@@ -98,93 +96,4 @@ function saveCacheSettings() {
 			console.error('❌ Error saving cache settings:', error)
 			OC.Notification.showTemporary('Error saving cache locations', { type: 'error' })
 		})
-}
-
-/**
- * Initialize prototype features
- */
-function initializePrototypeFeatures() {
-	const liveTranscodeToggle = document.getElementById('live-transcode-enabled')
-	const transcodeStatus = document.getElementById('transcode-status')
-	
-	if (!liveTranscodeToggle) return
-
-	// Load saved setting
-	const savedSetting = localStorage.getItem('hyper_viewer_live_transcode_enabled')
-	if (savedSetting === 'true') {
-		liveTranscodeToggle.checked = true
-		showTranscodeStatus()
-	}
-
-	// Handle toggle changes
-	liveTranscodeToggle.addEventListener('change', function() {
-		console.log('⚡ Live transcode toggle changed:', this.checked)
-		localStorage.setItem('hyper_viewer_live_transcode_enabled', this.checked.toString())
-		
-		if (this.checked) {
-			showTranscodeStatus()
-			updateTranscodeStatus()
-		} else {
-			transcodeStatus.style.display = 'none'
-		}
-		
-		// Show notification
-		const message = this.checked ? 
-			'Live transcode mode enabled - .MOV files will stream on-the-fly' : 
-			'Live transcode mode disabled - using standard HLS cache'
-		OC.Notification.showTemporary(message)
-	})
-
-	// Update status periodically when enabled
-	if (liveTranscodeToggle.checked) {
-		setInterval(updateTranscodeStatus, 5000)
-	}
-}
-
-/**
- * Show transcode status section
- */
-function showTranscodeStatus() {
-	const transcodeStatus = document.getElementById('transcode-status')
-	if (transcodeStatus) {
-		transcodeStatus.style.display = 'block'
-	}
-}
-
-/**
- * Update transcode status
- */
-function updateTranscodeStatus() {
-	fetch(OC.generateUrl('/apps/hyper_viewer/api/transcode/status'), {
-		method: 'GET',
-		headers: {
-			requesttoken: OC.requestToken
-		}
-	})
-	.then(response => response.json())
-	.then(data => {
-		const statusText = document.getElementById('status-text')
-		const activeProcesses = document.getElementById('active-processes')
-		const maxProcesses = document.getElementById('max-processes')
-		
-		if (statusText) {
-			statusText.textContent = data.active_processes > 0 ? 'Active' : 'Idle'
-		}
-		if (activeProcesses) {
-			activeProcesses.textContent = data.active_processes || 0
-		}
-		if (maxProcesses) {
-			maxProcesses.textContent = data.max_processes || 1
-		}
-	})
-	.catch(error => {
-		console.warn('⚠️ Could not fetch transcode status:', error)
-	})
-}
-
-/**
- * Check if live transcode mode is enabled
- */
-window.isLiveTranscodeEnabled = function() {
-	return localStorage.getItem('hyper_viewer_live_transcode_enabled') === 'true'
 }

@@ -45,10 +45,10 @@ function initializeFilesIntegration() {
 		}
 	});
 
-	// Register "Play with HLS" action for MOV files (higher priority)
+	// Register "Play Live" action for MOV files (higher priority)
 	OCA.Files.fileActions.registerAction({
 		name: "playHlsMov",
-		displayName: t("hyper_viewer", "Play with HLS"),
+		displayName: t("hyper_viewer", "⚡ Play Live (720p)"),
 		mime: "video/quicktime",
 		permissions: OC.PERMISSION_READ,
 		iconClass: "icon-play",
@@ -57,11 +57,9 @@ function initializeFilesIntegration() {
 			const directory =
 				context?.dir || context?.fileList?.getCurrentDirectory() || "/";
 			
-			// Check if live transcode mode is enabled
-			const isLiveTranscodeEnabled = window.isLiveTranscodeEnabled && window.isLiveTranscodeEnabled();
-			
-			if (isLiveTranscodeEnabled && filename.toLowerCase().endsWith('.mov')) {
-				console.log('⚡ Starting live transcode for:', filename);
+			// Always try live transcoding for .MOV files first
+			if (filename.toLowerCase().endsWith('.mov')) {
+				console.log('⚡ Starting live transcode for .MOV file:', filename);
 				await playWithLiveTranscode(filename, directory, context);
 			} else {
 				await playWithHls(filename, directory, context);
