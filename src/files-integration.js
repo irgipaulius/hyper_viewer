@@ -2121,37 +2121,68 @@ function loadShakaPlayer(filename, cachePath, context) {
 			});
 		});
 		
-		// Browse button functionality - Use Nextcloud's file picker with proper error handling
+		// Browse button functionality - Tiered file picker approach
 		exportModal.querySelector('#browse-location').addEventListener('click', () => {
-			try {
-				// Check if OC.dialogs is available
-				if (window.OC && window.OC.dialogs && typeof window.OC.dialogs.filepicker === 'function') {
+			// Tier 1: Modern Files app picker (Nextcloud 25+)
+			if (window.OCA?.Files?.FilePicker) {
+				console.log('🎯 Using modern OCA.Files.FilePicker');
+				try {
+					const picker = new window.OCA.Files.FilePicker({
+						modal: true,
+						multiselect: false,
+						type: 'folder',
+						allowNewFolder: true
+					});
+					
+					picker.open().then(items => {
+						// Handle both array and single item responses
+						const selected = Array.isArray(items) ? items[0] : items;
+						const path = selected?.path || selected;
+						if (path) {
+							exportModal.querySelector('#export-path').value = path;
+							console.log('📁 Selected export path (modern):', path);
+						}
+					}).catch(error => {
+						console.log('📁 File picker canceled or error:', error);
+					});
+					return;
+				} catch (error) {
+					console.warn('⚠️ Modern file picker failed:', error);
+				}
+			}
+			
+			// Tier 2: Legacy OC.dialogs.filepicker
+			if (window.OC?.dialogs?.filepicker) {
+				console.log('🎯 Using legacy OC.dialogs.filepicker');
+				try {
 					window.OC.dialogs.filepicker(
 						'Select Export Directory',
-						(path) => {
+						(pathOrArray) => {
+							// Handle both array and string responses
+							const path = Array.isArray(pathOrArray) ? pathOrArray[0] : pathOrArray;
 							if (path) {
 								exportModal.querySelector('#export-path').value = path;
-								console.log('📁 Selected export path:', path);
+								console.log('📁 Selected export path (legacy):', path);
 							}
 						},
 						false, // multiselect
-						['httpd/unix-directory'], // mime types (directories only)
+						['httpd/unix-directory'], // directories only
 						true // modal
 					);
-				} else {
-					throw new Error('OC.dialogs.filepicker not available');
+					return;
+				} catch (error) {
+					console.warn('⚠️ Legacy file picker failed:', error);
 				}
-			} catch (error) {
-				console.warn('⚠️ File picker not available, using fallback:', error.message);
-				
-				// Fallback to simple input dialog
-				const currentPath = exportModal.querySelector('#export-path').value || '/';
-				const path = prompt('Enter export directory path (e.g., /Documents/Videos):', currentPath);
-				if (path && path.trim()) {
-					const normalizedPath = path.trim().startsWith('/') ? path.trim() : '/' + path.trim();
-					exportModal.querySelector('#export-path').value = normalizedPath;
-					console.log('📁 Manual export path set:', normalizedPath);
-				}
+			}
+			
+			// Tier 3: Manual input fallback
+			console.log('🎯 Using manual input fallback');
+			const currentPath = exportModal.querySelector('#export-path').value || '/';
+			const manualPath = prompt('Enter export directory path (e.g., /Documents/Videos):', currentPath);
+			if (manualPath && manualPath.trim()) {
+				const normalizedPath = manualPath.trim().startsWith('/') ? manualPath.trim() : '/' + manualPath.trim();
+				exportModal.querySelector('#export-path').value = normalizedPath;
+				console.log('📁 Manual export path set:', normalizedPath);
 			}
 		});
 		

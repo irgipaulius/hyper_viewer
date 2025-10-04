@@ -24,6 +24,12 @@ class PageController extends Controller {
 	public function index(): TemplateResponse {
 		Util::addScript($this->appName, 'hyper_viewer-main');
 		Util::addStyle($this->appName, 'icons');
+		
+		// Load file picker assets for export functionality
+		Util::addScript('core', 'oc-dialogs');
+		Util::addScript('files', 'filepicker');
+		Util::addStyle('files', 'filepicker');
+		
 		return new TemplateResponse($this->appName, 'main');
 	}
 }
