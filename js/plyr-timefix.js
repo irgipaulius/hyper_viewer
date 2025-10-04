@@ -186,26 +186,256 @@
     }
 
     /**
+     * Detect if we're running inside the Nextcloud Viewer iframe
+     */
+    function isInsideViewerIframe() {
+        try {
+            return window.self !== window.top && 
+                   (window.location.href.includes('/apps/viewer/') || 
+                    window.location.pathname.includes('/apps/viewer/'));
+        } catch (e) {
+            // Cross-origin iframe access denied
+            return true;
+        }
+    }
+
+    /**
+     * Inject the time fix into a viewer iframe
+     */
+    function injectIntoViewerIframe(iframe) {
+        try {
+            const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+            
+            // Check if already injected
+            if (iframeDoc.getElementById('hyper-viewer-plyr-timefix-injected')) {
+                return;
+            }
+
+            console.log('🎬 Injecting Plyr Time Fix into viewer iframe');
+
+            // Create a script element with our time fix logic
+            const script = iframeDoc.createElement('script');
+            script.id = 'hyper-viewer-plyr-timefix-injected';
+            script.textContent = `
+                (function() {
+                    console.info('[HyperViewer] Plyr TimeFix active in viewer iframe');
+                    
+                    // Copy the time fix functions into the iframe context
+                    ${formatTime.toString()}
+                    ${customizePlayerTimeDisplay.toString()}
+                    ${initializeExistingPlayers.toString()}
+                    ${setupMutationObserver.toString()}
+                    
+                    // Initialize in iframe context
+                    function initializeInIframe() {
+                        console.log('⏰ Initializing Plyr Time Fix in viewer iframe...');
+                        
+                        // Wait for Plyr to be available
+                        function waitForPlyr() {
+                            if (window.Plyr || document.querySelector('.plyr__controls')) {
+                                console.log('✅ Plyr detected in iframe, starting customization');
+                                initializeExistingPlayers();
+                                setupMutationObserver();
+                            } else {
+                                setTimeout(waitForPlyr, 500);
+                            }
+                        }
+                        
+                        if (document.readyState === 'loading') {
+                            document.addEventListener('DOMContentLoaded', waitForPlyr);
+                        } else {
+                            waitForPlyr();
+                        }
+                        
+                        // Also check after window load
+                        window.addEventListener('load', () => {
+                            setTimeout(() => {
+                                initializeExistingPlayers();
+                            }, 1000);
+                        });
+                    }
+                    
+                    initializeInIframe();
+                })();
+            `;
+
+            // Inject CSS styles
+            const style = iframeDoc.createElement('style');
+            style.textContent = `
+                /* Custom time display container */
+                .plyr__time--custom {
+                    display: flex !important;
+                    align-items: center;
+                    font-variant-numeric: tabular-nums;
+                    font-size: inherit;
+                    line-height: inherit;
+                    color: inherit;
+                }
+
+                /* Current time styling */
+                .plyr__time-current {
+                    font-weight: 500;
+                    color: inherit;
+                }
+
+                /* Time divider styling */
+                .plyr__time-divider {
+                    opacity: 0.7;
+                    margin: 0 3px;
+                    font-weight: 400;
+                    color: inherit;
+                    user-select: none;
+                    transition: opacity 0.2s ease;
+                }
+
+                /* Duration styling */
+                .plyr__time-duration {
+                    font-weight: 400;
+                    opacity: 0.9;
+                    color: inherit;
+                }
+
+                /* Hide original remaining time element globally */
+                .plyr__time--remaining {
+                    display: none !important;
+                }
+
+                /* Hover effects */
+                .plyr__controls:hover .plyr__time-divider {
+                    opacity: 0.8;
+                }
+            `;
+
+            // Inject into iframe
+            iframeDoc.head.appendChild(style);
+            iframeDoc.head.appendChild(script);
+
+            console.log('✅ Plyr Time Fix injected into viewer iframe successfully');
+        } catch (error) {
+            console.warn('⚠️ Failed to inject Plyr Time Fix into iframe:', error);
+        }
+    }
+
+    /**
+     * Watch for viewer iframes and inject time fix
+     */
+    function watchForViewerIframes() {
+        console.log('👀 Watching for Nextcloud Viewer iframes...');
+
+        // Check for existing viewer iframes
+        function checkExistingIframes() {
+            const viewerIframes = document.querySelectorAll('iframe[src*="/apps/viewer/"], iframe[src*="viewer"]');
+            viewerIframes.forEach(iframe => {
+                if (iframe.contentDocument || iframe.contentWindow) {
+                    // Wait for iframe to load
+                    if (iframe.contentDocument && iframe.contentDocument.readyState === 'complete') {
+                        injectIntoViewerIframe(iframe);
+                    } else {
+                        iframe.addEventListener('load', () => {
+                            setTimeout(() => injectIntoViewerIframe(iframe), 500);
+                        });
+                    }
+                }
+            });
+        }
+
+        // Check immediately
+        checkExistingIframes();
+
+        // Set up mutation observer for new iframes
+        const observer = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+                mutation.addedNodes.forEach((node) => {
+                    if (node.nodeType === Node.ELEMENT_NODE) {
+                        // Check if the added node is a viewer iframe
+                        if (node.tagName === 'IFRAME' && 
+                            (node.src.includes('/apps/viewer/') || node.src.includes('viewer'))) {
+                            console.log('🎬 New viewer iframe detected');
+                            node.addEventListener('load', () => {
+                                setTimeout(() => injectIntoViewerIframe(node), 500);
+                            });
+                        }
+
+                        // Check for viewer iframes within the added node
+                        const iframes = node.querySelectorAll ? 
+                            node.querySelectorAll('iframe[src*="/apps/viewer/"], iframe[src*="viewer"]') : [];
+                        iframes.forEach(iframe => {
+                            console.log('🎬 New viewer iframe found within added node');
+                            iframe.addEventListener('load', () => {
+                                setTimeout(() => injectIntoViewerIframe(iframe), 500);
+                            });
+                        });
+                    }
+                });
+            });
+        });
+
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
+
+        // Also check periodically in case we miss something
+        setInterval(checkExistingIframes, 5000);
+    }
+
+    /**
      * Initialize the Plyr time fix
      */
     function initialize() {
         console.log('⏰ Initializing Plyr Time Fix...');
 
-        // Wait for DOM to be ready
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', () => {
-                initializeExistingPlayers();
-                setupMutationObserver();
+        if (isInsideViewerIframe()) {
+            // We're inside the viewer iframe - run customization directly
+            console.info('[HyperViewer] Plyr TimeFix active in viewer iframe');
+            
+            function waitForPlyr() {
+                if (window.Plyr || document.querySelector('.plyr__controls')) {
+                    console.log('✅ Plyr detected in iframe, starting customization');
+                    initializeExistingPlayers();
+                    setupMutationObserver();
+                } else {
+                    setTimeout(waitForPlyr, 500);
+                }
+            }
+
+            // Wait for DOM to be ready
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', waitForPlyr);
+            } else {
+                waitForPlyr();
+            }
+
+            // Also listen for window load
+            window.addEventListener('load', () => {
+                setTimeout(initializeExistingPlayers, 1000);
             });
         } else {
-            initializeExistingPlayers();
-            setupMutationObserver();
-        }
+            // We're in the main Files app - watch for viewer iframes
+            console.log('📁 Running in main Files app, watching for viewer iframes');
+            
+            // Wait for DOM to be ready
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', () => {
+                    watchForViewerIframes();
+                    // Also initialize for any Plyr players in the main app
+                    initializeExistingPlayers();
+                    setupMutationObserver();
+                });
+            } else {
+                watchForViewerIframes();
+                initializeExistingPlayers();
+                setupMutationObserver();
+            }
 
-        // Also listen for window load in case some players are initialized later
-        window.addEventListener('load', () => {
-            setTimeout(initializeExistingPlayers, 2000);
-        });
+            // Also listen for window load
+            window.addEventListener('load', () => {
+                setTimeout(() => {
+                    watchForViewerIframes();
+                    initializeExistingPlayers();
+                }, 2000);
+            });
+        }
     }
 
     // Start the initialization
