@@ -2121,12 +2121,38 @@ function loadShakaPlayer(filename, cachePath, context) {
 			});
 		});
 		
-		// Browse button functionality
+		// Browse button functionality - Use Nextcloud's file picker with proper error handling
 		exportModal.querySelector('#browse-location').addEventListener('click', () => {
-			// Use Nextcloud's file picker
-			OC.dialogs.filepicker('Select Export Directory', (path) => {
-				exportModal.querySelector('#export-path').value = path;
-			}, false, ['httpd/unix-directory'], true);
+			try {
+				// Check if OC.dialogs is available
+				if (window.OC && window.OC.dialogs && typeof window.OC.dialogs.filepicker === 'function') {
+					window.OC.dialogs.filepicker(
+						'Select Export Directory',
+						(path) => {
+							if (path) {
+								exportModal.querySelector('#export-path').value = path;
+								console.log('📁 Selected export path:', path);
+							}
+						},
+						false, // multiselect
+						['httpd/unix-directory'], // mime types (directories only)
+						true // modal
+					);
+				} else {
+					throw new Error('OC.dialogs.filepicker not available');
+				}
+			} catch (error) {
+				console.warn('⚠️ File picker not available, using fallback:', error.message);
+				
+				// Fallback to simple input dialog
+				const currentPath = exportModal.querySelector('#export-path').value || '/';
+				const path = prompt('Enter export directory path (e.g., /Documents/Videos):', currentPath);
+				if (path && path.trim()) {
+					const normalizedPath = path.trim().startsWith('/') ? path.trim() : '/' + path.trim();
+					exportModal.querySelector('#export-path').value = normalizedPath;
+					console.log('📁 Manual export path set:', normalizedPath);
+				}
+			}
 		});
 		
 		exportModal.querySelector('#confirm-export').addEventListener('click', () => {

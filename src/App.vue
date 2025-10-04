@@ -55,7 +55,7 @@
 					</div>
 				</div>
 			</div>
-			<div class="stat-card">
+			<div class="stat-card clickable" @click="toggleCompletedJobs">
 				<div class="stat-icon">
 					✅
 				</div>
@@ -65,6 +65,7 @@
 					</div>
 					<div class="stat-label">
 						Completed
+						<span class="toggle-indicator">{{ showCompletedJobs ? '▼' : '▶' }}</span>
 					</div>
 				</div>
 			</div>
@@ -79,6 +80,23 @@
 					<div class="stat-label">
 						Pending
 					</div>
+				</div>
+			</div>
+		</div>
+
+		<!-- Completed Jobs List (Collapsible) -->
+		<div v-if="showCompletedJobs && statistics.completedJobFilenames && statistics.completedJobFilenames.length > 0" class="completed-jobs-section">
+			<div class="completed-jobs-header">
+				<h3>✅ Completed Jobs ({{ statistics.completedJobFilenames.length }})</h3>
+				<button @click="showCompletedJobs = false" class="close-btn">✕</button>
+			</div>
+			<div class="completed-jobs-list">
+				<div 
+					v-for="filename in statistics.completedJobFilenames" 
+					:key="filename"
+					class="completed-job-item"
+					:title="filename">
+					{{ filename }}
 				</div>
 			</div>
 		</div>
@@ -187,13 +205,15 @@ export default {
 			statistics: {
 				activeJobs: 0,
 				completedJobs: 0,
-				pendingJobs: 0
+				pendingJobs: 0,
+				completedJobFilenames: []
 			},
 			lastRefresh: 'Never',
 			refreshInterval: null,
 			statsInterval: null,
 			isPollingActive: false, // Track if centralized polling is running
-			showBackToTop: false
+			showBackToTop: false,
+			showCompletedJobs: false
 		}
 	},
 	async mounted() {
@@ -454,6 +474,10 @@ export default {
 			})
 		},
 
+		toggleCompletedJobs() {
+			this.showCompletedJobs = !this.showCompletedJobs
+		},
+
 		scrollToSection(sectionId) {
 			const element = document.getElementById(sectionId)
 			if (element) {
@@ -596,6 +620,121 @@ export default {
 	font-size: 0.9em;
 	text-transform: uppercase;
 	letter-spacing: 0.5px;
+	position: relative;
+}
+
+.stat-card.clickable {
+	cursor: pointer;
+}
+
+.stat-card.clickable:hover {
+	background: #f8f9fa;
+}
+
+.toggle-indicator {
+	margin-left: 8px;
+	font-size: 0.8em;
+	color: #999;
+	transition: transform 0.2s ease;
+}
+
+/* Completed Jobs Section */
+.completed-jobs-section {
+	background: white;
+	border-radius: 12px;
+	box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+	margin-bottom: 30px;
+	overflow: hidden;
+	animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+	from {
+		opacity: 0;
+		transform: translateY(-10px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+.completed-jobs-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 20px;
+	background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+	color: white;
+}
+
+.completed-jobs-header h3 {
+	margin: 0;
+	font-size: 1.3em;
+	font-weight: 600;
+}
+
+.close-btn {
+	background: rgba(255, 255, 255, 0.2);
+	border: none;
+	color: white;
+	width: 30px;
+	height: 30px;
+	border-radius: 50%;
+	cursor: pointer;
+	font-size: 16px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	transition: background 0.2s ease;
+}
+
+.close-btn:hover {
+	background: rgba(255, 255, 255, 0.3);
+}
+
+.completed-jobs-list {
+	max-height: 400px;
+	overflow-y: auto;
+	padding: 0;
+}
+
+.completed-job-item {
+	padding: 12px 20px;
+	border-bottom: 1px solid #f0f0f0;
+	font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+	font-size: 0.9em;
+	color: #333;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	transition: background 0.2s ease;
+}
+
+.completed-job-item:hover {
+	background: #f8f9fa;
+}
+
+.completed-job-item:last-child {
+	border-bottom: none;
+}
+
+/* Custom scrollbar for completed jobs list */
+.completed-jobs-list::-webkit-scrollbar {
+	width: 8px;
+}
+
+.completed-jobs-list::-webkit-scrollbar-track {
+	background: #f1f1f1;
+}
+
+.completed-jobs-list::-webkit-scrollbar-thumb {
+	background: #c1c1c1;
+	border-radius: 4px;
+}
+
+.completed-jobs-list::-webkit-scrollbar-thumb:hover {
+	background: #a8a8a8;
 }
 
 /* Sections */

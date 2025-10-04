@@ -886,6 +886,13 @@ class CacheController extends Controller {
 			
 			$stats['completedJobs'] = count($completedDirs);
 			
+			// Extract completed job filenames from directory names
+			$completedFilenames = [];
+			foreach (array_keys($completedDirs) as $dirPath) {
+				$completedFilenames[] = basename($dirPath);
+			}
+			$stats['completedJobFilenames'] = $completedFilenames;
+			
 			// Calculate pending jobs: totalJobs - completedJobs
 			$stats['pendingJobs'] = $stats['totalJobs'] - $stats['completedJobs'];
 			
