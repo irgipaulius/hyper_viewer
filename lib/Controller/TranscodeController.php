@@ -203,9 +203,9 @@ class TranscodeController extends Controller {
                 exit;
             }
             
-            // Wait for file to have some content (at least 1KB)
-            $minSize = 1024;
-            $maxContentWait = 30; // Increased to 30 seconds
+            // Wait for file to have some content (even just a few bytes)
+            $minSize = 100; // Reduced to 100 bytes - just need some data
+            $maxContentWait = 10; // Reduced wait time
             $contentWaited = 0;
             
             while (filesize($tempFile) < $minSize && $contentWaited < $maxContentWait) {
@@ -213,16 +213,15 @@ class TranscodeController extends Controller {
                 $contentWaited += $waitInterval;
             }
             
-            // If still no content after waiting, return helpful error
+            // Start streaming even with small files - progressive streaming will handle it
             $currentSize = filesize($tempFile);
-            if ($currentSize < $minSize) {
+            if ($currentSize == 0) {
                 header('HTTP/1.1 202 Accepted');
-                header('X-Debug-Error: Transcoding in progress, file too small');
+                header('X-Debug-Error: Transcoding starting, no data yet');
                 header('X-Debug-Current-Size: ' . $currentSize);
-                header('X-Debug-Min-Size-Required: ' . $minSize);
                 header('X-Debug-Content-Wait-Time: ' . $contentWaited . 's');
                 header('X-Debug-Suggestion: Please wait and try again in a few seconds');
-                header('Retry-After: 5');
+                header('Retry-After: 3');
                 exit;
             }
 
@@ -270,8 +269,8 @@ class TranscodeController extends Controller {
             '-profile:v baseline -level 3.0 -pix_fmt yuv420p ' .
             '-crf 28 -maxrate 1200k -bufsize 2400k ' .
             '-c:a aac -b:a 128k -ar 44100 ' .
-            '-movflags +frag_keyframe+empty_moov+default_base_moof ' .
-            '-frag_duration 2000000 -min_frag_duration 1000000 ' .
+            '-movflags +frag_keyframe+empty_moov+default_base_moof+frag_every_frame ' .
+            '-frag_duration 1000000 -min_frag_duration 500000 ' .
             '-f mp4 %s > %s 2>&1 &',
             escapeshellarg($inputPath),
             escapeshellarg($outputPath),
@@ -499,7 +498,7 @@ class TranscodeController extends Controller {
         return $fileAge < 300; // Consider active if modified within 5 minutes
     }
     
-    private function streamProgressiveFile(string $filePath): Response {
+    private function streamProgressiveFile(string $filePath): void {
         // Clear any output buffering
         @ob_end_clean();
         
@@ -519,9 +518,10 @@ class TranscodeController extends Controller {
         }
         
         $position = 0;
-        $chunkSize = 8192;
+        $chunkSize = 16384; // Increased chunk size for better performance
         $maxWaitTime = 300; // 5 minutes max
         $startTime = time();
+        $lastDataTime = time();
         
         while (time() - $startTime < $maxWaitTime) {
             // Get current file size
@@ -541,6 +541,7 @@ class TranscodeController extends Controller {
                     flush();
                     
                     $position += strlen($chunk);
+                    $lastDataTime = time();
                 }
             } else {
                 // Check if transcoding is complete
@@ -548,8 +549,13 @@ class TranscodeController extends Controller {
                     break; // Transcoding finished
                 }
                 
-                // Wait a bit for more data
-                usleep(500000); // 500ms
+                // If no new data for 30 seconds, might be stalled
+                if (time() - $lastDataTime > 30) {
+                    break;
+                }
+                
+                // Wait less time for more responsive streaming
+                usleep(250000); // 250ms - more responsive
             }
             
             // Check if client disconnected
