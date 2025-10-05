@@ -219,6 +219,13 @@ class TranscodeController extends Controller {
             $fileSize = filesize($tempFile);
             $rangeHeader = $this->request->getHeader('Range');
 
+            // Add debug headers for troubleshooting
+            header('X-Debug-File-Size: ' . $fileSize);
+            header('X-Debug-File-Exists: ' . (file_exists($tempFile) ? 'true' : 'false'));
+            header('X-Debug-Wait-Time: ' . $waited . 's');
+            header('X-Debug-Content-Wait: ' . $contentWaited . 's');
+            header('X-Debug-Range-Header: ' . ($rangeHeader ?: 'none'));
+
             if ($rangeHeader) {
                 // Handle range requests for seeking
                 $this->handleRangeRequest($tempFile, $fileSize, $rangeHeader);
@@ -458,7 +465,8 @@ class TranscodeController extends Controller {
     private function isFileBeingTranscoded(string $filePath): bool {
         // Check if corresponding FFmpeg process is still running
         $fileId = basename($filePath, '.mp4');
-        $logPattern = $this->tempDir . '/ffmpeg_*.log';
+        $tempDir = $this->getUserTempDir();
+        $logPattern = $tempDir . '/ffmpeg_*.log';
         $logFiles = glob($logPattern);
         
         foreach ($logFiles as $logFile) {
