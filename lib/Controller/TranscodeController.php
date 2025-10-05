@@ -155,10 +155,10 @@ class TranscodeController extends Controller {
             
             if (!file_exists($tempFile)) {
                 $this->logger->error('Temp file not created after waiting: ' . $tempFile, ['app' => 'hyper_viewer']);
-                $response = new Response('File not found after waiting: ' . $id . ' (waited ' . $waited . 's)');
-                $response->setStatus(Http::STATUS_NOT_FOUND);
-                $response->addHeader('Content-Type', 'text/plain');
-                return $response;
+                header('HTTP/1.1 404 Not Found');
+                header('Content-Type: text/plain');
+                echo 'File not found after waiting: ' . $id . ' (waited ' . $waited . 's)';
+                exit;
             }
             
             // Wait for file to have some content (at least 1KB)
@@ -181,16 +181,16 @@ class TranscodeController extends Controller {
 
             if ($rangeHeader) {
                 // Handle range requests for seeking
-                return $this->handleRangeRequest($tempFile, $fileSize, $rangeHeader);
+                $this->handleRangeRequest($tempFile, $fileSize, $rangeHeader);
             } else {
                 // Serve entire file
-                return $this->serveFile($tempFile, $fileSize);
+                $this->serveFile($tempFile, $fileSize);
             }
         } catch (\Exception $e) {
-            $response = new Response('Stream error: ' . $e->getMessage());
-            $response->setStatus(Http::STATUS_INTERNAL_SERVER_ERROR);
-            $response->addHeader('Content-Type', 'text/plain');
-            return $response;
+            header('HTTP/1.1 500 Internal Server Error');
+            header('Content-Type: text/plain');
+            echo 'Stream error: ' . $e->getMessage();
+            exit;
         }
     }
 
@@ -232,14 +232,14 @@ class TranscodeController extends Controller {
         ];
     }
 
-    private function handleRangeRequest(string $filePath, int $fileSize, string $rangeHeader): Response {
+    private function handleRangeRequest(string $filePath, int $fileSize, string $rangeHeader): void {
         try {
             // Parse Range header (e.g., "bytes=0-1023" or "bytes=0-")
             if (!preg_match('/bytes=(\d+)-(\d*)/', $rangeHeader, $matches)) {
-                $response = new Response('Invalid range header: ' . $rangeHeader);
-                $response->setStatus(Http::STATUS_REQUESTED_RANGE_NOT_SATISFIABLE);
-                $response->addHeader('Content-Type', 'text/plain');
-                return $response;
+                header('HTTP/1.1 416 Requested Range Not Satisfiable');
+                header('Content-Type: text/plain');
+                echo 'Invalid range header: ' . $rangeHeader;
+                exit;
             }
 
             $start = (int)$matches[1];
@@ -247,7 +247,8 @@ class TranscodeController extends Controller {
             
             if ($isTranscoding) {
                 // For transcoding files, use progressive range streaming
-                return $this->streamProgressiveRange($filePath, $start, $matches[2]);
+                $this->streamProgressiveRange($filePath, $start, $matches[2]);
+                return;
             }
             
             // For completed files, use normal range handling
@@ -255,11 +256,11 @@ class TranscodeController extends Controller {
 
             // Validate range
             if ($start >= $fileSize || $end >= $fileSize || $start > $end) {
-                $response = new Response('Invalid range: ' . $start . '-' . $end . ' for file size ' . $fileSize);
-                $response->setStatus(Http::STATUS_REQUESTED_RANGE_NOT_SATISFIABLE);
-                $response->addHeader('Content-Range', 'bytes */' . $fileSize);
-                $response->addHeader('Content-Type', 'text/plain');
-                return $response;
+                header('HTTP/1.1 416 Requested Range Not Satisfiable');
+                header('Content-Range: bytes */' . $fileSize);
+                header('Content-Type: text/plain');
+                echo 'Invalid range: ' . $start . '-' . $end . ' for file size ' . $fileSize;
+                exit;
             }
 
             $contentLength = $end - $start + 1;
@@ -267,10 +268,10 @@ class TranscodeController extends Controller {
             // Stream the range directly using native PHP headers
             $handle = fopen($filePath, 'rb');
             if (!$handle) {
-                $response = new Response('Cannot open file: ' . $filePath);
-                $response->setStatus(Http::STATUS_INTERNAL_SERVER_ERROR);
-                $response->addHeader('Content-Type', 'text/plain');
-                return $response;
+                header('HTTP/1.1 500 Internal Server Error');
+                header('Content-Type: text/plain');
+                echo 'Cannot open file: ' . $filePath;
+                exit;
             }
 
             // Clear any output buffering
@@ -300,35 +301,51 @@ class TranscodeController extends Controller {
             exit;
             
         } catch (\Exception $e) {
-            $response = new Response('Range request error: ' . $e->getMessage());
-            $response->setStatus(Http::STATUS_INTERNAL_SERVER_ERROR);
-            $response->addHeader('Content-Type', 'text/plain');
-            return $response;
+            header('HTTP/1.1 500 Internal Server Error');
+            header('Content-Type: text/plain');
+            echo 'Range request error: ' . $e->getMessage();
+            exit;
         }
     }
 
-    private function serveFile(string $filePath, int $fileSize): Response {
+    private function serveFile(string $filePath, int $fileSize): void {
         // Check if file is still being written (FFmpeg in progress)
         $isTranscoding = $this->isFileBeingTranscoded($filePath);
         
         if ($isTranscoding) {
             // Stream progressively with chunked encoding
-            return $this->streamProgressiveFile($filePath);
+            $this->streamProgressiveFile($filePath);
         } else {
             // File is complete, serve normally
-            $content = file_get_contents($filePath);
-            if ($content === false) {
-                $response = new Response();
-                $response->setStatus(Http::STATUS_INTERNAL_SERVER_ERROR);
-                return $response;
+            $handle = fopen($filePath, 'rb');
+            if (!$handle) {
+                header('HTTP/1.1 500 Internal Server Error');
+                header('Content-Type: text/plain');
+                echo 'Cannot open file';
+                exit;
             }
 
-            $response = new Response($content);
-            $response->addHeader('Content-Type', 'video/mp4');
-            $response->addHeader('Accept-Ranges', 'bytes');
-            $response->addHeader('Content-Length', (string)$fileSize);
-            $response->addHeader('Cache-Control', 'public, max-age=3600');
-            return $response;
+            // Clear any output buffering
+            @ob_end_clean();
+
+            // Send headers directly
+            header('HTTP/1.1 200 OK');
+            header('Content-Type: video/mp4');
+            header('Accept-Ranges: bytes');
+            header('Content-Length: ' . $fileSize);
+            header('Cache-Control: public, max-age=3600');
+            header('Content-Disposition: inline; filename="' . basename($filePath) . '"');
+
+            // Stream file in chunks
+            $bufferSize = 8192;
+            while (!feof($handle)) {
+                echo fread($handle, $bufferSize);
+                flush();
+                if (connection_aborted()) break;
+            }
+
+            fclose($handle);
+            exit;
         }
     }
 
@@ -477,7 +494,7 @@ class TranscodeController extends Controller {
         exit;
     }
     
-    private function streamProgressiveRange(string $filePath, int $start, string $endStr): Response {
+    private function streamProgressiveRange(string $filePath, int $start, string $endStr): void {
         // Clear any output buffering
         @ob_end_clean();
         
