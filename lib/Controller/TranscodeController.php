@@ -172,133 +172,40 @@ class TranscodeController extends Controller {
     }
 
     private function startTranscode($inputPath, $outputPath) {
-        // Escape shell arguments
-        $input = escapeshellarg($inputPath);
-        $output = escapeshellarg($outputPath);
-
+        // Create unique log file for this transcode
+        $logId = uniqid();
+        $logFile = '/tmp/hyper_ffmpeg_' . $logId . '.log';
+        
         // FFmpeg command for 480p ultrafast transcoding with web-compatible settings
-        // Output to stdout (-) for streaming
+        // Background process that writes directly to output file
         $cmd = sprintf(
-            '/usr/local/bin/ffmpeg -y -threads 3 -i %s ' .
+            'nohup /usr/local/bin/ffmpeg -y -threads 3 -i %s ' .
             '-vf "scale=-2:480:flags=fast_bilinear" ' .
             '-c:v libx264 -preset ultrafast -tune zerolatency ' .
             '-profile:v baseline -level 3.0 -pix_fmt yuv420p ' .
             '-crf 28 -maxrate 1200k -bufsize 2400k ' .
             '-c:a aac -b:a 128k -ar 44100 ' .
             '-movflags +faststart+frag_keyframe+empty_moov ' .
-            '-f mp4 -',
-            $input
+            '-f mp4 %s > %s 2>&1 &',
+            escapeshellarg($inputPath),
+            escapeshellarg($outputPath),
+            escapeshellarg($logFile)
         );
 
-        $this->logger->debug('FFmpeg command: ' . $cmd, ['app' => 'hyper_viewer']);
+        $this->logger->debug('Starting background FFmpeg: ' . $cmd, ['app' => 'hyper_viewer']);
 
-        // Execute asynchronously with streaming output
-        $descriptorspec = [
-            0 => ['pipe', 'r'],  // stdin
-            1 => ['pipe', 'w'],  // stdout (video data)
-            2 => ['pipe', 'w'],  // stderr (ffmpeg logs)
+        // Fire and forget - start FFmpeg in background
+        exec($cmd);
+        
+        // Return immediately - don't wait for completion
+        return [
+            'success' => true,
+            'running' => true,
+            'backgroundProcess' => true,
+            'logFile' => $logFile,
+            'cmd' => $cmd,
+            'outputPath' => $outputPath
         ];
-        
-        $process = proc_open($cmd, $descriptorspec, $pipes);
-        
-        if (!is_resource($process)) {
-            $this->logger->error('Failed to start FFmpeg process', ['app' => 'hyper_viewer']);
-            return [
-                'success' => false,
-                'output' => 'Failed to start FFmpeg process',
-                'returnCode' => -1,
-                'fileExists' => false,
-                'fileSize' => 0,
-                'isValidMP4' => false,
-                'cmd' => $cmd
-            ];
-        }
-        
-        // Close stdin as we don't need it
-        fclose($pipes[0]);
-        
-        // Stream video data directly to output file
-        $outputFile = fopen($outputPath, 'wb');
-        if (!$outputFile) {
-            fclose($pipes[1]);
-            fclose($pipes[2]);
-            proc_close($process);
-            return [
-                'success' => false,
-                'output' => 'Failed to create output file',
-                'returnCode' => -1,
-                'fileExists' => false,
-                'fileSize' => 0,
-                'isValidMP4' => false,
-                'cmd' => $cmd
-            ];
-        }
-        
-        // Stream data from FFmpeg stdout to file
-        while (!feof($pipes[1])) {
-            $chunk = fread($pipes[1], 8192);
-            if ($chunk !== false && strlen($chunk) > 0) {
-                fwrite($outputFile, $chunk);
-            }
-        }
-        
-        // Get stderr output for logging
-        $errorOutput = stream_get_contents($pipes[2]);
-        
-        // Close pipes and process
-        fclose($pipes[1]);
-        fclose($pipes[2]);
-        fclose($outputFile);
-        $return_code = proc_close($process);
-        
-        // Check if transcoding was actually successful (don't rely only on return code)
-        $outputString = $errorOutput;
-        
-        $result = [
-            'success' => false,
-            'output' => $outputString,
-            'returnCode' => $return_code,
-            'fileExists' => file_exists($outputPath),
-            'fileSize' => file_exists($outputPath) ? filesize($outputPath) : 0,
-            'isValidMP4' => false,
-            'cmd' => $cmd
-        ];
-        
-        if ($return_code !== 0) {
-            // Check if it's actually successful despite non-zero return code
-            if ($this->isFFmpegOutputSuccessful($outputString, $outputPath)) {
-                $this->logger->debug('FFmpeg returned non-zero code but output appears successful: ' . $return_code, ['app' => 'hyper_viewer']);
-            } else {
-                $this->logger->error('FFmpeg failed with code ' . $return_code . ': ' . $outputString, ['app' => 'hyper_viewer']);
-                return $result;
-            }
-        }
-
-        // Check if file exists and has reasonable size
-        if (!file_exists($outputPath)) {
-            $this->logger->error('FFmpeg completed but output file does not exist: ' . $outputPath, ['app' => 'hyper_viewer']);
-            return $result;
-        }
-
-        $fileSize = filesize($outputPath);
-        if ($fileSize < 1024) { // Less than 1KB is probably an error
-            $this->logger->error('FFmpeg output file is too small (' . $fileSize . ' bytes): ' . $outputPath, ['app' => 'hyper_viewer']);
-            return $result;
-        }
-
-        // Verify it's actually a valid MP4 file
-        if (!$this->isValidMP4File($outputPath)) {
-            $this->logger->error('FFmpeg output is not a valid MP4 file: ' . $outputPath, ['app' => 'hyper_viewer']);
-            return $result;
-        }
-
-        $this->logger->debug('FFmpeg transcoding successful. Output file size: ' . $fileSize . ' bytes', ['app' => 'hyper_viewer']);
-        
-        $result['success'] = true;
-        $result['fileSize'] = $fileSize;
-        $result['isValidMP4'] = true;
-        
-        return $result;
     }
 
     private function handleRangeRequest(string $filePath, int $fileSize, string $rangeHeader): Response {
