@@ -719,7 +719,11 @@ class TranscodeController extends Controller {
         header('Accept-Ranges: bytes'); // Allow range requests
         header('Connection: keep-alive');
         
-        // Optimized FFmpeg command for instant playback
+        // Add debug headers
+        header('X-Debug-FFmpeg-Command: Starting');
+        header('X-Debug-Input-File: ' . basename($inputPath));
+        
+        // Optimized FFmpeg command for instant playback with better fragmentation
         $cmd = sprintf(
             '/usr/local/bin/ffmpeg -re -i %s ' .
             '-vf "scale=-2:480:flags=fast_bilinear" ' .
@@ -728,7 +732,8 @@ class TranscodeController extends Controller {
             '-crf 28 -maxrate 1200k -bufsize 2400k ' .
             '-c:a aac -b:a 128k -ar 44100 ' .
             '-g 25 -keyint_min 25 -force_key_frames "expr:gte(t,n_forced*1)" ' .
-            '-movflags +frag_keyframe+empty_moov+default_base_moof ' .
+            '-movflags +frag_keyframe+empty_moov+default_base_moof+faststart ' .
+            '-frag_duration 1000000 -min_frag_duration 500000 ' .
             '-f mp4 pipe:1 2>/dev/null',
             escapeshellarg($inputPath)
         );
@@ -742,19 +747,44 @@ class TranscodeController extends Controller {
         }
 
         // Stream directly from FFmpeg output
+        $totalBytes = 0;
+        $chunkCount = 0;
+        $headerSent = false;
+        
         while (!feof($handle)) {
             $chunk = fread($handle, 8192);
             if ($chunk === false) break;
             
-            // Send chunk directly (no chunked encoding for range requests)
-            echo $chunk;
-            flush();
+            $chunkSize = strlen($chunk);
+            if ($chunkSize > 0) {
+                $totalBytes += $chunkSize;
+                $chunkCount++;
+                
+                // Check if this looks like MP4 header in first chunk
+                if (!$headerSent && $chunkCount === 1) {
+                    $headerSent = true;
+                    if (strpos($chunk, 'ftyp') !== false) {
+                        header('X-Debug-MP4-Header: Found ftyp box');
+                    } else {
+                        header('X-Debug-MP4-Header: No ftyp box in first chunk');
+                    }
+                    header('X-Debug-First-Chunk-Size: ' . $chunkSize);
+                }
+                
+                // Send chunk directly
+                echo $chunk;
+                flush();
+            }
             
             // Check if client disconnected
             if (connection_aborted()) {
                 break;
             }
         }
+        
+        // Add final debug info
+        header('X-Debug-Total-Bytes: ' . $totalBytes);
+        header('X-Debug-Chunk-Count: ' . $chunkCount);
 
         pclose($handle);
         exit;
