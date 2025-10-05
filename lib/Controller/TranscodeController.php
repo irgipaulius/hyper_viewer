@@ -89,58 +89,16 @@ class TranscodeController extends Controller {
 
             // Generate unique ID for this file
             $fileId = md5($user->getUID() . ':' . $path . ':' . $file->getMTime());
-            $tempFile = $this->getUserTempDir() . '/' . $fileId . '.mp4';
-
-            // Check if already transcoded (unless force is true)
-            if (!$force && file_exists($tempFile)) {
-                return new JSONResponse([
-                    'url' => '/apps/hyper_viewer/api/proxy-stream?id=' . $fileId,
-                    'debug' => [
-                        'fileSize' => filesize($tempFile),
-                        'tempFile' => basename($tempFile),
-                        'cacheHit' => true,
-                        'path' => $path,
-                        'fileId' => $fileId,
-                        'tempDir' => $this->getUserTempDir()
-                    ]
-                ]);
-            }
             
-            // If forcing, delete existing file
-            if ($force && file_exists($tempFile)) {
-                unlink($tempFile);
-            }
-
-            // Clean up old files (older than 2 hours)
-            $this->cleanupOldFiles();
-
-            // Get input file path
-            $inputPath = $file->getStorage()->getLocalFile($file->getInternalPath());
-            if (!$inputPath) {
-                return new JSONResponse(['error' => 'Cannot access file locally'], Http::STATUS_INTERNAL_SERVER_ERROR);
-            }
-
-            // Start transcoding
-            $transcodeResult = $this->startTranscode($inputPath, $tempFile);
-            
-            if (!$transcodeResult['success']) {
-                return new JSONResponse([
-                    'error' => 'Transcoding failed',
-                    'debug' => $transcodeResult
-                ], Http::STATUS_INTERNAL_SERVER_ERROR);
-            }
-
+            // For progressive streaming, we'll stream directly without temp files
+            // Return the live stream URL immediately
             return new JSONResponse([
-                'url' => '/apps/hyper_viewer/api/proxy-stream?id=' . $fileId,
+                'url' => '/apps/hyper_viewer/api/proxy-stream-live?path=' . urlencode($path),
                 'debug' => [
-                    'backgroundTranscode' => true,
-                    'tempFile' => basename($tempFile),
-                    'cacheHit' => false,
+                    'liveStream' => true,
                     'path' => $path,
                     'fileId' => $fileId,
-                    'inputPath' => $inputPath,
-                    'tempDir' => $this->getUserTempDir(),
-                    'transcodeResult' => $transcodeResult
+                    'method' => 'direct_pipe_streaming'
                 ]
             ]);
 
@@ -160,6 +118,55 @@ class TranscodeController extends Controller {
         }
     }
 
+    /**
+     * @NoAdminRequired
+     * @NoCSRFRequired
+     */
+    public function proxyStreamLive($path) {
+        try {
+            $user = $this->userSession->getUser();
+            if (!$user) {
+                header('HTTP/1.1 401 Unauthorized');
+                header('X-Debug-Error: User not authenticated');
+                exit;
+            }
+
+            // Get the file from Nextcloud
+            $userFolder = $this->rootFolder->getUserFolder($user->getUID());
+            $file = $userFolder->get($path);
+            
+            if (!$file->isReadable()) {
+                header('HTTP/1.1 403 Forbidden');
+                header('X-Debug-Error: File not accessible');
+                exit;
+            }
+
+            // Get input file path
+            $inputPath = $file->getStorage()->getLocalFile($file->getInternalPath());
+            
+            if (!$inputPath) {
+                header('HTTP/1.1 500 Internal Server Error');
+                header('X-Debug-Error: Cannot access file locally');
+                exit;
+            }
+
+            // Stream directly from FFmpeg pipe
+            $this->streamLiveFromFFmpeg($inputPath);
+
+        } catch (NotFoundException $e) {
+            header('HTTP/1.1 404 Not Found');
+            header('X-Debug-Error: File not found');
+            exit;
+        } catch (NotPermittedException $e) {
+            header('HTTP/1.1 403 Forbidden');
+            header('X-Debug-Error: Permission denied');
+            exit;
+        } catch (\Exception $e) {
+            header('HTTP/1.1 500 Internal Server Error');
+            header('X-Debug-Exception: ' . $e->getMessage());
+            exit;
+        }
+    }
 
     /**
      * @NoAdminRequired
@@ -680,5 +687,64 @@ class TranscodeController extends Controller {
                 unlink($file);
             }
         }
+    }
+
+    private function streamLiveFromFFmpeg(string $inputPath): void {
+        // Clear any output buffering and set up for immediate streaming
+        @ob_end_clean();
+        @ob_implicit_flush(true);
+        
+        // Send headers for progressive MP4 streaming
+        header('HTTP/1.1 200 OK');
+        header('Content-Type: video/mp4');
+        header('Cache-Control: no-cache');
+        header('Transfer-Encoding: chunked');
+        header('Connection: keep-alive');
+        header('Accept-Ranges: none'); // Disable range requests for live stream
+        
+        // Optimized FFmpeg command for instant playback
+        $cmd = sprintf(
+            '/usr/local/bin/ffmpeg -re -i %s ' .
+            '-vf "scale=-2:480:flags=fast_bilinear" ' .
+            '-c:v libx264 -preset ultrafast -tune zerolatency ' .
+            '-profile:v baseline -level 3.0 -pix_fmt yuv420p ' .
+            '-crf 28 -maxrate 1200k -bufsize 2400k ' .
+            '-c:a aac -b:a 128k -ar 44100 ' .
+            '-g 25 -keyint_min 25 -force_key_frames "expr:gte(t,n_forced*1)" ' .
+            '-movflags +frag_keyframe+empty_moov+default_base_moof ' .
+            '-f mp4 pipe:1 2>/dev/null',
+            escapeshellarg($inputPath)
+        );
+
+        // Start FFmpeg process with pipe
+        $handle = popen($cmd, 'r');
+        if (!$handle) {
+            header('HTTP/1.1 500 Internal Server Error');
+            header('X-Debug-Error: Failed to start FFmpeg');
+            exit;
+        }
+
+        // Stream directly from FFmpeg output
+        while (!feof($handle)) {
+            $chunk = fread($handle, 8192);
+            if ($chunk === false) break;
+            
+            // Send chunk in HTTP chunked format
+            echo dechex(strlen($chunk)) . "\r\n";
+            echo $chunk . "\r\n";
+            flush();
+            
+            // Check if client disconnected
+            if (connection_aborted()) {
+                break;
+            }
+        }
+
+        // Send final chunk to end stream
+        echo "0\r\n\r\n";
+        flush();
+
+        pclose($handle);
+        exit;
     }
 }
