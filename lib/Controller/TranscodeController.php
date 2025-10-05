@@ -242,8 +242,8 @@ class TranscodeController extends Controller {
                 // Handle range requests for seeking
                 $this->handleRangeRequest($tempFile, $fileSize, $rangeHeader);
             } else {
-                // Serve entire file
-                $this->serveFile($tempFile, $fileSize);
+                // Always use chunked streaming for better UX, even for completed files
+                $this->streamFileInChunks($tempFile, $fileSize);
             }
         } catch (\Exception $e) {
             header('HTTP/1.1 500 Internal Server Error');
@@ -680,5 +680,55 @@ class TranscodeController extends Controller {
                 unlink($file);
             }
         }
+    }
+
+    /**
+     * Stream a completed file in chunks for immediate playback start
+     */
+    private function streamFileInChunks(string $filePath, int $fileSize): void {
+        // Clear any output buffering
+        @ob_end_clean();
+        
+        // Send headers for chunked streaming
+        header('HTTP/1.1 200 OK');
+        header('Content-Type: video/mp4');
+        header('Content-Length: ' . $fileSize);
+        header('Accept-Ranges: bytes');
+        header('Cache-Control: public, max-age=3600'); // Cache completed files
+        header('Connection: keep-alive');
+        
+        $handle = fopen($filePath, 'rb');
+        if (!$handle) {
+            header('HTTP/1.1 500 Internal Server Error');
+            header('X-Debug-Error: Cannot open completed file for streaming');
+            exit;
+        }
+        
+        $chunkSize = 32768; // 32KB chunks for fast initial loading
+        $position = 0;
+        
+        while ($position < $fileSize) {
+            // Check if client disconnected
+            if (connection_aborted()) {
+                break;
+            }
+            
+            $bytesToRead = min($chunkSize, $fileSize - $position);
+            $chunk = fread($handle, $bytesToRead);
+            
+            if ($chunk !== false && strlen($chunk) > 0) {
+                echo $chunk;
+                flush();
+                $position += strlen($chunk);
+            } else {
+                break; // Error reading file
+            }
+            
+            // Small delay to prevent overwhelming the connection
+            usleep(1000); // 1ms delay
+        }
+        
+        fclose($handle);
+        exit;
     }
 }
