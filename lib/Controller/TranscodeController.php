@@ -177,6 +177,7 @@ class TranscodeController extends Controller {
         $output = escapeshellarg($outputPath);
 
         // FFmpeg command for 480p ultrafast transcoding with web-compatible settings
+        // Output to stdout (-) for streaming
         $cmd = sprintf(
             '/usr/local/bin/ffmpeg -y -threads 3 -i %s ' .
             '-vf "scale=-2:480:flags=fast_bilinear" ' .
@@ -185,21 +186,73 @@ class TranscodeController extends Controller {
             '-crf 28 -maxrate 1200k -bufsize 2400k ' .
             '-c:a aac -b:a 128k -ar 44100 ' .
             '-movflags +faststart+frag_keyframe+empty_moov ' .
-            '-f mp4 ' .
-            '%s 2>&1',
-            $input,
-            $output
+            '-f mp4 -',
+            $input
         );
 
         $this->logger->debug('FFmpeg command: ' . $cmd, ['app' => 'hyper_viewer']);
 
-        // Execute synchronously
-        $output_lines = [];
-        $return_code = 0;
-        exec($cmd, $output_lines, $return_code);
-
+        // Execute asynchronously with streaming output
+        $descriptorspec = [
+            0 => ['pipe', 'r'],  // stdin
+            1 => ['pipe', 'w'],  // stdout (video data)
+            2 => ['pipe', 'w'],  // stderr (ffmpeg logs)
+        ];
+        
+        $process = proc_open($cmd, $descriptorspec, $pipes);
+        
+        if (!is_resource($process)) {
+            $this->logger->error('Failed to start FFmpeg process', ['app' => 'hyper_viewer']);
+            return [
+                'success' => false,
+                'output' => 'Failed to start FFmpeg process',
+                'returnCode' => -1,
+                'fileExists' => false,
+                'fileSize' => 0,
+                'isValidMP4' => false,
+                'cmd' => $cmd
+            ];
+        }
+        
+        // Close stdin as we don't need it
+        fclose($pipes[0]);
+        
+        // Stream video data directly to output file
+        $outputFile = fopen($outputPath, 'wb');
+        if (!$outputFile) {
+            fclose($pipes[1]);
+            fclose($pipes[2]);
+            proc_close($process);
+            return [
+                'success' => false,
+                'output' => 'Failed to create output file',
+                'returnCode' => -1,
+                'fileExists' => false,
+                'fileSize' => 0,
+                'isValidMP4' => false,
+                'cmd' => $cmd
+            ];
+        }
+        
+        // Stream data from FFmpeg stdout to file
+        while (!feof($pipes[1])) {
+            $chunk = fread($pipes[1], 8192);
+            if ($chunk !== false && strlen($chunk) > 0) {
+                fwrite($outputFile, $chunk);
+            }
+        }
+        
+        // Get stderr output for logging
+        $errorOutput = stream_get_contents($pipes[2]);
+        
+        // Close pipes and process
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        fclose($outputFile);
+        $return_code = proc_close($process);
+        
         // Check if transcoding was actually successful (don't rely only on return code)
-        $outputString = implode('\n', $output_lines);
+        $outputString = $errorOutput;
         
         $result = [
             'success' => false,
