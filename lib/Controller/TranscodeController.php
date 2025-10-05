@@ -19,12 +19,13 @@ class TranscodeController extends Controller {
     /** @var IRootFolder */
     private $rootFolder;
     /** @var IUserSession */
+    private $userSession;
     /** @var ILogger */
     private $logger;
     /** @var string */
     private $tempDir;
 
-    public function __construct(string $appName, IRequest $request, IRootFolder $rootFolder, IUserSession $userSession, LoggerInterface $logger) {
+    public function __construct(string $appName, IRequest $request, IRootFolder $rootFolder, IUserSession $userSession, ILogger $logger) {
         parent::__construct($appName, $request);
         $this->rootFolder = $rootFolder;
         $this->userSession = $userSession;
