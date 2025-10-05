@@ -272,7 +272,7 @@ class TranscodeController extends Controller {
 
             $contentLength = $end - $start + 1;
 
-            // Read the exact range requested
+            // Stream the range directly using native PHP headers
             $handle = fopen($filePath, 'rb');
             if (!$handle) {
                 $response = new Response('Cannot open file: ' . $filePath);
@@ -281,26 +281,31 @@ class TranscodeController extends Controller {
                 return $response;
             }
 
-            fseek($handle, $start);
-            $content = fread($handle, $contentLength);
-            fclose($handle);
+            // Clear any output buffering
+            @ob_end_clean();
 
-            if ($content === false) {
-                $response = new Response('Cannot read file range');
-                $response->setStatus(Http::STATUS_INTERNAL_SERVER_ERROR);
-                $response->addHeader('Content-Type', 'text/plain');
-                return $response;
+            fseek($handle, $start);
+
+            // Send headers directly
+            header('HTTP/1.1 206 Partial Content');
+            header('Content-Type: video/mp4');
+            header('Accept-Ranges: bytes');
+            header('Content-Range: bytes ' . $start . '-' . $end . '/' . $fileSize);
+            header('Content-Length: ' . $contentLength);
+            header('Cache-Control: public, max-age=3600');
+            header('Content-Disposition: inline; filename="' . basename($filePath) . '"');
+
+            // Stream data in chunks
+            $bufferSize = 8192;
+            while (!feof($handle) && ($pos = ftell($handle)) <= $end) {
+                $bytesToRead = min($bufferSize, $end - $pos + 1);
+                echo fread($handle, $bytesToRead);
+                flush();
+                if (connection_aborted()) break;
             }
 
-            $response = new Response($content);
-            $response->setStatus(Http::STATUS_PARTIAL_CONTENT);
-            $response->addHeader('Content-Type', 'video/mp4');
-            $response->addHeader('Accept-Ranges', 'bytes');
-            $response->addHeader('Content-Length', (string)strlen($content));
-            $response->addHeader('Content-Range', 'bytes ' . $start . '-' . $end . '/' . $fileSize);
-            $response->addHeader('Cache-Control', 'public, max-age=3600');
-
-            return $response;
+            fclose($handle);
+            exit;
             
         } catch (\Exception $e) {
             $response = new Response('Range request error: ' . $e->getMessage());
