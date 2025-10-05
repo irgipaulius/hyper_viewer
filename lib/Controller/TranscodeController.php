@@ -694,13 +694,30 @@ class TranscodeController extends Controller {
         @ob_end_clean();
         @ob_implicit_flush(1);
         
+        // Check if this is a range request
+        $rangeHeader = $_SERVER['HTTP_RANGE'] ?? '';
+        
+        if ($rangeHeader && preg_match('/bytes=(\d+)-/', $rangeHeader, $matches)) {
+            // Handle range request for live stream
+            $start = (int)$matches[1];
+            if ($start === 0) {
+                // Start from beginning - this is what browsers typically request
+                header('HTTP/1.1 200 OK');
+            } else {
+                // For non-zero start, we can't seek in live stream
+                header('HTTP/1.1 416 Range Not Satisfiable');
+                header('Content-Range: bytes */*');
+                exit;
+            }
+        } else {
+            header('HTTP/1.1 200 OK');
+        }
+        
         // Send headers for progressive MP4 streaming
-        header('HTTP/1.1 200 OK');
         header('Content-Type: video/mp4');
         header('Cache-Control: no-cache');
-        header('Transfer-Encoding: chunked');
+        header('Accept-Ranges: bytes'); // Allow range requests
         header('Connection: keep-alive');
-        header('Accept-Ranges: none'); // Disable range requests for live stream
         
         // Optimized FFmpeg command for instant playback
         $cmd = sprintf(
@@ -729,9 +746,8 @@ class TranscodeController extends Controller {
             $chunk = fread($handle, 8192);
             if ($chunk === false) break;
             
-            // Send chunk in HTTP chunked format
-            echo dechex(strlen($chunk)) . "\r\n";
-            echo $chunk . "\r\n";
+            // Send chunk directly (no chunked encoding for range requests)
+            echo $chunk;
             flush();
             
             // Check if client disconnected
@@ -739,10 +755,6 @@ class TranscodeController extends Controller {
                 break;
             }
         }
-
-        // Send final chunk to end stream
-        echo "0\r\n\r\n";
-        flush();
 
         pclose($handle);
         exit;
