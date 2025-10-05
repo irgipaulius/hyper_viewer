@@ -1731,6 +1731,30 @@ async function playProgressive(filename, directory, context) {
 			}
 		);
 
+		// Check if response is HTML (error page) instead of JSON
+		const contentType = response.headers.get('content-type');
+		if (!response.ok || (contentType && contentType.includes('text/html'))) {
+			
+			// Extract error details from debug headers if available
+			const debugError = response.headers.get('X-Debug-Error');
+			const debugException = response.headers.get('X-Debug-Exception');
+			
+			let errorMessage = 'Server error occurred while preparing video';
+			if (debugError) {
+				errorMessage = `Server Error: ${debugError}`;
+			} else if (debugException) {
+				errorMessage = `Server Exception: ${debugException}`;
+			} else if (response.status === 404) {
+				errorMessage = 'Video file not found or not accessible';
+			} else if (response.status === 403) {
+				errorMessage = 'Permission denied - you may not have access to this file';
+			} else if (response.status >= 500) {
+				errorMessage = 'Internal server error - please check server configuration';
+			}
+			
+			throw new Error(errorMessage);
+		}
+
 		const result = await response.json();
 
 		// Hide loading overlay
@@ -1750,9 +1774,18 @@ async function playProgressive(filename, directory, context) {
 		if (existingOverlay) {
 			hideLoadingOverlay(existingOverlay);
 		}
+		
+		// Show user-friendly error message
+		let userMessage = error.message;
+		if (error.message.includes('SyntaxError') || error.message.includes('Unexpected token')) {
+			userMessage = 'Server returned an error page instead of video data. Please check server logs or contact administrator.';
+		} else if (error.message.includes('NetworkError') || error.message.includes('fetch')) {
+			userMessage = 'Network error - please check your connection and try again.';
+		}
+		
 		OC.dialogs.alert(
-			`Failed to prepare progressive MP4: ${error.message}`,
-			"Transcoding Error"
+			userMessage,
+			"Video Transcoding Error"
 		);
 	}
 }

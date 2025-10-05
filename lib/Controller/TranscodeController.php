@@ -237,7 +237,8 @@ class TranscodeController extends Controller {
     private function startTranscode($inputPath, $outputPath) {
         // Create unique log file for this transcode in cache directory
         $logId = uniqid();
-        $logFile = $this->tempDir . '/ffmpeg_' . $logId . '.log';
+        $tempDir = $this->getUserTempDir();
+        $logFile = $tempDir . '/ffmpeg_' . $logId . '.log';
         
         // FFmpeg command for 480p fragmented MP4 streaming with continuous output
         // Uses fragmented MP4 for progressive streaming during transcoding
