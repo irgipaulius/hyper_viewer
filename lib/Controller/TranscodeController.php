@@ -143,12 +143,35 @@ class TranscodeController extends Controller {
         try {
             $tempFile = $this->tempDir . '/' . $id . '.mp4';
             
+            // Wait for FFmpeg to create the file (up to 30 seconds)
+            $maxWaitTime = 30;
+            $waitInterval = 0.5; // 500ms
+            $waited = 0;
+            
+            while (!file_exists($tempFile) && $waited < $maxWaitTime) {
+                usleep($waitInterval * 1000000); // Convert to microseconds
+                $waited += $waitInterval;
+            }
+            
             if (!file_exists($tempFile)) {
-                $response = new Response('File not found: ' . $id);
+                $this->logger->error('Temp file not created after waiting: ' . $tempFile, ['app' => 'hyper_viewer']);
+                $response = new Response('File not found after waiting: ' . $id . ' (waited ' . $waited . 's)');
                 $response->setStatus(Http::STATUS_NOT_FOUND);
                 $response->addHeader('Content-Type', 'text/plain');
                 return $response;
             }
+            
+            // Wait for file to have some content (at least 1KB)
+            $minSize = 1024;
+            $maxContentWait = 10;
+            $contentWaited = 0;
+            
+            while (filesize($tempFile) < $minSize && $contentWaited < $maxContentWait) {
+                usleep($waitInterval * 1000000);
+                $contentWaited += $waitInterval;
+            }
+            
+            $this->logger->debug('Streaming file after waiting: ' . $waited . 's for creation, ' . $contentWaited . 's for content. Size: ' . filesize($tempFile) . ' bytes', ['app' => 'hyper_viewer']);
 
             // Clean up old files
             $this->cleanupOldFiles();
