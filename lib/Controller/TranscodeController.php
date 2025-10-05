@@ -146,7 +146,7 @@ class TranscodeController extends Controller {
             $waited = 0;
             
             while (!file_exists($tempFile) && $waited < $maxWaitTime) {
-                usleep($waitInterval * 1000000); // Convert to microseconds
+                usleep((int)($waitInterval * 1000000)); // Convert to microseconds
                 $waited += $waitInterval;
             }
             
@@ -164,7 +164,7 @@ class TranscodeController extends Controller {
             $contentWaited = 0;
             
             while (filesize($tempFile) < $minSize && $contentWaited < $maxContentWait) {
-                usleep($waitInterval * 1000000);
+                usleep((int)($waitInterval * 1000000));
                 $contentWaited += $waitInterval;
             }
             
