@@ -683,18 +683,23 @@ class TranscodeController extends Controller {
     }
 
     /**
-     * Stream a completed file in chunks for immediate playback start
+     * Stream a completed file optimized for immediate video playback
      */
     private function streamFileInChunks(string $filePath, int $fileSize): void {
         // Clear any output buffering
         @ob_end_clean();
         
-        // Send headers for chunked streaming
-        header('HTTP/1.1 200 OK');
+        // For video files, we want to send just enough data for the browser to start playing
+        // The browser will then make range requests for the rest
+        $initialChunkSize = min(1048576, $fileSize); // 1MB or entire file if smaller
+        
+        // Send headers for partial content to enable range requests
+        header('HTTP/1.1 206 Partial Content');
         header('Content-Type: video/mp4');
-        header('Content-Length: ' . $fileSize);
+        header('Content-Length: ' . $initialChunkSize);
+        header('Content-Range: bytes 0-' . ($initialChunkSize - 1) . '/' . $fileSize);
         header('Accept-Ranges: bytes');
-        header('Cache-Control: public, max-age=3600'); // Cache completed files
+        header('Cache-Control: public, max-age=3600');
         header('Connection: keep-alive');
         
         $handle = fopen($filePath, 'rb');
@@ -704,16 +709,16 @@ class TranscodeController extends Controller {
             exit;
         }
         
-        $chunkSize = 32768; // 32KB chunks for fast initial loading
+        // Stream the initial chunk in smaller pieces for responsiveness
+        $chunkSize = 32768; // 32KB chunks
         $position = 0;
         
-        while ($position < $fileSize) {
-            // Check if client disconnected
+        while ($position < $initialChunkSize) {
             if (connection_aborted()) {
                 break;
             }
             
-            $bytesToRead = min($chunkSize, $fileSize - $position);
+            $bytesToRead = min($chunkSize, $initialChunkSize - $position);
             $chunk = fread($handle, $bytesToRead);
             
             if ($chunk !== false && strlen($chunk) > 0) {
@@ -721,11 +726,11 @@ class TranscodeController extends Controller {
                 flush();
                 $position += strlen($chunk);
             } else {
-                break; // Error reading file
+                break;
             }
             
-            // Small delay to prevent overwhelming the connection
-            usleep(1000); // 1ms delay
+            // Small delay for smooth streaming
+            usleep(500); // 0.5ms delay
         }
         
         fclose($handle);
