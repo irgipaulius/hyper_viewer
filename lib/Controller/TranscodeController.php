@@ -36,7 +36,10 @@ class TranscodeController extends Controller {
         $this->rootFolder = $rootFolder;
         $this->userSession = $userSession;
         $this->logger = $logger;
-        $this->tempDir = '/tmp/hypertranscode';
+        
+        // Use hidden cache directory in Nextcloud root (SSD optimized)
+        $nextcloudRoot = dirname(dirname(dirname(__DIR__))); // Go up from apps/hyper_viewer/lib/Controller
+        $this->tempDir = $nextcloudRoot . '/.cache_fmp4';
         
         // Ensure temp directory exists
         if (!is_dir($this->tempDir)) {
@@ -192,12 +195,12 @@ class TranscodeController extends Controller {
     }
 
     private function startTranscode($inputPath, $outputPath) {
-        // Create unique log file for this transcode
+        // Create unique log file for this transcode in cache directory
         $logId = uniqid();
-        $logFile = '/tmp/hyper_ffmpeg_' . $logId . '.log';
+        $logFile = $this->tempDir . '/ffmpeg_' . $logId . '.log';
         
-        // FFmpeg command for 480p ultrafast transcoding with web-compatible settings
-        // Background process that writes directly to output file
+        // FFmpeg command for 480p fragmented MP4 streaming with continuous output
+        // Uses fragmented MP4 for progressive streaming during transcoding
         $cmd = sprintf(
             'nohup /usr/local/bin/ffmpeg -y -threads 3 -i %s ' .
             '-vf "scale=-2:480:flags=fast_bilinear" ' .
@@ -205,7 +208,8 @@ class TranscodeController extends Controller {
             '-profile:v baseline -level 3.0 -pix_fmt yuv420p ' .
             '-crf 28 -maxrate 1200k -bufsize 2400k ' .
             '-c:a aac -b:a 128k -ar 44100 ' .
-            '-movflags +faststart+frag_keyframe+empty_moov ' .
+            '-movflags +frag_keyframe+empty_moov+default_base_moof ' .
+            '-frag_duration 2000000 -min_frag_duration 1000000 ' .
             '-f mp4 %s > %s 2>&1 &',
             escapeshellarg($inputPath),
             escapeshellarg($outputPath),
@@ -239,6 +243,14 @@ class TranscodeController extends Controller {
             }
 
             $start = (int)$matches[1];
+            $isTranscoding = $this->isFileBeingTranscoded($filePath);
+            
+            if ($isTranscoding) {
+                // For transcoding files, use progressive range streaming
+                return $this->streamProgressiveRange($filePath, $start, $matches[2]);
+            }
+            
+            // For completed files, use normal range handling
             $end = $matches[2] !== '' ? (int)$matches[2] : $fileSize - 1;
 
             // Validate range
@@ -296,20 +308,28 @@ class TranscodeController extends Controller {
     }
 
     private function serveFile(string $filePath, int $fileSize): Response {
-        // For large files, we should use streaming, but for now use simple response
-        $content = file_get_contents($filePath);
-        if ($content === false) {
-            $response = new Response();
-            $response->setStatus(Http::STATUS_INTERNAL_SERVER_ERROR);
+        // Check if file is still being written (FFmpeg in progress)
+        $isTranscoding = $this->isFileBeingTranscoded($filePath);
+        
+        if ($isTranscoding) {
+            // Stream progressively with chunked encoding
+            return $this->streamProgressiveFile($filePath);
+        } else {
+            // File is complete, serve normally
+            $content = file_get_contents($filePath);
+            if ($content === false) {
+                $response = new Response();
+                $response->setStatus(Http::STATUS_INTERNAL_SERVER_ERROR);
+                return $response;
+            }
+
+            $response = new Response($content);
+            $response->addHeader('Content-Type', 'video/mp4');
+            $response->addHeader('Accept-Ranges', 'bytes');
+            $response->addHeader('Content-Length', (string)$fileSize);
+            $response->addHeader('Cache-Control', 'public, max-age=3600');
             return $response;
         }
-
-        $response = new Response($content);
-        $response->addHeader('Content-Type', 'video/mp4');
-        $response->addHeader('Accept-Ranges', 'bytes');
-        $response->addHeader('Content-Length', (string)$fileSize);
-        $response->addHeader('Cache-Control', 'no-cache');
-        return $response;
     }
 
     private function isFFmpegOutputSuccessful(string $output, string $outputPath): bool {
@@ -367,14 +387,203 @@ class TranscodeController extends Controller {
         return strpos($header, 'ftyp') !== false;
     }
 
+    private function isFileBeingTranscoded(string $filePath): bool {
+        // Check if corresponding FFmpeg process is still running
+        $fileId = basename($filePath, '.mp4');
+        $logPattern = $this->tempDir . '/ffmpeg_*.log';
+        $logFiles = glob($logPattern);
+        
+        foreach ($logFiles as $logFile) {
+            $logContent = file_get_contents($logFile);
+            if ($logContent && strpos($logContent, $filePath) !== false) {
+                // Check if log shows completion
+                if (strpos($logContent, 'muxing overhead:') !== false ||
+                    strpos($logContent, 'Conversion failed') !== false) {
+                    return false; // Transcoding finished
+                }
+                return true; // Still transcoding
+            }
+        }
+        
+        // Fallback: check file age (if very recent, likely still transcoding)
+        $fileAge = time() - filemtime($filePath);
+        return $fileAge < 300; // Consider active if modified within 5 minutes
+    }
+    
+    private function streamProgressiveFile(string $filePath): Response {
+        // Clear any output buffering
+        @ob_end_clean();
+        
+        // Send headers for chunked streaming
+        header('HTTP/1.1 200 OK');
+        header('Content-Type: video/mp4');
+        header('Accept-Ranges: bytes');
+        header('Transfer-Encoding: chunked');
+        header('Cache-Control: no-cache');
+        header('Connection: keep-alive');
+        
+        $handle = fopen($filePath, 'rb');
+        if (!$handle) {
+            header('HTTP/1.1 500 Internal Server Error');
+            echo 'Cannot open file';
+            exit;
+        }
+        
+        $position = 0;
+        $chunkSize = 8192;
+        $maxWaitTime = 300; // 5 minutes max
+        $startTime = time();
+        
+        while (time() - $startTime < $maxWaitTime) {
+            // Get current file size
+            clearstatcache(true, $filePath);
+            $currentSize = filesize($filePath);
+            
+            if ($position < $currentSize) {
+                // Read available data
+                fseek($handle, $position);
+                $bytesToRead = min($chunkSize, $currentSize - $position);
+                $chunk = fread($handle, $bytesToRead);
+                
+                if ($chunk !== false && strlen($chunk) > 0) {
+                    // Send chunk in HTTP chunked format
+                    echo dechex(strlen($chunk)) . "\r\n";
+                    echo $chunk . "\r\n";
+                    flush();
+                    
+                    $position += strlen($chunk);
+                }
+            } else {
+                // Check if transcoding is complete
+                if (!$this->isFileBeingTranscoded($filePath)) {
+                    break; // Transcoding finished
+                }
+                
+                // Wait a bit for more data
+                usleep(500000); // 500ms
+            }
+            
+            // Check if client disconnected
+            if (connection_aborted()) {
+                break;
+            }
+        }
+        
+        // Send final chunk (empty to signal end)
+        echo "0\r\n\r\n";
+        flush();
+        
+        fclose($handle);
+        exit;
+    }
+    
+    private function streamProgressiveRange(string $filePath, int $start, string $endStr): Response {
+        // Clear any output buffering
+        @ob_end_clean();
+        
+        $handle = fopen($filePath, 'rb');
+        if (!$handle) {
+            header('HTTP/1.1 500 Internal Server Error');
+            echo 'Cannot open file';
+            exit;
+        }
+        
+        // Seek to start position
+        fseek($handle, $start);
+        $position = $start;
+        $chunkSize = 8192;
+        $maxWaitTime = 300; // 5 minutes max
+        $startTime = time();
+        
+        // Send initial headers for range request
+        header('HTTP/1.1 206 Partial Content');
+        header('Content-Type: video/mp4');
+        header('Accept-Ranges: bytes');
+        header('Cache-Control: no-cache');
+        header('Connection: keep-alive');
+        
+        // If end is specified, we need to respect it, otherwise stream until file ends
+        $hasEndLimit = ($endStr !== '');
+        $endLimit = $hasEndLimit ? (int)$endStr : PHP_INT_MAX;
+        
+        $totalSent = 0;
+        $headersSent = false;
+        
+        while (time() - $startTime < $maxWaitTime) {
+            // Get current file size
+            clearstatcache(true, $filePath);
+            $currentSize = filesize($filePath);
+            
+            if ($position < $currentSize) {
+                $availableBytes = $currentSize - $position;
+                $bytesToRead = min($chunkSize, $availableBytes);
+                
+                // Respect end limit if specified
+                if ($hasEndLimit && ($position + $bytesToRead) > ($endLimit + 1)) {
+                    $bytesToRead = ($endLimit + 1) - $position;
+                }
+                
+                if ($bytesToRead > 0) {
+                    $chunk = fread($handle, $bytesToRead);
+                    
+                    if ($chunk !== false && strlen($chunk) > 0) {
+                        // Send Content-Range header with first chunk
+                        if (!$headersSent) {
+                            $rangeEnd = $hasEndLimit ? $endLimit : '*';
+                            header('Content-Range: bytes ' . $start . '-' . $rangeEnd . '/*');
+                            $headersSent = true;
+                        }
+                        
+                        echo $chunk;
+                        flush();
+                        
+                        $position += strlen($chunk);
+                        $totalSent += strlen($chunk);
+                        
+                        // If we've reached the end limit, stop
+                        if ($hasEndLimit && $position > $endLimit) {
+                            break;
+                        }
+                    }
+                }
+            } else {
+                // Check if transcoding is complete
+                if (!$this->isFileBeingTranscoded($filePath)) {
+                    break; // Transcoding finished
+                }
+                
+                // Wait a bit for more data
+                usleep(500000); // 500ms
+            }
+            
+            // Check if client disconnected
+            if (connection_aborted()) {
+                break;
+            }
+        }
+        
+        fclose($handle);
+        exit;
+    }
+
     private function cleanupOldFiles(): void {
         $cutoff = time() - (2 * 3600); // 2 hours ago
         
-        $files = glob($this->tempDir . '/*.mp4');
-        foreach ($files as $file) {
+        // Clean up old MP4 files
+        $mp4Files = glob($this->tempDir . '/*.mp4');
+        foreach ($mp4Files as $file) {
             if (filemtime($file) < $cutoff) {
                 unlink($file);
                 $this->logger->debug('Cleaned up old transcode file: ' . basename($file), ['app' => 'hyper_viewer']);
+            }
+        }
+        
+        // Clean up old log files
+        $logFiles = glob($this->tempDir . '/ffmpeg_*.log');
+        foreach ($logFiles as $file) {
+            if (filemtime($file) < $cutoff) {
+                unlink($file);
+                $this->logger->debug('Cleaned up old FFmpeg log: ' . basename($file), ['app' => 'hyper_viewer']);
             }
         }
     }
