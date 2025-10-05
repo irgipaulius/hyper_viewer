@@ -113,14 +113,11 @@ class TranscodeController extends Controller {
             return new JSONResponse([
                 'url' => '/apps/hyper_viewer/api/proxy-stream?id=' . $fileId,
                 'debug' => [
-                    'fileSize' => filesize($tempFile),
+                    'backgroundTranscode' => true,
                     'tempFile' => basename($tempFile),
                     'cacheHit' => false,
-                    'ffmpegOutput' => $transcodeResult['output'],
-                    'isValidMP4' => $this->isValidMP4File($tempFile),
-                    'fileExists' => file_exists($tempFile),
-                    'tempDir' => $this->tempDir,
-                    'returnCode' => $transcodeResult['returnCode']
+                    'logFile' => $transcodeResult['logFile'],
+                    'tempDir' => $this->tempDir
                 ]
             ]);
 
