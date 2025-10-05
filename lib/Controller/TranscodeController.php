@@ -205,12 +205,25 @@ class TranscodeController extends Controller {
             
             // Wait for file to have some content (at least 1KB)
             $minSize = 1024;
-            $maxContentWait = 10;
+            $maxContentWait = 30; // Increased to 30 seconds
             $contentWaited = 0;
             
             while (filesize($tempFile) < $minSize && $contentWaited < $maxContentWait) {
                 usleep((int)($waitInterval * 1000000));
                 $contentWaited += $waitInterval;
+            }
+            
+            // If still no content after waiting, return helpful error
+            $currentSize = filesize($tempFile);
+            if ($currentSize < $minSize) {
+                header('HTTP/1.1 202 Accepted');
+                header('X-Debug-Error: Transcoding in progress, file too small');
+                header('X-Debug-Current-Size: ' . $currentSize);
+                header('X-Debug-Min-Size-Required: ' . $minSize);
+                header('X-Debug-Content-Wait-Time: ' . $contentWaited . 's');
+                header('X-Debug-Suggestion: Please wait and try again in a few seconds');
+                header('Retry-After: 5');
+                exit;
             }
 
             // Clean up old files

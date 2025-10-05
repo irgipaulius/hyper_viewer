@@ -1897,14 +1897,21 @@ function showProgressiveVideoModal(filename, videoUrl) {
 				</button>
 			</div>
 			<div class="hyper-viewer-progressive-content">
-				<video 
-					controls 
-					preload="auto"
-					playsinline
-					class="hyper-viewer-progressive-video"
-					src="${videoUrl}">
-					Your browser does not support the video tag.
-				</video>
+				<div class="hyper-viewer-video-container">
+					<video 
+						controls 
+						preload="auto"
+						playsinline
+						class="hyper-viewer-progressive-video"
+						src="${videoUrl}">
+						Your browser does not support the video tag.
+					</video>
+					<div class="hyper-viewer-retry-message" style="display: none;">
+						<p>Video is still being prepared...</p>
+						<div class="hyper-viewer-retry-spinner"></div>
+						<p class="retry-text">Retrying in <span class="countdown">5</span> seconds</p>
+					</div>
+				</div>
 			</div>
 		</div>
 		
@@ -1989,6 +1996,16 @@ function showProgressiveVideoModal(filename, videoUrl) {
 				background: #000000;
 			}
 			
+			.hyper-viewer-video-container {
+				position: relative;
+				width: 100%;
+				min-height: 300px;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				background: #000;
+			}
+			
 			.hyper-viewer-progressive-video {
 				width: 100%;
 				height: auto;
@@ -1998,6 +2015,44 @@ function showProgressiveVideoModal(filename, videoUrl) {
 				display: block;
 				background: #000;
 				object-fit: contain;
+			}
+			
+			.hyper-viewer-retry-message {
+				position: absolute;
+				top: 50%;
+				left: 50%;
+				transform: translate(-50%, -50%);
+				text-align: center;
+				color: #ffffff;
+				background: rgba(0, 0, 0, 0.8);
+				padding: 20px;
+				border-radius: 8px;
+				z-index: 10;
+			}
+			
+			.hyper-viewer-retry-message p {
+				margin: 10px 0;
+				font-size: 16px;
+			}
+			
+			.hyper-viewer-retry-spinner {
+				width: 40px;
+				height: 40px;
+				border: 3px solid #333;
+				border-top: 3px solid #ffffff;
+				border-radius: 50%;
+				animation: spin 1s linear infinite;
+				margin: 15px auto;
+			}
+			
+			@keyframes spin {
+				0% { transform: rotate(0deg); }
+				100% { transform: rotate(360deg); }
+			}
+			
+			.retry-text {
+				font-size: 14px;
+				opacity: 0.8;
 			}
 			
 			.hyper-viewer-close {
@@ -2102,15 +2157,53 @@ function showProgressiveVideoModal(filename, videoUrl) {
 	video.addEventListener("error", (e) => {
 		console.error("🎬 Video error:", e);
 		console.error("Video error details:", video.error);
+		
+		// Check if this might be a transcoding-in-progress error
+		if (video.error && (video.error.code === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED || 
+		                   video.error.code === MediaError.MEDIA_ERR_NETWORK)) {
+			handleVideoRetry(video, videoUrl);
+		}
 	});
 	
 	video.addEventListener("stalled", () => {
 		console.log("🎬 Video stalled");
+		// Also try retry on stalled
+		handleVideoRetry(video, videoUrl);
 	});
 	
 	video.addEventListener("waiting", () => {
 		console.log("🎬 Video waiting for data");
 	});
+
+	// Retry logic for transcoding videos
+	function handleVideoRetry(videoElement, originalUrl) {
+		const retryMessage = modal.querySelector(".hyper-viewer-retry-message");
+		const countdownSpan = retryMessage.querySelector(".countdown");
+		
+		// Show retry message, hide video
+		videoElement.style.display = "none";
+		retryMessage.style.display = "block";
+		
+		let countdown = 5;
+		countdownSpan.textContent = countdown;
+		
+		const countdownInterval = setInterval(() => {
+			countdown--;
+			countdownSpan.textContent = countdown;
+			
+			if (countdown <= 0) {
+				clearInterval(countdownInterval);
+				
+				// Hide retry message, show video
+				retryMessage.style.display = "none";
+				videoElement.style.display = "block";
+				
+				// Reload video source
+				videoElement.src = originalUrl + "&t=" + Date.now(); // Add timestamp to bypass cache
+				videoElement.load();
+			}
+		}, 1000);
+	}
 
 	document.addEventListener("keydown", handleKeydown);
 }
