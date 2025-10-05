@@ -19,32 +19,51 @@ class TranscodeController extends Controller {
     /** @var IRootFolder */
     private $rootFolder;
     /** @var IUserSession */
-    private $userSession;
     /** @var ILogger */
     private $logger;
     /** @var string */
     private $tempDir;
 
-    public function __construct(
-        $appName,
-        IRequest $request,
-        IRootFolder $rootFolder,
-        IUserSession $userSession,
-        ILogger $logger
-    ) {
+    public function __construct(string $appName, IRequest $request, IRootFolder $rootFolder, IUserSession $userSession, LoggerInterface $logger) {
         parent::__construct($appName, $request);
         $this->rootFolder = $rootFolder;
         $this->userSession = $userSession;
         $this->logger = $logger;
         
-        // Use hidden cache directory in Nextcloud root (SSD optimized)
-        $nextcloudRoot = dirname(dirname(dirname(__DIR__))); // Go up from apps/hyper_viewer/lib/Controller
-        $this->tempDir = $nextcloudRoot . '/.cache_fmp4';
-        
-        // Ensure temp directory exists
-        if (!is_dir($this->tempDir)) {
-            mkdir($this->tempDir, 0755, true);
+        // Temp directory will be set per-user in getUserTempDir()
+        $this->tempDir = null;
+    }
+
+    /**
+     * Get user-specific temp directory for transcoded files
+     */
+    private function getUserTempDir(): string {
+        if ($this->tempDir === null) {
+            $user = $this->userSession->getUser();
+            if (!$user) {
+                throw new \Exception('User not authenticated');
+            }
+            
+            // Get user's home folder and create .cached_mp4 directory
+            $userFolder = $this->rootFolder->getUserFolder($user->getUID());
+            $tempDirPath = '/.cached_mp4';
+            
+            try {
+                if (!$userFolder->nodeExists($tempDirPath)) {
+                    $userFolder->newFolder($tempDirPath);
+                }
+                $tempFolder = $userFolder->get($tempDirPath);
+                $this->tempDir = $tempFolder->getStorage()->getLocalFile($tempFolder->getInternalPath());
+            } catch (\Exception $e) {
+                // Fallback to system temp directory
+                $this->tempDir = sys_get_temp_dir() . '/hyper_viewer_' . $user->getUID();
+                if (!is_dir($this->tempDir)) {
+                    mkdir($this->tempDir, 0755, true);
+                }
+            }
         }
+        
+        return $this->tempDir;
     }
 
     /**
@@ -69,17 +88,19 @@ class TranscodeController extends Controller {
 
             // Generate unique ID for this file
             $fileId = md5($user->getUID() . ':' . $path . ':' . $file->getMTime());
-            $tempFile = $this->tempDir . '/' . $fileId . '.mp4';
+            $tempFile = $this->getUserTempDir() . '/' . $fileId . '.mp4';
 
             // Check if already transcoded (unless force is true)
             if (!$force && file_exists($tempFile)) {
-                $this->logger->debug('Reusing cached transcode for: ' . $path, ['app' => 'hyper_viewer']);
                 return new JSONResponse([
                     'url' => '/apps/hyper_viewer/api/proxy-stream?id=' . $fileId,
                     'debug' => [
                         'fileSize' => filesize($tempFile),
                         'tempFile' => basename($tempFile),
-                        'cacheHit' => true
+                        'cacheHit' => true,
+                        'path' => $path,
+                        'fileId' => $fileId,
+                        'tempDir' => $this->getUserTempDir()
                     ]
                 ]);
             }
@@ -87,7 +108,6 @@ class TranscodeController extends Controller {
             // If forcing, delete existing file
             if ($force && file_exists($tempFile)) {
                 unlink($tempFile);
-                $this->logger->debug('Deleted existing transcode due to force flag: ' . $path, ['app' => 'hyper_viewer']);
             }
 
             // Clean up old files (older than 2 hours)
@@ -100,8 +120,6 @@ class TranscodeController extends Controller {
             }
 
             // Start transcoding
-            $this->logger->info('Starting 480p transcode for: ' . $path, ['app' => 'hyper_viewer']);
-            
             $transcodeResult = $this->startTranscode($inputPath, $tempFile);
             
             if (!$transcodeResult['success']) {
@@ -111,16 +129,17 @@ class TranscodeController extends Controller {
                 ], Http::STATUS_INTERNAL_SERVER_ERROR);
             }
 
-            $this->logger->info('Completed 480p transcode for: ' . $path, ['app' => 'hyper_viewer']);
-
             return new JSONResponse([
                 'url' => '/apps/hyper_viewer/api/proxy-stream?id=' . $fileId,
                 'debug' => [
                     'backgroundTranscode' => true,
                     'tempFile' => basename($tempFile),
                     'cacheHit' => false,
-                    'logFile' => $transcodeResult['logFile'],
-                    'tempDir' => $this->tempDir
+                    'path' => $path,
+                    'fileId' => $fileId,
+                    'inputPath' => $inputPath,
+                    'tempDir' => $this->getUserTempDir(),
+                    'transcodeResult' => $transcodeResult
                 ]
             ]);
 
@@ -129,8 +148,14 @@ class TranscodeController extends Controller {
         } catch (NotPermittedException $e) {
             return new JSONResponse(['error' => 'Permission denied'], Http::STATUS_FORBIDDEN);
         } catch (\Exception $e) {
-            $this->logger->error('Transcode error: ' . $e->getMessage(), ['app' => 'hyper_viewer']);
-            return new JSONResponse(['error' => 'Internal server error'], Http::STATUS_INTERNAL_SERVER_ERROR);
+            return new JSONResponse([
+                'error' => 'Internal server error', 
+                'debug' => [
+                    'exception' => $e->getMessage(),
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine()
+                ]
+            ], Http::STATUS_INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -141,7 +166,16 @@ class TranscodeController extends Controller {
      */
     public function proxyStream($id) {
         try {
-            $tempFile = $this->tempDir . '/' . $id . '.mp4';
+            $tempDir = $this->getUserTempDir();
+            $tempFile = $tempDir . '/' . $id . '.mp4';
+            
+            // Check if temp directory exists
+            if (!is_dir($tempDir)) {
+                header('HTTP/1.1 500 Internal Server Error');
+                header('X-Debug-Error: Temp directory not found');
+                header('X-Debug-Path: ' . $tempDir);
+                exit;
+            }
             
             // Wait for FFmpeg to create the file (up to 30 seconds)
             $maxWaitTime = 30;
@@ -154,10 +188,17 @@ class TranscodeController extends Controller {
             }
             
             if (!file_exists($tempFile)) {
-                $this->logger->error('Temp file not created after waiting: ' . $tempFile, ['app' => 'hyper_viewer']);
+                // List files in temp directory for debugging
+                $files = glob($tempDir . '/*');
+                $fileList = implode(', ', array_map('basename', $files));
+                
                 header('HTTP/1.1 404 Not Found');
-                header('Content-Type: text/plain');
-                echo 'File not found after waiting: ' . $id . ' (waited ' . $waited . 's)';
+                header('X-Debug-Error: File not found after waiting');
+                header('X-Debug-Wait-Time: ' . $waited . 's');
+                header('X-Debug-ID: ' . $id);
+                header('X-Debug-Expected-File: ' . basename($tempFile));
+                header('X-Debug-Temp-Dir: ' . $tempDir);
+                header('X-Debug-Files-In-Dir: ' . $fileList);
                 exit;
             }
             
@@ -170,8 +211,6 @@ class TranscodeController extends Controller {
                 usleep((int)($waitInterval * 1000000));
                 $contentWaited += $waitInterval;
             }
-            
-            $this->logger->debug('Streaming file after waiting: ' . $waited . 's for creation, ' . $contentWaited . 's for content. Size: ' . filesize($tempFile) . ' bytes', ['app' => 'hyper_viewer']);
 
             // Clean up old files
             $this->cleanupOldFiles();
@@ -188,8 +227,9 @@ class TranscodeController extends Controller {
             }
         } catch (\Exception $e) {
             header('HTTP/1.1 500 Internal Server Error');
-            header('Content-Type: text/plain');
-            echo 'Stream error: ' . $e->getMessage();
+            header('X-Debug-Exception: ' . $e->getMessage());
+            header('X-Debug-File: ' . $e->getFile());
+            header('X-Debug-Line: ' . $e->getLine());
             exit;
         }
     }
@@ -216,10 +256,14 @@ class TranscodeController extends Controller {
             escapeshellarg($logFile)
         );
 
-        $this->logger->debug('Starting background FFmpeg: ' . $cmd, ['app' => 'hyper_viewer']);
+        // Ensure temp directory exists
+        $tempDir = $this->getUserTempDir();
+        if (!is_dir($tempDir)) {
+            mkdir($tempDir, 0755, true);
+        }
 
         // Fire and forget - start FFmpeg in background
-        exec($cmd);
+        exec($cmd, $output, $returnCode);
         
         // Return immediately - don't wait for completion
         return [
@@ -228,7 +272,11 @@ class TranscodeController extends Controller {
             'backgroundProcess' => true,
             'logFile' => $logFile,
             'cmd' => $cmd,
-            'outputPath' => $outputPath
+            'outputPath' => $outputPath,
+            'execReturnCode' => $returnCode,
+            'execOutput' => $output,
+            'tempDirExists' => is_dir($tempDir),
+            'tempDirWritable' => is_writable($tempDir)
         ];
     }
 
@@ -237,8 +285,8 @@ class TranscodeController extends Controller {
             // Parse Range header (e.g., "bytes=0-1023" or "bytes=0-")
             if (!preg_match('/bytes=(\d+)-(\d*)/', $rangeHeader, $matches)) {
                 header('HTTP/1.1 416 Requested Range Not Satisfiable');
-                header('Content-Type: text/plain');
-                echo 'Invalid range header: ' . $rangeHeader;
+                header('X-Debug-Error: Invalid range header');
+                header('X-Debug-Range-Header: ' . $rangeHeader);
                 exit;
             }
 
@@ -258,8 +306,9 @@ class TranscodeController extends Controller {
             if ($start >= $fileSize || $end >= $fileSize || $start > $end) {
                 header('HTTP/1.1 416 Requested Range Not Satisfiable');
                 header('Content-Range: bytes */' . $fileSize);
-                header('Content-Type: text/plain');
-                echo 'Invalid range: ' . $start . '-' . $end . ' for file size ' . $fileSize;
+                header('X-Debug-Error: Invalid range');
+                header('X-Debug-Range: ' . $start . '-' . $end);
+                header('X-Debug-File-Size: ' . $fileSize);
                 exit;
             }
 
@@ -269,8 +318,8 @@ class TranscodeController extends Controller {
             $handle = fopen($filePath, 'rb');
             if (!$handle) {
                 header('HTTP/1.1 500 Internal Server Error');
-                header('Content-Type: text/plain');
-                echo 'Cannot open file: ' . $filePath;
+                header('X-Debug-Error: Cannot open file');
+                header('X-Debug-File-Path: ' . basename($filePath));
                 exit;
             }
 
@@ -302,8 +351,9 @@ class TranscodeController extends Controller {
             
         } catch (\Exception $e) {
             header('HTTP/1.1 500 Internal Server Error');
-            header('Content-Type: text/plain');
-            echo 'Range request error: ' . $e->getMessage();
+            header('X-Debug-Exception: ' . $e->getMessage());
+            header('X-Debug-File: ' . $e->getFile());
+            header('X-Debug-Line: ' . $e->getLine());
             exit;
         }
     }
@@ -320,8 +370,7 @@ class TranscodeController extends Controller {
             $handle = fopen($filePath, 'rb');
             if (!$handle) {
                 header('HTTP/1.1 500 Internal Server Error');
-                header('Content-Type: text/plain');
-                echo 'Cannot open file';
+                header('X-Debug-Error: Cannot open file');
                 exit;
             }
 
@@ -442,7 +491,7 @@ class TranscodeController extends Controller {
         $handle = fopen($filePath, 'rb');
         if (!$handle) {
             header('HTTP/1.1 500 Internal Server Error');
-            echo 'Cannot open file';
+            header('X-Debug-Error: Cannot open file for progressive streaming');
             exit;
         }
         
@@ -501,7 +550,7 @@ class TranscodeController extends Controller {
         $handle = fopen($filePath, 'rb');
         if (!$handle) {
             header('HTTP/1.1 500 Internal Server Error');
-            echo 'Cannot open file';
+            header('X-Debug-Error: Cannot open file for range streaming');
             exit;
         }
         
@@ -584,23 +633,22 @@ class TranscodeController extends Controller {
     }
 
     private function cleanupOldFiles(): void {
-        $cutoff = time() - (2 * 3600); // 2 hours ago
+        $cutoff = time() - (24 * 3600); // 2 hours ago
+        $tempDir = $this->getUserTempDir();
         
         // Clean up old MP4 files
-        $mp4Files = glob($this->tempDir . '/*.mp4');
+        $mp4Files = glob($tempDir . '/*.mp4');
         foreach ($mp4Files as $file) {
             if (filemtime($file) < $cutoff) {
                 unlink($file);
-                $this->logger->debug('Cleaned up old transcode file: ' . basename($file), ['app' => 'hyper_viewer']);
             }
         }
         
         // Clean up old log files
-        $logFiles = glob($this->tempDir . '/ffmpeg_*.log');
+        $logFiles = glob($tempDir . '/ffmpeg_*.log');
         foreach ($logFiles as $file) {
             if (filemtime($file) < $cutoff) {
                 unlink($file);
-                $this->logger->debug('Cleaned up old FFmpeg log: ' . basename($file), ['app' => 'hyper_viewer']);
             }
         }
     }
