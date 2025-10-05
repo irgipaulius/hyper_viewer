@@ -692,7 +692,7 @@ class TranscodeController extends Controller {
     private function streamLiveFromFFmpeg(string $inputPath): void {
         // Clear any output buffering and set up for immediate streaming
         @ob_end_clean();
-        @ob_implicit_flush(true);
+        @ob_implicit_flush(1);
         
         // Send headers for progressive MP4 streaming
         header('HTTP/1.1 200 OK');
