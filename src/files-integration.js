@@ -2392,23 +2392,44 @@ function loadShakaPlayer(filename, cachePath, context) {
 	if (shaka.Player.isBrowserSupported()) {
 		const player = new shaka.Player(video);
 		const videoContainer = modal.querySelector('#video-player-container');
-		const ui = new shaka.ui.Overlay(player, videoContainer, video); // eslint-disable-line no-unused-vars
-
-		// Inject CSS to prevent Shaka controls from overlapping clipping panel
-		const shakaStyle = document.createElement('style');
-		shakaStyle.textContent = `
-			.shaka-video-container {
-				margin-bottom: 10px !important;
+		
+		// Configure Shaka UI with professional video editing controls
+		const uiConfig = {
+			controlPanelElements: [
+				'play_pause',
+				'rewind',
+				'fast_forward',
+				'time_and_duration',
+				'spacer',
+				'mute',
+				'volume',
+				'loop',
+				'playback_rate',
+				'fullscreen',
+				'overflow_menu'
+			],
+			overflowMenuButtons: [
+				'quality',
+				'picture_in_picture',
+				'save_video_frame',
+				'statistics'
+			],
+			enableTooltips: true,
+			addSeekBar: true,
+			addBigPlayButton: true,
+			customContextMenu: false,
+			playbackRates: [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2],
+			rewindRates: [-1, -2, -4],
+			fastForwardRates: [2, 4, 8],
+			seekBarColors: {
+				base: 'rgba(255, 255, 255, 0.3)',
+				buffered: 'rgba(76, 175, 80, 0.4)',
+				played: 'rgb(255, 152, 0)' // Match orange theme
 			}
-			.shaka-controls-container {
-				pointer-events: auto !important;
-				z-index: 10001 !important;
-			}
-			.shaka-bottom-controls {
-				margin-bottom: 5px !important;
-			}
-		`;
-		document.head.appendChild(shakaStyle);
+		};
+		
+		const ui = new shaka.ui.Overlay(player, videoContainer, video);
+		ui.configure(uiConfig);
 
 		// Build manifest URL
 		const encodedCachePath = encodeURIComponent(cachePath);
