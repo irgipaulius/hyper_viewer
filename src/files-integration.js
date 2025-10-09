@@ -191,6 +191,114 @@ function initializeFilesIntegration() {
 	}
 
 	console.log("✅ Hyper Viewer Files integration registered!");
+	
+	// Add HLS badges to file list
+	addHlsBadgesToFileList();
+}
+
+/**
+ * Add HLS badges to videos in the file list
+ */
+function addHlsBadgesToFileList() {
+	// Inject CSS for HLS badges
+	const style = document.createElement('style');
+	style.textContent = `
+		.hls-badge {
+			position: absolute;
+			top: 8px;
+			right: 8px;
+			background: rgba(60, 60, 60, 0.9);
+			color: #FF9800;
+			padding: 3px 8px;
+			border-radius: 4px;
+			font-size: 10px;
+			font-weight: bold;
+			letter-spacing: 0.5px;
+			z-index: 100;
+			pointer-events: none;
+			box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+			backdrop-filter: blur(4px);
+		}
+		
+		/* Make sure badge is visible on thumbnails */
+		.files-fileList tr[data-file] .thumbnail-wrapper {
+			position: relative;
+		}
+	`;
+	document.head.appendChild(style);
+	
+	// Function to check and add badges
+	async function updateHlsBadges() {
+		const fileList = document.querySelector('#filestable tbody.files-fileList');
+		if (!fileList) return;
+		
+		const directory = window.OCA?.Files?.App?.fileList?.getCurrentDirectory() || '/';
+		const videoRows = fileList.querySelectorAll('tr[data-file][data-mime="video/quicktime"], tr[data-file][data-mime="video/mp4"]');
+		
+		for (const row of videoRows) {
+			const filename = row.getAttribute('data-file');
+			if (!filename) continue;
+			
+			// Skip if badge already exists
+			if (row.querySelector('.hls-badge')) continue;
+			
+			try {
+				// Check if HLS cache exists
+				const cachePath = await checkHlsCache(filename, directory);
+				
+				if (cachePath) {
+					// Add HLS badge
+					const thumbnailWrapper = row.querySelector('.thumbnail-wrapper') || 
+					                        row.querySelector('td.filename .thumbnail');
+					
+					if (thumbnailWrapper) {
+						// Ensure wrapper has relative positioning
+						thumbnailWrapper.style.position = 'relative';
+						
+						const badge = document.createElement('div');
+						badge.className = 'hls-badge';
+						badge.textContent = 'HLS';
+						badge.title = 'HLS cache available';
+						thumbnailWrapper.appendChild(badge);
+						
+						console.log(`✅ Added HLS badge to: ${filename}`);
+					}
+				}
+			} catch (error) {
+				console.error(`Failed to check HLS cache for ${filename}:`, error);
+			}
+		}
+	}
+	
+	// Update badges on initial load
+	setTimeout(updateHlsBadges, 2000);
+	
+	// Update badges when file list changes
+	const observer = new MutationObserver(() => {
+		updateHlsBadges();
+	});
+	
+	// Wait for file list to exist
+	const checkFileList = setInterval(() => {
+		const fileListElement = document.querySelector('#filestable tbody.files-fileList');
+		if (fileListElement) {
+			observer.observe(fileListElement, {
+				childList: true,
+				subtree: true
+			});
+			clearInterval(checkFileList);
+		}
+	}, 500);
+	
+	// Also update on directory change
+	if (window.OCA?.Files?.App?.fileList) {
+		const originalChangeDirectory = window.OCA.Files.App.fileList.changeDirectory;
+		window.OCA.Files.App.fileList.changeDirectory = function(...args) {
+			const result = originalChangeDirectory.apply(this, args);
+			setTimeout(updateHlsBadges, 1000);
+			return result;
+		};
+	}
 }
 
 /**
@@ -2458,6 +2566,16 @@ function loadShakaPlayer(filename, cachePath, context, directory) {
         </div>
         
         <!-- Top Controls (Over video player) -->
+        <div style="position: absolute; top: 20px; left: 20px; z-index: 10003;">
+            <div class="hls-player-badge" style="
+                background: rgba(60, 60, 60, 0.9); color: #FF9800; 
+                padding: 6px 12px; border-radius: 4px; font-size: 11px; font-weight: bold;
+                letter-spacing: 0.5px; box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+                backdrop-filter: blur(4px); display: flex; align-items: center; gap: 6px;">
+                <span style="font-size: 14px;">📡</span> HLS STREAMING
+            </div>
+        </div>
+        
         <div style="position: absolute; top: 20px; right: 20px; display: flex; gap: 10px; z-index: 10003;">
             <button id="toggle-clip-mode" style="
                 background: rgba(255, 152, 0, 0.9); border: none; color: white; 
