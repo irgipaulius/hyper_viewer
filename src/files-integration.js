@@ -2394,6 +2394,22 @@ function loadShakaPlayer(filename, cachePath, context) {
 		const videoContainer = modal.querySelector('#video-player-container');
 		const ui = new shaka.ui.Overlay(player, videoContainer, video); // eslint-disable-line no-unused-vars
 
+		// Inject CSS to prevent Shaka controls from overlapping clipping panel
+		const shakaStyle = document.createElement('style');
+		shakaStyle.textContent = `
+			.shaka-video-container {
+				margin-bottom: 10px !important;
+			}
+			.shaka-controls-container {
+				pointer-events: auto !important;
+				z-index: 10001 !important;
+			}
+			.shaka-bottom-controls {
+				margin-bottom: 5px !important;
+			}
+		`;
+		document.head.appendChild(shakaStyle);
+
 		// Build manifest URL
 		const encodedCachePath = encodeURIComponent(cachePath);
 		const masterUrl = `${OC.generateUrl(
