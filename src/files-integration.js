@@ -1899,22 +1899,43 @@ async function playVideoSmart(filename, directory, context) {
 function openWithDefaultPlayer(filename, directory, context) {
 	console.log(`🎥 Opening with default player: ${filename}`);
 	
-	// Trigger the default viewer action
-	const filePath = directory === "/" ? `/${filename}` : `${directory}/${filename}`;
-	
-	// Use Nextcloud's built-in viewer
-	if (window.OCA && window.OCA.Viewer && window.OCA.Viewer.open) {
-		// Nextcloud 25+ Viewer API
-		window.OCA.Viewer.open({
-			path: filePath,
-			list: context?.fileList?.files || []
-		});
-	} else if (window.OC && window.OC.Viewer) {
-		// Fallback for older Nextcloud versions
-		window.OC.Viewer.open(filePath);
-	} else {
-		// Last resort: direct download/view
-		window.location.href = OC.generateUrl(`/f/${context?.fileId || ''}`);
+	try {
+		// Get the file info from context
+		const fileList = context?.fileInfoModel?.fileList || context?.fileList || window.OCA?.Files?.App?.fileList;
+		
+		if (!fileList) {
+			console.error('No fileList available');
+			return;
+		}
+		
+		// Find the file model in the fileList
+		const fileModel = fileList.files.find(f => f.name === filename);
+		
+		if (!fileModel) {
+			console.error(`File not found in fileList: ${filename}`);
+			return;
+		}
+		
+		// Use Nextcloud's Viewer with proper file object
+		if (window.OCA?.Viewer?.open) {
+			// Modern Viewer API - pass the file object directly
+			window.OCA.Viewer.open({
+				fileInfo: fileModel,
+				list: fileList.files,
+				enableSidebar: true
+			});
+		} else if (fileList.showDetailsView) {
+			// Fallback: trigger the file's default action through fileList
+			fileList.showDetailsView(filename, 'sharing');
+		} else {
+			// Last resort: try to open via file actions
+			const defaultAction = OCA.Files.fileActions.getDefault(fileModel.mimetype, 'file', OC.PERMISSION_READ);
+			if (defaultAction) {
+				defaultAction.action(filename, context);
+			}
+		}
+	} catch (error) {
+		console.error('Error opening with default player:', error);
 	}
 }
 
