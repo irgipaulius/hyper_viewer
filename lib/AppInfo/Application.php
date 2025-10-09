@@ -12,8 +12,6 @@ use OCP\Util;
 use OCP\AppFramework\Http\Events\AddContentSecurityPolicyEvent;
 use OCA\HyperViewer\Listener\CspListener;
 use OCA\HyperViewer\BackgroundJob\AutoHlsGenerationJob;
-use OCA\HyperViewer\Settings\PersonalSection;
-use OCA\HyperViewer\Settings\PersonalSettings;
 
 class Application extends App implements IBootstrap {
 	public const APP_ID = 'hyper_viewer';
@@ -26,9 +24,7 @@ class Application extends App implements IBootstrap {
 		// Hook CSP into pages rendered by other apps (Files/Viewer)
 		$context->registerEventListener(AddContentSecurityPolicyEvent::class, CspListener::class);
 		
-		// Register settings section and page
-		$context->registerSettingsSection(PersonalSection::class);
-		$context->registerSettings(PersonalSettings::class);
+		// Settings are registered via info.xml for better compatibility
 		
 		// Register auto-generation cron job
 		$context->registerService('AutoHlsGenerationJob', function() {
