@@ -243,42 +243,52 @@ function addHlsBadgesToFileList() {
 		console.log('🔍 Checking for videos to badge...');
 		
 		const directory = window.OCA?.Files?.App?.fileList?.getCurrentDirectory() || '/';
+		const fileList = window.OCA?.Files?.App?.fileList;
 		
-		// Try multiple selectors for different Nextcloud views
-		let videoElements = [];
+		if (!fileList || !fileList.files) {
+			console.warn('⚠️ No fileList available');
+			return;
+		}
 		
-		// List view
-		const listViewVideos = document.querySelectorAll(
-			'#filestable tbody.files-fileList tr[data-file][data-mime="video/quicktime"], ' +
-			'#filestable tbody.files-fileList tr[data-file][data-mime="video/mp4"]'
+		// Get video files from fileList (the source of truth)
+		const videoFiles = fileList.files.filter(file => 
+			file.mimetype === 'video/quicktime' || 
+			file.mimetype === 'video/mp4'
 		);
 		
-		// Grid view
-		const gridViewVideos = document.querySelectorAll(
-			'section.files-grid .grid-item[data-mime="video/quicktime"], ' +
-			'section.files-grid .grid-item[data-mime="video/mp4"]'
-		);
+		console.log(`📹 Found ${videoFiles.length} video files in fileList`);
 		
-		videoElements = [...listViewVideos, ...gridViewVideos];
-		console.log(`📹 Found ${videoElements.length} video elements`);
+		if (videoFiles.length === 0) {
+			return;
+		}
 		
-		for (const element of videoElements) {
-			const filename = element.getAttribute('data-file');
-			if (!filename) continue;
+		// Process each video file
+		for (const videoFile of videoFiles) {
+			const filename = videoFile.name;
+			
+			// Find the DOM element for this file
+			const fileRow = document.querySelector(`tr[data-file="${filename}"]`);
+			
+			if (!fileRow) {
+				console.warn(`⚠️ No DOM element found for: ${filename}`);
+				continue;
+			}
 			
 			// Skip if badge already exists
-			if (element.querySelector('.hls-badge')) continue;
+			if (fileRow.querySelector('.hls-badge')) {
+				continue;
+			}
 			
 			try {
 				// Check if HLS cache exists
 				const cachePath = await checkHlsCache(filename, directory);
 				
 				if (cachePath) {
-					// Find thumbnail container (different for list vs grid)
+					// Find thumbnail container in the row
 					const thumbnailContainer = 
-						element.querySelector('td.filename .thumbnail') || // List view
-						element.querySelector('.thumbnail') || // Grid view
-						element.querySelector('.icon-file'); // Fallback
+						fileRow.querySelector('td.filename .thumbnail') || 
+						fileRow.querySelector('.thumbnail') || 
+						fileRow.querySelector('.icon');
 					
 					if (thumbnailContainer) {
 						// Ensure container has relative positioning
