@@ -233,7 +233,7 @@ class CacheController extends Controller {
 		}
 
 		$userFolder = $this->rootFolder->getUserFolder($user->getUID());
-		$cacheExists = $this->findHlsCache($userFolder, $filename, $directory);
+		$cacheExists = $this->findHlsCache($userFolder, $filename, $directory, $user->getUID());
 
 		return new JSONResponse([
 			'exists' => $cacheExists !== null,
@@ -243,19 +243,65 @@ class CacheController extends Controller {
 	}
 
 	/**
+	 * Get cache locations from user settings
+	 */
+	private function getCacheLocations(string $userId): array {
+		// Get user-configured cache locations
+		$cacheLocationsJson = $this->config->getUserValue(
+			$userId,
+			$this->appName,
+			'cache_locations',
+			json_encode([
+				'./.cached_hls/',
+				'~/.cached_hls/',
+				'/mnt/cache/.cached_hls/'
+			])
+		);
+
+		$locations = json_decode($cacheLocationsJson, true);
+		if (!is_array($locations)) {
+			// Fallback to defaults if invalid JSON
+			$locations = ['./.cached_hls/', '~/.cached_hls/', '/mnt/cache/.cached_hls/'];
+		}
+
+		return $locations;
+	}
+
+	/**
 	 * Find HLS cache for a video file
 	 */
-	private function findHlsCache($userFolder, string $filename, string $directory): ?string {
+	private function findHlsCache($userFolder, string $filename, string $directory, string $userId): ?string {
 		$baseFilename = pathinfo($filename, PATHINFO_FILENAME);
 		
-		// Check cache locations in order of preference
-		$cacheLocations = [
-			// Relative to video file
-			$directory . '/.cached_hls/' . $baseFilename,
-			// User home directory
-			'/.cached_hls/' . $baseFilename,
-			// TODO: Add custom mount points from user settings
-		];
+		// Get cache locations from user settings
+		$userCacheLocations = $this->getCacheLocations($userId);
+		
+		$cacheLocations = [];
+		foreach ($userCacheLocations as $location) {
+			// Normalize the location path
+			$location = rtrim($location, '/');
+			
+			// Handle different path formats
+			if ($location === '.' || $location === './.cached_hls') {
+				// Relative to current directory
+				$cacheLocations[] = $directory . '/.cached_hls/' . $baseFilename;
+			} elseif ($location === '~' || strpos($location, '~/') === 0) {
+				// User home directory
+				$cacheLocations[] = '/.cached_hls/' . $baseFilename;
+			} elseif (strpos($location, '/') === 0) {
+				// Absolute path
+				$cacheLocations[] = $location . '/' . $baseFilename;
+			} else {
+				// Treat as relative path
+				$cacheLocations[] = '/' . $location . '/' . $baseFilename;
+			}
+		}
+
+		// Always check relative to video file as first priority (if not already added)
+		$relativeCache = $directory . '/.cached_hls/' . $baseFilename;
+		if (!in_array($relativeCache, $cacheLocations)) {
+			array_unshift($cacheLocations, $relativeCache);
+		}
 
 		foreach ($cacheLocations as $cachePath) {
 			try {
@@ -1157,5 +1203,42 @@ class CacheController extends Controller {
 			// Skip folders we can't access
 			return;
 		}
+	}
+
+	/**
+	 * Batch check HLS cache for multiple videos in a directory
+	 * Much faster than checking each file individually
+	 * 
+	 * @NoAdminRequired
+	 */
+	public function batchCheckCache(): JSONResponse {
+		$user = $this->userSession->getUser();
+		if (!$user) {
+			return new JSONResponse(['error' => 'User not authenticated'], 401);
+		}
+
+		$directory = $this->request->getParam('directory', '/');
+		$filenames = $this->request->getParam('filenames', []);
+
+		if (empty($filenames)) {
+			return new JSONResponse(['cachedVideos' => []]);
+		}
+
+		$userFolder = $this->rootFolder->getUserFolder($user->getUID());
+		$cachedVideos = [];
+
+		// Check each video file
+		foreach ($filenames as $filename) {
+			$cachePath = $this->findHlsCache($userFolder, $filename, $directory, $user->getUID());
+			if ($cachePath !== null) {
+				$cachedVideos[] = $filename;
+			}
+		}
+
+		return new JSONResponse([
+			'directory' => $directory,
+			'cachedVideos' => $cachedVideos,
+			'totalChecked' => count($filenames)
+		]);
 	}
 }

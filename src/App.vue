@@ -2,7 +2,36 @@
 	<div class="hyper-viewer-dashboard">
 		<!-- Header -->
 		<div class="dashboard-header">
-			<h1>🎬 Hyper Viewer Management</h1>
+			<div class="header-logo">
+				<svg
+					xmlns="http://www.w3.org/2000/svg"
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="2"
+					stroke-linecap="round"
+					stroke-linejoin="round">
+					<path d="M23 7l-7 5 7 5V7z" />
+					<rect
+						x="1"
+						y="5"
+						width="15"
+						height="14"
+						rx="2"
+						ry="2" />
+					<line
+						x1="5"
+						y1="9"
+						x2="12"
+						y2="9" />
+					<line
+						x1="5"
+						y1="13"
+						x2="12"
+						y2="13" />
+				</svg>
+			</div>
+			<h1>Hyper Viewer Management</h1>
 			<p>Monitor HLS generation jobs and manage auto-generation settings</p>
 			<button class="refresh-btn" :disabled="loading" @click="refreshData">
 				<span v-if="loading">🔄</span>
@@ -511,6 +540,26 @@ export default {
 	border-radius: 12px;
 	color: white;
 	position: relative;
+}
+
+.header-logo {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 80px;
+	height: 80px;
+	margin-bottom: 15px;
+	background: rgba(255, 255, 255, 0.15);
+	border-radius: 20px;
+	backdrop-filter: blur(10px);
+	box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+.header-logo svg {
+	width: 48px;
+	height: 48px;
+	stroke: white;
+	filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
 }
 
 .dashboard-header h1 {

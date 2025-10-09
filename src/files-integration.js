@@ -262,52 +262,81 @@ function addHlsBadgesToFileList() {
 			return;
 		}
 		
-		// Process each video file
-		for (const videoFile of videoFiles) {
-			const filename = videoFile.name;
-			
-			// Find the DOM element for this file
-			const fileRow = document.querySelector(`tr[data-file="${filename}"]`);
-			
-			if (!fileRow) {
-				console.warn(`⚠️ No DOM element found for: ${filename}`);
-				continue;
-			}
-			
-			// Skip if badge already exists
-			if (fileRow.querySelector('.hls-badge')) {
-				continue;
-			}
-			
-			try {
-				// Check if HLS cache exists
-				const cachePath = await checkHlsCache(filename, directory);
-				
-				if (cachePath) {
-					// Find thumbnail container in the row
-					const thumbnailContainer = 
-						fileRow.querySelector('td.filename .thumbnail') || 
-						fileRow.querySelector('.thumbnail') || 
-						fileRow.querySelector('.icon');
-					
-					if (thumbnailContainer) {
-						// Ensure container has relative positioning
-						thumbnailContainer.style.position = 'relative';
-						
-						const badge = document.createElement('div');
-						badge.className = 'hls-badge';
-						badge.textContent = 'HLS';
-						badge.title = 'HLS cache available';
-						thumbnailContainer.appendChild(badge);
-						
-						console.log(`✅ Added HLS badge to: ${filename}`);
-					} else {
-						console.warn(`⚠️ No thumbnail container found for: ${filename}`);
-					}
+		// Get all filenames
+		const filenames = videoFiles.map(f => f.name);
+		
+		try {
+			// Batch check all videos at once (much faster!)
+			const response = await fetch(
+				OC.generateUrl('/apps/hyper_viewer/cache/batch-check'),
+				{
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+						requesttoken: OC.requestToken
+					},
+					body: JSON.stringify({
+						directory,
+						filenames
+					})
 				}
-			} catch (error) {
-				console.error(`Failed to check HLS cache for ${filename}:`, error);
+			);
+			
+			if (!response.ok) {
+				console.error('Batch check failed:', response.status);
+				return;
 			}
+			
+			const result = await response.json();
+			const cachedVideos = new Set(result.cachedVideos || []);
+			
+			console.log(`✅ Batch check complete: ${cachedVideos.size}/${filenames.length} videos have HLS cache`);
+			
+			// Apply badges to videos with cache
+			for (const videoFile of videoFiles) {
+				const filename = videoFile.name;
+				
+				// Skip if video doesn't have cache
+				if (!cachedVideos.has(filename)) {
+					continue;
+				}
+				
+				// Find the DOM element for this file
+				const fileRow = document.querySelector(`tr[data-file="${filename}"]`);
+				
+				if (!fileRow) {
+					console.warn(`⚠️ No DOM element found for: ${filename}`);
+					continue;
+				}
+				
+				// Skip if badge already exists
+				if (fileRow.querySelector('.hls-badge')) {
+					continue;
+				}
+				
+				// Find thumbnail container in the row
+				const thumbnailContainer = 
+					fileRow.querySelector('td.filename .thumbnail') || 
+					fileRow.querySelector('.thumbnail') || 
+					fileRow.querySelector('.icon');
+				
+				if (thumbnailContainer) {
+					// Ensure container has relative positioning
+					thumbnailContainer.style.position = 'relative';
+					
+					const badge = document.createElement('div');
+					badge.className = 'hls-badge';
+					badge.textContent = 'HLS';
+					badge.title = 'HLS cache available';
+					thumbnailContainer.appendChild(badge);
+					
+					console.log(`✅ Added HLS badge to: ${filename}`);
+				} else {
+					console.warn(`⚠️ No thumbnail container found for: ${filename}`);
+				}
+			}
+		} catch (error) {
+			console.error('Failed to batch check HLS cache:', error);
 		}
 	}
 	

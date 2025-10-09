@@ -29,6 +29,7 @@ return [
 		['name' => 'settings#getCacheLocations', 'url' => '/settings/cache-locations', 'verb' => 'GET'],
 		['name' => 'cache#generateCache', 'url' => '/cache/generate', 'verb' => 'POST'],
 		['name' => 'cache#checkCache', 'url' => '/cache/check', 'verb' => 'POST'],
+		['name' => 'cache#batchCheckCache', 'url' => '/cache/batch-check', 'verb' => 'POST'],
 		['name' => 'cache#getProgress', 'url' => '/cache/progress/{cachePath}', 'verb' => 'GET', 'requirements' => ['cachePath' => '.+']],
 		['name' => 'cache#discoverVideos', 'url' => '/cache/discover-videos', 'verb' => 'POST'],
 		['name' => 'cache#registerAutoGeneration', 'url' => '/cache/register-auto-generation', 'verb' => 'POST'],

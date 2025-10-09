@@ -40,7 +40,7 @@ class PersonalSettings implements ISettings {
 	}
 
 	public function getSection(): string {
-		return 'additional';
+		return 'hyper_viewer';
 	}
 
 	public function getPriority(): int {
