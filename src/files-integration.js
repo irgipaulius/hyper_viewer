@@ -2270,6 +2270,29 @@ function showProgressiveVideoModal(filename, videoUrl) {
 function loadShakaPlayer(filename, cachePath, context) {
 	const videoId = `hyperVideo_${Date.now()}`;
 
+	// Get current directory
+	const directory = context?.dir || context?.fileList?.getCurrentDirectory() || "/";
+
+	// Get video playlist for navigation
+	let videoPlaylist = [];
+	let currentVideoIndex = 0;
+	if (context?.fileInfoModel || context?.fileList) {
+		const fileList = context.fileInfoModel?.fileList || context.fileList;
+		if (fileList) {
+			const files = fileList.files || [];
+			// Filter video files (MOV and MP4)
+			videoPlaylist = files
+				.filter(file => 
+					file.mimetype === 'video/quicktime' || 
+					file.mimetype === 'video/mp4'
+				)
+				.map(file => file.name)
+				.sort();
+			currentVideoIndex = videoPlaylist.indexOf(filename);
+			console.log(`📹 Video playlist: ${videoPlaylist.length} videos, current index: ${currentVideoIndex}`);
+		}
+	}
+
 	// Create enhanced modal with clipping controls
 	const modal = document.createElement("div");
 	modal.style.cssText = `
@@ -2284,6 +2307,23 @@ function loadShakaPlayer(filename, cachePath, context) {
             position: relative; width: min(90vw, 1200px); height: min(70vh, 600px);
             background: #000; border-radius: 8px 8px 0 0; overflow: visible; padding-bottom: 50px;
         ">
+            <!-- Navigation Arrows (Desktop only) -->
+            <button id="prev-video-btn" class="nav-arrow prev-arrow" style="
+                position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+                width: 50px; height: 50px; border-radius: 50%; border: none;
+                background: rgba(0,0,0,0.6); color: white; font-size: 24px;
+                cursor: pointer; z-index: 1000; display: flex; align-items: center; justify-content: center;
+                opacity: 0; transition: opacity 0.3s, background 0.2s;
+            " title="Previous video (Shift+Left)">‹</button>
+            
+            <button id="next-video-btn" class="nav-arrow next-arrow" style="
+                position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+                width: 50px; height: 50px; border-radius: 50%; border: none;
+                background: rgba(0,0,0,0.6); color: white; font-size: 24px;
+                cursor: pointer; z-index: 1000; display: flex; align-items: center; justify-content: center;
+                opacity: 0; transition: opacity 0.3s, background 0.2s;
+            " title="Next video (Shift+Right)">›</button>
+            
             <video id="${videoId}" autoplay style="
                 width: 100%; height: calc(100% - 50px); object-fit: contain; background: #000;
             "></video>
@@ -2438,12 +2478,106 @@ function loadShakaPlayer(filename, cachePath, context) {
 	// Add close button event listener
 	modal.querySelector(".close-btn").addEventListener("click", closeModal);
 
+	// Video navigation functionality
+	const navigateToVideo = async (direction) => {
+		if (videoPlaylist.length <= 1) return; // No other videos to navigate to
+		
+		// Calculate new index with loop-around
+		let newIndex = currentVideoIndex + direction;
+		if (newIndex < 0) newIndex = videoPlaylist.length - 1; // Loop to end
+		if (newIndex >= videoPlaylist.length) newIndex = 0; // Loop to start
+		
+		const nextFilename = videoPlaylist[newIndex];
+		console.log(`🔄 Navigating to video ${newIndex + 1}/${videoPlaylist.length}: ${nextFilename}`);
+		
+		// Close current modal
+		closeModal();
+		
+		// Play next video with HLS
+		await playWithHls(nextFilename, directory, context);
+	};
+
+	// Navigation arrow buttons (desktop)
+	const prevBtn = modal.querySelector("#prev-video-btn");
+	const nextBtn = modal.querySelector("#next-video-btn");
+	const videoContainer = modal.querySelector("#video-player-container");
+	
+	// Hide arrows if only one video
+	if (videoPlaylist.length <= 1) {
+		prevBtn.style.display = "none";
+		nextBtn.style.display = "none";
+	} else {
+		// Show arrows on hover (desktop only)
+		videoContainer.addEventListener("mouseenter", () => {
+			if (window.innerWidth > 768) { // Desktop only
+				prevBtn.style.opacity = "0.7";
+				nextBtn.style.opacity = "0.7";
+			}
+		});
+		
+		videoContainer.addEventListener("mouseleave", () => {
+			prevBtn.style.opacity = "0";
+			nextBtn.style.opacity = "0";
+		});
+		
+		// Arrow hover effects
+		prevBtn.addEventListener("mouseenter", () => {
+			prevBtn.style.opacity = "1";
+			prevBtn.style.background = "rgba(0,0,0,0.8)";
+		});
+		prevBtn.addEventListener("mouseleave", () => {
+			prevBtn.style.background = "rgba(0,0,0,0.6)";
+		});
+		
+		nextBtn.addEventListener("mouseenter", () => {
+			nextBtn.style.opacity = "1";
+			nextBtn.style.background = "rgba(0,0,0,0.8)";
+		});
+		nextBtn.addEventListener("mouseleave", () => {
+			nextBtn.style.background = "rgba(0,0,0,0.6)";
+		});
+		
+		// Click handlers
+		prevBtn.addEventListener("click", (e) => {
+			e.stopPropagation();
+			navigateToVideo(-1);
+		});
+		
+		nextBtn.addEventListener("click", (e) => {
+			e.stopPropagation();
+			navigateToVideo(1);
+		});
+		
+		// Swipe detection for mobile
+		let touchStartX = 0;
+		let touchEndX = 0;
+		const minSwipeDistance = 50;
+		
+		videoContainer.addEventListener("touchstart", (e) => {
+			touchStartX = e.changedTouches[0].screenX;
+		});
+		
+		videoContainer.addEventListener("touchend", (e) => {
+			touchEndX = e.changedTouches[0].screenX;
+			const swipeDistance = touchEndX - touchStartX;
+			
+			if (Math.abs(swipeDistance) > minSwipeDistance) {
+				if (swipeDistance > 0) {
+					// Swipe right = previous video
+					navigateToVideo(-1);
+				} else {
+					// Swipe left = next video
+					navigateToVideo(1);
+				}
+			}
+		});
+	}
+
 	// Initialize Shaka Player
 	shaka.polyfill.installAll();
 
 	if (shaka.Player.isBrowserSupported()) {
 		const player = new shaka.Player(video);
-		const videoContainer = modal.querySelector("#video-player-container");
 
 		// Configure Shaka UI with professional video editing controls
 		const uiConfig = {
@@ -3041,6 +3175,23 @@ function loadShakaPlayer(filename, cachePath, context) {
 				video.play();
 			} else {
 				video.pause();
+			}
+			return;
+		}
+
+		// Handle video navigation with Shift+Arrow keys (works always, unless typing in input)
+		if (e.shiftKey && e.key === "ArrowRight" && !e.target.matches("input, textarea")) {
+			e.preventDefault();
+			if (videoPlaylist.length > 1) {
+				navigateToVideo(1); // Next video
+			}
+			return;
+		}
+
+		if (e.shiftKey && e.key === "ArrowLeft" && !e.target.matches("input, textarea")) {
+			e.preventDefault();
+			if (videoPlaylist.length > 1) {
+				navigateToVideo(-1); // Previous video
 			}
 			return;
 		}
