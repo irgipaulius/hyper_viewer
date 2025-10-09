@@ -172,9 +172,9 @@ class ClipController extends Controller {
             escapeshellarg($scanPath)
         );
         
-        // Chain commands in background
+        // Chain commands in background (use sh for FreeBSD compatibility)
         $fullCmd = sprintf(
-            'nohup bash -c %s > %s 2>&1 &',
+            'nohup sh -c %s > %s 2>&1 &',
             escapeshellarg($ffmpegCmd . ' && ' . $scanCmd),
             escapeshellarg($logFile)
         );
