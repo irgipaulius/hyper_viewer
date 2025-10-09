@@ -46,20 +46,24 @@ function initializeFilesIntegration() {
 		}
 	});
 
-	// Register "Play with HLS" action for MOV files (higher priority)
+	// Override default video player for MOV files - auto-detect HLS cache
 	OCA.Files.fileActions.registerAction({
-		name: "playHlsMov",
-		displayName: t("hyper_viewer", "Play with HLS"),
+		name: "playVideoSmart",
+		displayName: t("hyper_viewer", "Play"),
 		mime: "video/quicktime",
 		permissions: OC.PERMISSION_READ,
 		iconClass: "icon-play",
+		order: -1, // Higher priority than default
 		async actionHandler(filename, context) {
-			console.log("🎬 Play with HLS triggered for MOV:", filename);
+			console.log("🎬 Smart play triggered for MOV:", filename);
 			const directory =
 				context?.dir || context?.fileList?.getCurrentDirectory() || "/";
-			await playWithHls(filename, directory, context);
+			await playVideoSmart(filename, directory, context);
 		}
 	});
+
+	// Set as default action for MOV files
+	OCA.Files.fileActions.setDefault("video/quicktime", "playVideoSmart");
 
 	// Register "Generate HLS Cache" action for MP4 files
 	OCA.Files.fileActions.registerAction({
@@ -78,20 +82,24 @@ function initializeFilesIntegration() {
 		}
 	});
 
-	// Register "Play with HLS" action for MP4 files (higher priority)
+	// Override default video player for MP4 files - auto-detect HLS cache
 	OCA.Files.fileActions.registerAction({
-		name: "playHlsMp4",
-		displayName: t("hyper_viewer", "> Play with HLS"),
+		name: "playVideoSmartMp4",
+		displayName: t("hyper_viewer", "Play"),
 		mime: "video/mp4",
 		permissions: OC.PERMISSION_READ,
 		iconClass: "icon-play",
+		order: -1, // Higher priority than default
 		async actionHandler(filename, context) {
-			console.log("🎬 Play with HLS triggered for MP4:", filename);
+			console.log("🎬 Smart play triggered for MP4:", filename);
 			const directory =
 				context?.dir || context?.fileList?.getCurrentDirectory() || "/";
-			await playWithHls(filename, directory, context);
+			await playVideoSmart(filename, directory, context);
 		}
 	});
+
+	// Set as default action for MP4 files
+	OCA.Files.fileActions.setDefault("video/mp4", "playVideoSmartMp4");
 
 	// Register "Play Progressive (480p)" action for MOV files
 	OCA.Files.fileActions.registerAction({
@@ -1684,45 +1692,61 @@ async function checkHlsCache(filename, directory) {
 }
 
 /**
- * Play video with HLS if cache exists, otherwise fallback to regular player
+ * Smart video player - automatically uses HLS if available, otherwise default player
  *
  * @param filename
  * @param directory
  * @param context
  */
-async function playWithHls(filename, directory, context) {
-	console.log(`🎬 Checking HLS cache for: ${filename}`);
+async function playVideoSmart(filename, directory, context) {
+	console.log(`🎬 Smart play: Checking HLS cache for: ${filename}`);
 
 	try {
 		// Check if HLS cache exists
 		const cachePath = await checkHlsCache(filename, directory);
 
 		if (cachePath) {
-			console.log(`✅ HLS cache found at: ${cachePath}`);
+			console.log(`✅ HLS cache found, using Shaka Player`);
 			// Load Shaka Player with HLS
-			loadShakaPlayer(filename, cachePath, context);
+			loadShakaPlayer(filename, cachePath, context, directory);
 		} else {
-			console.log(`❌ No HLS cache found for: ${filename}`);
-			// Fallback to regular video player or show message
-			OC.dialogs.confirm(
-				`No HLS cache found for "${filename}".\n\nWould you like to generate HLS cache now?`,
-				"HLS Cache Not Found",
-				function(confirmed) {
-					if (confirmed) {
-						openCacheGenerationDialog([{ filename, context }]);
-					} else {
-						// Let default video player handle it
-						console.log("🎥 Falling back to default video player");
-					}
-				}
-			);
+			console.log(`ℹ️ No HLS cache, using default player`);
+			// Fall back to default Nextcloud video player
+			openWithDefaultPlayer(filename, directory, context);
 		}
 	} catch (error) {
 		console.error("Error checking HLS cache:", error);
-		OC.dialogs.alert(
-			"Failed to check HLS cache. Using default video player.",
-			"Error"
-		);
+		// Fall back to default player on error
+		openWithDefaultPlayer(filename, directory, context);
+	}
+}
+
+/**
+ * Open video with default Nextcloud player
+ *
+ * @param filename
+ * @param directory
+ * @param context
+ */
+function openWithDefaultPlayer(filename, directory, context) {
+	console.log(`🎥 Opening with default player: ${filename}`);
+	
+	// Trigger the default viewer action
+	const filePath = directory === "/" ? `/${filename}` : `${directory}/${filename}`;
+	
+	// Use Nextcloud's built-in viewer
+	if (window.OCA && window.OCA.Viewer && window.OCA.Viewer.open) {
+		// Nextcloud 25+ Viewer API
+		window.OCA.Viewer.open({
+			path: filePath,
+			list: context?.fileList?.files || []
+		});
+	} else if (window.OC && window.OC.Viewer) {
+		// Fallback for older Nextcloud versions
+		window.OC.Viewer.open(filePath);
+	} else {
+		// Last resort: direct download/view
+		window.location.href = OC.generateUrl(`/f/${context?.fileId || ''}`);
 	}
 }
 
@@ -2266,12 +2290,15 @@ function showProgressiveVideoModal(filename, videoUrl) {
  * @param {string} filename - Video filename
  * @param {string} cachePath - HLS cache path
  * @param {object} context - File context
+ * @param {string} directory - Current directory path
  */
-function loadShakaPlayer(filename, cachePath, context) {
+function loadShakaPlayer(filename, cachePath, context, directory) {
 	const videoId = `hyperVideo_${Date.now()}`;
 
-	// Get current directory
-	const directory = context?.dir || context?.fileList?.getCurrentDirectory() || "/";
+	// Ensure directory is set
+	if (!directory) {
+		directory = context?.dir || context?.fileList?.getCurrentDirectory() || "/";
+	}
 
 	// Get video playlist for navigation
 	let videoPlaylist = [];
@@ -2435,6 +2462,10 @@ function loadShakaPlayer(filename, cachePath, context) {
             <button id="toggle-clip-mode" style="
                 background: rgba(255, 152, 0, 0.9); border: none; color: white; 
                 padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">✂️ Clip Video</button>
+            <button id="open-default-player" style="
+                background: rgba(33, 150, 243, 0.9); border: none; color: white; 
+                padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; 
+                display: flex; align-items: center; gap: 5px;" title="Open with default Nextcloud player">🎬 Default Player</button>
             <button class="close-btn" style="
                 background: rgba(0,0,0,0.7); border: none; color: white; 
                 width: 40px; height: 40px; border-radius: 50%; font-size: 18px; cursor: pointer;">✕</button>
@@ -2478,6 +2509,12 @@ function loadShakaPlayer(filename, cachePath, context) {
 	// Add close button event listener
 	modal.querySelector(".close-btn").addEventListener("click", closeModal);
 
+	// Add default player button event listener
+	modal.querySelector("#open-default-player").addEventListener("click", () => {
+		closeModal();
+		openWithDefaultPlayer(filename, directory, context);
+	});
+
 	// Video navigation functionality
 	const navigateToVideo = async (direction) => {
 		if (videoPlaylist.length <= 1) return; // No other videos to navigate to
@@ -2493,8 +2530,8 @@ function loadShakaPlayer(filename, cachePath, context) {
 		// Close current modal
 		closeModal();
 		
-		// Play next video with HLS
-		await playWithHls(nextFilename, directory, context);
+		// Play next video with smart player
+		await playVideoSmart(nextFilename, directory, context);
 	};
 
 	// Navigation arrow buttons (desktop)
