@@ -151,7 +151,8 @@ class ClipController extends Controller {
         $duration = $endTime - $startTime;
         
         // Get Nextcloud base path for occ command
-        $ncBasePath = dirname(dirname(dirname(__DIR__)));
+        // __DIR__ is /lib/Controller, so we need to go up 4 levels to reach Nextcloud root
+        $ncBasePath = dirname(dirname(dirname(dirname(__DIR__))));
         $occPath = $ncBasePath . '/occ';
         $userId = $this->userSession->getUser()->getUID();
         $scanPath = $userId . $exportDir;
