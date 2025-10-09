@@ -2282,17 +2282,17 @@ function loadShakaPlayer(filename, cachePath, context) {
         <!-- Video Player Container (Shaka Player will be attached here) -->
         <div id="video-player-container" style="
             position: relative; width: min(90vw, 1200px); height: min(70vh, 600px);
-            background: #000; border-radius: 8px 8px 0 0; overflow: visible; margin-bottom: 15px;
+            background: #000; border-radius: 8px 8px 0 0; overflow: visible; padding-bottom: 50px;
         ">
             <video id="${videoId}" autoplay style="
-                width: 100%; height: 100%; object-fit: contain; background: #000;
+                width: 100%; height: calc(100% - 50px); object-fit: contain; background: #000;
             "></video>
         </div>
         
         <!-- Clipping Controls Panel (Outside Shaka Player scope) -->
         <div id="clipping-panel" style="
-            width: min(90vw, 1200px); background: rgba(20,20,20,0.95); border-radius: 8px;
-            padding: 20px; padding-top: 25px; display: none; border: 1px solid #444; position: relative; z-index: 9999;
+            width: min(90vw, 1200px); background: rgba(20,20,20,0.95); border-radius: 0 0 8px 8px;
+            padding: 15px; display: none; border-top: 1px solid #444; position: relative; z-index: 10002;
         ">
             <!-- Clip Mode Toggle -->
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
@@ -2402,11 +2402,6 @@ function loadShakaPlayer(filename, cachePath, context) {
     `;
 
 	const closeModal = () => {
-		// Clean up Shaka controls style
-		const shakaStyle = document.getElementById('shaka-controls-fix');
-		if (shakaStyle) {
-			shakaStyle.remove();
-		}
 		modal.remove();
 		document.body.style.overflow = "";
 		document.removeEventListener("keydown", handleKeydown);
@@ -2470,7 +2465,7 @@ function loadShakaPlayer(filename, cachePath, context) {
 			],
 			enableTooltips: true,
 			addSeekBar: true,
-			customContextMenu: false,
+			customContextMenu: true,
 			playbackRates: [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2],
 			seekBarColors: {
 				base: "rgba(255, 255, 255, 0.3)",
@@ -2481,37 +2476,6 @@ function loadShakaPlayer(filename, cachePath, context) {
 
 		const ui = new shaka.ui.Overlay(player, videoContainer, video);
 		ui.configure(uiConfig);
-		
-		// Add CSS to constrain Shaka controls within video container
-		const shakaControlsStyle = document.createElement('style');
-		shakaControlsStyle.id = 'shaka-controls-fix';
-		shakaControlsStyle.textContent = `
-			/* Constrain Shaka controls to video container */
-			#video-player-container {
-				overflow: hidden !important;
-			}
-			
-			/* Ensure seek bar doesn't overflow */
-			.shaka-seek-bar-container {
-				position: relative !important;
-				margin-bottom: 0 !important;
-			}
-			
-			/* Keep controls within bounds */
-			.shaka-controls-container {
-				position: absolute !important;
-				bottom: 0 !important;
-				left: 0 !important;
-				right: 0 !important;
-				max-height: 100px !important;
-			}
-			
-			/* Prevent overflow on hover */
-			.shaka-bottom-controls {
-				margin-bottom: 0 !important;
-			}
-		`;
-		document.head.appendChild(shakaControlsStyle);
 
 		// Build manifest URL
 		const encodedCachePath = encodeURIComponent(cachePath);
