@@ -165,9 +165,9 @@ class ClipController extends Controller {
             escapeshellarg($outputPath)
         );
         
-        // Build scan command
+        // Build scan command (use full PHP path for FreeBSD)
         $scanCmd = sprintf(
-            'php %s files:scan --path=%s',
+            '/usr/local/bin/php %s files:scan --path=%s',
             escapeshellarg($occPath),
             escapeshellarg($scanPath)
         );
