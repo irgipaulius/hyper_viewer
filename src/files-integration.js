@@ -2464,42 +2464,13 @@ function loadShakaPlayer(filename, cachePath, context) {
 				"statistics"
 			],
 			enableTooltips: true,
-			addSeekBar: true,
+			addSeekBar: false,
 			customContextMenu: false,
-			playbackRates: [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2],
-			seekBarColors: {
-				base: "rgba(255, 255, 255, 0.3)",
-				buffered: "rgba(76, 175, 80, 0.4)",
-				played: "rgb(255, 152, 0)" // Match orange theme
-			}
+			playbackRates: [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2]
 		};
 
 		const ui = new shaka.ui.Overlay(player, videoContainer, video);
 		ui.configure(uiConfig);
-
-		// Add CSS to prevent Shaka controls from overlapping clipping panel
-		const seekBarFix = document.createElement("style");
-		seekBarFix.textContent = `
-			/* Add bottom margin to video container to create space */
-			#video-player-container {
-				margin-bottom: 20px !important;
-			}
-			
-			/* Ensure Shaka controls stay within bounds */
-			.shaka-video-container {
-				margin-bottom: 0 !important;
-			}
-			
-			.shaka-controls-container {
-				position: relative !important;
-			}
-			
-			/* Add top margin to clipping panel for extra safety */
-			#clipping-panel {
-				margin-top: 20px !important;
-			}
-		`;
-		document.head.appendChild(seekBarFix);
 
 		// Build manifest URL
 		const encodedCachePath = encodeURIComponent(cachePath);
