@@ -18,6 +18,7 @@
         <navigation>
             <name>Hyper Viewer</name>
             <route>hyper_viewer.page.index</route>
+            <icon>app.svg</icon>
         </navigation>
     </navigations>
     <types>
@@ -26,5 +27,6 @@
     </types>
     <settings>
         <personal>OCA\HyperViewer\Settings\PersonalSettings</personal>
+        <personal-section>OCA\HyperViewer\Settings\PersonalSection</personal-section>
     </settings>
 </info>

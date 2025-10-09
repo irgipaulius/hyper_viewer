@@ -301,24 +301,35 @@ function addHlsBadgesToFileList() {
 					continue;
 				}
 				
-				// Find the DOM element for this file
-				const fileRow = document.querySelector(`tr[data-file="${filename}"]`);
+				// Escape filename for querySelector (handle special chars)
+				const escapedFilename = CSS.escape(filename);
 				
-				if (!fileRow) {
-					console.warn(`⚠️ No DOM element found for: ${filename}`);
+				// Find the DOM element - try both list and grid view
+				let fileElement = document.querySelector(`tr[data-file="${escapedFilename}"]`); // List view
+				if (!fileElement) {
+					fileElement = document.querySelector(`[data-name="${escapedFilename}"]`); // Grid view
+				}
+				if (!fileElement) {
+					// Try without escaping for older Nextcloud versions
+					fileElement = document.querySelector(`tr[data-file="${filename}"]`);
+				}
+				
+				if (!fileElement) {
+					// Skip silently - file might not be visible in current view
 					continue;
 				}
 				
 				// Skip if badge already exists
-				if (fileRow.querySelector('.hls-badge')) {
+				if (fileElement.querySelector('.hls-badge')) {
 					continue;
 				}
 				
-				// Find thumbnail container in the row
+				// Find thumbnail container in the element
 				const thumbnailContainer = 
-					fileRow.querySelector('td.filename .thumbnail') || 
-					fileRow.querySelector('.thumbnail') || 
-					fileRow.querySelector('.icon');
+					fileElement.querySelector('td.filename .thumbnail') || // List view
+					fileElement.querySelector('.thumbnail') || // Grid view
+					fileElement.querySelector('.files-list__row-icon') || // New list view
+					fileElement.querySelector('.icon');
 				
 				if (thumbnailContainer) {
 					// Ensure container has relative positioning
@@ -331,8 +342,6 @@ function addHlsBadgesToFileList() {
 					thumbnailContainer.appendChild(badge);
 					
 					console.log(`✅ Added HLS badge to: ${filename}`);
-				} else {
-					console.warn(`⚠️ No thumbnail container found for: ${filename}`);
 				}
 			}
 		} catch (error) {
@@ -346,13 +355,21 @@ function addHlsBadgesToFileList() {
 		updateHlsBadges();
 	}, 3000);
 	
-	// Update badges periodically to catch late-loaded thumbnails
-	setInterval(updateHlsBadges, 5000);
+	// Update badges periodically but less frequently (30 seconds instead of 5)
+	// MutationObserver will catch most changes, this is just a safety net
+	setInterval(updateHlsBadges, 30000);
+	
+	// Throttle mechanism for MutationObserver
+	let badgeUpdateTimeout = null;
+	const throttledBadgeUpdate = () => {
+		if (badgeUpdateTimeout) {
+			clearTimeout(badgeUpdateTimeout);
+		}
+		badgeUpdateTimeout = setTimeout(updateHlsBadges, 1000);
+	};
 	
 	// Update badges when file list changes (MutationObserver)
-	const observer = new MutationObserver(() => {
-		setTimeout(updateHlsBadges, 500);
-	});
+	const observer = new MutationObserver(throttledBadgeUpdate);
 	
 	// Observe both list and grid containers
 	const observeFileList = () => {
