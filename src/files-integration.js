@@ -102,7 +102,10 @@ function initializeFilesIntegration() {
 		iconClass: "icon-play",
 		priority: 100,
 		async actionHandler(filename, context) {
-			console.log("🎬 Play Progressive (480p) triggered for MOV:", filename);
+			console.log(
+				"🎬 Play Progressive (480p) triggered for MOV:",
+				filename
+			);
 			const directory =
 				context?.dir || context?.fileList?.getCurrentDirectory() || "/";
 			await playProgressive(filename, directory, context);
@@ -118,7 +121,10 @@ function initializeFilesIntegration() {
 		iconClass: "icon-play",
 		priority: 100,
 		async actionHandler(filename, context) {
-			console.log("🎬 Play Progressive (480p) triggered for MP4:", filename);
+			console.log(
+				"🎬 Play Progressive (480p) triggered for MP4:",
+				filename
+			);
 			const directory =
 				context?.dir || context?.fileList?.getCurrentDirectory() || "/";
 			await playProgressive(filename, directory, context);
@@ -446,9 +452,13 @@ async function openDirectoryCacheGenerationDialog(directoryName, context) {
 					<div class="info-item">
 						<strong>Directory:</strong> ${fullPath}
 					</div>
-					<div class="info-item ${fileCount === 0 ? 'no-videos' : ''}">
+					<div class="info-item ${fileCount === 0 ? "no-videos" : ""}">
 						<strong>Video files found:</strong> ${fileCount}
-						${fileCount > 0 ? `<div class="file-list">${fileList}</div>` : '<div class="no-videos-text">No videos currently, but auto-generation can monitor for new files</div>'}
+						${
+							fileCount > 0
+								? `<div class="file-list">${fileList}</div>`
+								: '<div class="no-videos-text">No videos currently, but auto-generation can monitor for new files</div>'
+						}
 					</div>
 				</div>
 				
@@ -835,7 +845,7 @@ async function openDirectoryCacheGenerationDialog(directoryName, context) {
 	});
 
 	// Handle escape key
-	const handleKeydown = (e) => {
+	const handleKeydown = e => {
 		if (e.key === "Escape") {
 			closeModal();
 		}
@@ -854,32 +864,39 @@ async function openDirectoryCacheGenerationDialog(directoryName, context) {
 	};
 
 	// Event listeners
-	modal.querySelector(".hyper-viewer-close").addEventListener("click", closeModal);
-	modal.querySelector(".hyper-viewer-overlay").addEventListener("click", closeModal);
+	modal
+		.querySelector(".hyper-viewer-close")
+		.addEventListener("click", closeModal);
+	modal
+		.querySelector(".hyper-viewer-overlay")
+		.addEventListener("click", closeModal);
 	modal.querySelector(".btn-cancel").addEventListener("click", closeModal);
-	
+
 	modal.querySelector(".btn-confirm").addEventListener("click", () => {
 		startDirectoryCacheGeneration(videoFiles, fullPath);
 		closeModal();
 	});
 
 	// Handle custom location radio button
-	const customRadio = modal.querySelector('input[name="cache_location"][value="custom"]');
+	const customRadio = modal.querySelector(
+		'input[name="cache_location"][value="custom"]'
+	);
 	const customPath = modal.querySelector("#custom_path");
 
 	if (customRadio && customPath) {
-		modal.querySelectorAll('input[name="cache_location"]').forEach(radio => {
-			radio.addEventListener("change", function() {
-				customPath.disabled = this.value !== "custom";
-				if (this.value === "custom") {
-					customPath.focus();
-				}
+		modal
+			.querySelectorAll('input[name="cache_location"]')
+			.forEach(radio => {
+				radio.addEventListener("change", function() {
+					customPath.disabled = this.value !== "custom";
+					if (this.value === "custom") {
+						customPath.focus();
+					}
+				});
 			});
-		});
 	}
 
 	document.addEventListener("keydown", handleKeydown);
-
 }
 
 /**
@@ -976,13 +993,19 @@ async function startDirectoryCacheGeneration(videoFiles, directoryPath) {
 		// Show appropriate success message
 		if (videoFiles.length > 0 && enableAutoGeneration) {
 			// Both processing and auto-generation
-			console.log(`✅ Started processing ${videoFiles.length} files and enabled auto-generation for ${directoryPath}`);
+			console.log(
+				`✅ Started processing ${videoFiles.length} files and enabled auto-generation for ${directoryPath}`
+			);
 		} else if (videoFiles.length > 0) {
 			// Only processing files
-			console.log(`✅ Started processing ${videoFiles.length} files in ${directoryPath}`);
+			console.log(
+				`✅ Started processing ${videoFiles.length} files in ${directoryPath}`
+			);
 		} else if (enableAutoGeneration) {
 			// Only auto-generation setup
-			console.log(`✅ Auto-generation enabled for ${directoryPath} - will monitor for new videos`);
+			console.log(
+				`✅ Auto-generation enabled for ${directoryPath} - will monitor for new videos`
+			);
 			OC.dialogs.info(
 				`Auto-generation has been enabled for "${directoryPath}".\n\nNew video files added to this directory will automatically have HLS cache generated.`,
 				"Auto-Generation Enabled"
@@ -1718,11 +1741,13 @@ async function playProgressive(filename, directory, context) {
 		const loadingOverlay = showLoadingOverlay(filename);
 
 		// Get the full file path
-		const filePath = directory === "/" ? `/${filename}` : `${directory}/${filename}`;
+		const filePath =
+			directory === "/" ? `/${filename}` : `${directory}/${filename}`;
 
 		// Call the proxy-transcode endpoint
 		const response = await fetch(
-			OC.generateUrl("/apps/hyper_viewer/api/proxy-transcode") + `?path=${encodeURIComponent(filePath)}`,
+			OC.generateUrl("/apps/hyper_viewer/api/proxy-transcode") +
+				`?path=${encodeURIComponent(filePath)}`,
 			{
 				method: "GET",
 				headers: {
@@ -1732,26 +1757,30 @@ async function playProgressive(filename, directory, context) {
 		);
 
 		// Check if response is HTML (error page) instead of JSON
-		const contentType = response.headers.get('content-type');
-		if (!response.ok || (contentType && contentType.includes('text/html'))) {
-			
+		const contentType = response.headers.get("content-type");
+		if (
+			!response.ok ||
+			(contentType && contentType.includes("text/html"))
+		) {
 			// Extract error details from debug headers if available
-			const debugError = response.headers.get('X-Debug-Error');
-			const debugException = response.headers.get('X-Debug-Exception');
-			
-			let errorMessage = 'Server error occurred while preparing video';
+			const debugError = response.headers.get("X-Debug-Error");
+			const debugException = response.headers.get("X-Debug-Exception");
+
+			let errorMessage = "Server error occurred while preparing video";
 			if (debugError) {
 				errorMessage = `Server Error: ${debugError}`;
 			} else if (debugException) {
 				errorMessage = `Server Exception: ${debugException}`;
 			} else if (response.status === 404) {
-				errorMessage = 'Video file not found or not accessible';
+				errorMessage = "Video file not found or not accessible";
 			} else if (response.status === 403) {
-				errorMessage = 'Permission denied - you may not have access to this file';
+				errorMessage =
+					"Permission denied - you may not have access to this file";
 			} else if (response.status >= 500) {
-				errorMessage = 'Internal server error - please check server configuration';
+				errorMessage =
+					"Internal server error - please check server configuration";
 			}
-			
+
 			throw new Error(errorMessage);
 		}
 
@@ -1765,28 +1794,37 @@ async function playProgressive(filename, directory, context) {
 			// Create and show video modal with the transcoded URL
 			showProgressiveVideoModal(filename, result.url);
 		} else {
-			throw new Error(result.error || "Failed to prepare progressive MP4");
+			throw new Error(
+				result.error || "Failed to prepare progressive MP4"
+			);
 		}
 	} catch (error) {
 		console.error("Error preparing progressive MP4:", error);
 		// Hide loading overlay if it exists
-		const existingOverlay = document.querySelector('.hyper-viewer-loading-overlay');
+		const existingOverlay = document.querySelector(
+			".hyper-viewer-loading-overlay"
+		);
 		if (existingOverlay) {
 			hideLoadingOverlay(existingOverlay);
 		}
-		
+
 		// Show user-friendly error message
 		let userMessage = error.message;
-		if (error.message.includes('SyntaxError') || error.message.includes('Unexpected token')) {
-			userMessage = 'Server returned an error page instead of video data. Please check server logs or contact administrator.';
-		} else if (error.message.includes('NetworkError') || error.message.includes('fetch')) {
-			userMessage = 'Network error - please check your connection and try again.';
+		if (
+			error.message.includes("SyntaxError") ||
+			error.message.includes("Unexpected token")
+		) {
+			userMessage =
+				"Server returned an error page instead of video data. Please check server logs or contact administrator.";
+		} else if (
+			error.message.includes("NetworkError") ||
+			error.message.includes("fetch")
+		) {
+			userMessage =
+				"Network error - please check your connection and try again.";
 		}
-		
-		OC.dialogs.alert(
-			userMessage,
-			"Video Transcoding Error"
-		);
+
+		OC.dialogs.alert(userMessage, "Video Transcoding Error");
 	}
 }
 
@@ -1864,7 +1902,7 @@ function showLoadingOverlay(filename) {
 
 	document.body.appendChild(overlay);
 	document.body.style.overflow = "hidden";
-	
+
 	return overlay;
 }
 
@@ -2085,7 +2123,7 @@ function showProgressiveVideoModal(filename, videoUrl) {
 	});
 
 	// Handle escape key
-	const handleKeydown = (e) => {
+	const handleKeydown = e => {
 		if (e.key === "Escape") {
 			closeModal();
 		}
@@ -2104,32 +2142,43 @@ function showProgressiveVideoModal(filename, videoUrl) {
 	};
 
 	// Event listeners
-	modal.querySelector(".hyper-viewer-close").addEventListener("click", closeModal);
-	modal.querySelector(".hyper-viewer-overlay").addEventListener("click", closeModal);
-	
+	modal
+		.querySelector(".hyper-viewer-close")
+		.addEventListener("click", closeModal);
+	modal
+		.querySelector(".hyper-viewer-overlay")
+		.addEventListener("click", closeModal);
+
 	// Prevent video container clicks from closing modal
-	modal.querySelector(".hyper-viewer-progressive-content").addEventListener("click", (e) => {
-		e.stopPropagation();
-	});
+	modal
+		.querySelector(".hyper-viewer-progressive-content")
+		.addEventListener("click", e => {
+			e.stopPropagation();
+		});
 
 	// Get video element and add event handlers
 	const video = modal.querySelector(".hyper-viewer-progressive-video");
-	
+
 	// Add video event listeners for debugging and functionality
 	video.addEventListener("loadstart", () => {
 		console.log("🎬 Video load started");
 	});
-	
+
 	video.addEventListener("loadedmetadata", () => {
 		console.log("🎬 Video metadata loaded");
 		console.log("Video duration:", video.duration);
-		console.log("Video dimensions:", video.videoWidth, "x", video.videoHeight);
+		console.log(
+			"Video dimensions:",
+			video.videoWidth,
+			"x",
+			video.videoHeight
+		);
 	});
-	
+
 	video.addEventListener("loadeddata", () => {
 		console.log("🎬 Video data loaded");
 	});
-	
+
 	video.addEventListener("canplay", () => {
 		console.log("🎬 Video can start playing");
 		// Try to play the video
@@ -2137,40 +2186,43 @@ function showProgressiveVideoModal(filename, videoUrl) {
 			console.error("🎬 Video play failed:", error);
 		});
 	});
-	
+
 	video.addEventListener("canplaythrough", () => {
 		console.log("🎬 Video can play through without buffering");
 	});
-	
+
 	video.addEventListener("play", () => {
 		console.log("🎬 Video started playing");
 	});
-	
+
 	video.addEventListener("playing", () => {
 		console.log("🎬 Video is playing");
 	});
-	
+
 	video.addEventListener("pause", () => {
 		console.log("🎬 Video paused");
 	});
-	
-	video.addEventListener("error", (e) => {
+
+	video.addEventListener("error", e => {
 		console.error("🎬 Video error:", e);
 		console.error("Video error details:", video.error);
-		
+
 		// Check if this might be a transcoding-in-progress error
-		if (video.error && (video.error.code === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED || 
-		                   video.error.code === MediaError.MEDIA_ERR_NETWORK)) {
+		if (
+			video.error &&
+			(video.error.code === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED ||
+				video.error.code === MediaError.MEDIA_ERR_NETWORK)
+		) {
 			handleVideoRetry(video, videoUrl);
 		}
 	});
-	
+
 	video.addEventListener("stalled", () => {
 		console.log("🎬 Video stalled");
 		// Also try retry on stalled
 		handleVideoRetry(video, videoUrl);
 	});
-	
+
 	video.addEventListener("waiting", () => {
 		console.log("🎬 Video waiting for data");
 	});
@@ -2179,25 +2231,25 @@ function showProgressiveVideoModal(filename, videoUrl) {
 	function handleVideoRetry(videoElement, originalUrl) {
 		const retryMessage = modal.querySelector(".hyper-viewer-retry-message");
 		const countdownSpan = retryMessage.querySelector(".countdown");
-		
+
 		// Show retry message, hide video
 		videoElement.style.display = "none";
 		retryMessage.style.display = "block";
-		
+
 		let countdown = 5;
 		countdownSpan.textContent = countdown;
-		
+
 		const countdownInterval = setInterval(() => {
 			countdown--;
 			countdownSpan.textContent = countdown;
-			
+
 			if (countdown <= 0) {
 				clearInterval(countdownInterval);
-				
+
 				// Hide retry message, show video
 				retryMessage.style.display = "none";
 				videoElement.style.display = "block";
-				
+
 				// Reload video source
 				videoElement.src = originalUrl + "&t=" + Date.now(); // Add timestamp to bypass cache
 				videoElement.load();
@@ -2391,43 +2443,37 @@ function loadShakaPlayer(filename, cachePath, context) {
 
 	if (shaka.Player.isBrowserSupported()) {
 		const player = new shaka.Player(video);
-		const videoContainer = modal.querySelector('#video-player-container');
-		
+		const videoContainer = modal.querySelector("#video-player-container");
+
 		// Configure Shaka UI with professional video editing controls
 		const uiConfig = {
 			controlPanelElements: [
-				'play_pause',
-				'rewind',
-				'fast_forward',
-				'time_and_duration',
-				'spacer',
-				'mute',
-				'volume',
-				'loop',
-				'playback_rate',
-				'fullscreen',
-				'overflow_menu'
+				"play_pause",
+				"time_and_duration",
+				"spacer",
+				"volume",
+				"mute",
+				"playback_speed",
+				"quality",
+				"overflow_menu",
+				"fullscreen"
 			],
 			overflowMenuButtons: [
-				'quality',
-				'picture_in_picture',
-				'save_video_frame',
-				'statistics'
+				"picture_in_picture",
+				"save_video_frame",
+				"statistics"
 			],
 			enableTooltips: true,
 			addSeekBar: true,
-			addBigPlayButton: true,
 			customContextMenu: false,
 			playbackRates: [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2],
-			rewindRates: [-1, -2, -4],
-			fastForwardRates: [2, 4, 8],
 			seekBarColors: {
-				base: 'rgba(255, 255, 255, 0.3)',
-				buffered: 'rgba(76, 175, 80, 0.4)',
-				played: 'rgb(255, 152, 0)' // Match orange theme
+				base: "rgba(255, 255, 255, 0.3)",
+				buffered: "rgba(76, 175, 80, 0.4)",
+				played: "rgb(255, 152, 0)" // Match orange theme
 			}
 		};
-		
+
 		const ui = new shaka.ui.Overlay(player, videoContainer, video);
 		ui.configure(uiConfig);
 
@@ -2444,14 +2490,14 @@ function loadShakaPlayer(filename, cachePath, context) {
 		player.load(masterUrl).catch(() => player.load(playlistUrl));
 
 		// Video event listeners
-		video.addEventListener('loadedmetadata', () => {
+		video.addEventListener("loadedmetadata", () => {
 			videoDuration = video.duration;
 			endTime = videoDuration;
 			updateTimelineMarkers();
 			updateTimeDisplays();
 		});
 
-		video.addEventListener('timeupdate', () => {
+		video.addEventListener("timeupdate", () => {
 			if (isClipMode) {
 				updateTimelineProgress();
 			}
@@ -2461,25 +2507,25 @@ function loadShakaPlayer(filename, cachePath, context) {
 	// Clipping functionality
 	function toggleClipMode() {
 		isClipMode = !isClipMode;
-		const panel = modal.querySelector('#clipping-panel');
-		const toggleBtn = modal.querySelector('#toggle-clip-mode');
-		const videoContainer = modal.querySelector('#video-player-container');
-		
+		const panel = modal.querySelector("#clipping-panel");
+		const toggleBtn = modal.querySelector("#toggle-clip-mode");
+		const videoContainer = modal.querySelector("#video-player-container");
+
 		if (isClipMode) {
-			panel.style.display = 'block';
-			videoContainer.style.borderRadius = '8px 8px 0 0';
-			toggleBtn.textContent = '✂️ Exit Clip Mode';
-			toggleBtn.style.background = 'rgba(244, 67, 54, 0.9)';
+			panel.style.display = "block";
+			videoContainer.style.borderRadius = "8px 8px 0 0";
+			toggleBtn.textContent = "✂️ Exit Clip Mode";
+			toggleBtn.style.background = "rgba(244, 67, 54, 0.9)";
 			// Initialize markers
 			startTime = 0;
 			endTime = videoDuration;
 			updateTimelineMarkers();
 			updateTimeDisplays();
 		} else {
-			panel.style.display = 'none';
-			videoContainer.style.borderRadius = '8px';
-			toggleBtn.textContent = '✂️ Clip Video';
-			toggleBtn.style.background = 'rgba(255, 152, 0, 0.9)';
+			panel.style.display = "none";
+			videoContainer.style.borderRadius = "8px";
+			toggleBtn.textContent = "✂️ Clip Video";
+			toggleBtn.style.background = "rgba(255, 152, 0, 0.9)";
 		}
 	}
 
@@ -2487,83 +2533,107 @@ function loadShakaPlayer(filename, cachePath, context) {
 		const mins = Math.floor(seconds / 60);
 		const secs = Math.floor(seconds % 60);
 		const ms = Math.floor((seconds % 1) * 1000);
-		return `${mins}:${secs.toString().padStart(2, '0')}.${ms.toString().padStart(3, '0')}`;
+		return `${mins}:${secs
+			.toString()
+			.padStart(2, "0")}.${ms.toString().padStart(3, "0")}`;
 	}
 
 	function updateTimeDisplays() {
-		modal.querySelector('#start-time-display').textContent = formatTime(startTime);
-		modal.querySelector('#end-time-display').textContent = formatTime(endTime);
-		
+		modal.querySelector("#start-time-display").textContent = formatTime(
+			startTime
+		);
+		modal.querySelector("#end-time-display").textContent = formatTime(
+			endTime
+		);
+
 		const duration = Math.max(0, endTime - startTime);
 		const durationMins = Math.floor(duration / 60);
 		const durationSecs = Math.floor(duration % 60);
-		modal.querySelector('#clip-duration').textContent = 
-			`Clip Duration: ${durationMins}:${durationSecs.toString().padStart(2, '0')}`;
+		modal.querySelector(
+			"#clip-duration"
+		).textContent = `Clip Duration: ${durationMins}:${durationSecs
+			.toString()
+			.padStart(2, "0")}`;
 	}
 
 	function updateTimelineMarkers() {
 		if (videoDuration === 0) return;
-		
+
 		const startPercent = (startTime / videoDuration) * 100;
 		const endPercent = (endTime / videoDuration) * 100;
-		
+
 		// Update markers (adjust for marker width)
-		modal.querySelector('#start-marker').style.left = `calc(${startPercent}% - 6px)`;
-		modal.querySelector('#end-marker').style.left = `calc(${endPercent}% - 6px)`;
-		modal.querySelector('#clip-range').style.left = `${startPercent}%`;
-		modal.querySelector('#clip-range').style.width = `${endPercent - startPercent}%`;
+		modal.querySelector(
+			"#start-marker"
+		).style.left = `calc(${startPercent}% - 6px)`;
+		modal.querySelector(
+			"#end-marker"
+		).style.left = `calc(${endPercent}% - 6px)`;
+		modal.querySelector("#clip-range").style.left = `${startPercent}%`;
+		modal.querySelector("#clip-range").style.width = `${endPercent -
+			startPercent}%`;
 	}
 
 	function updateTimelineProgress() {
 		if (videoDuration === 0) return;
 		const progressPercent = (video.currentTime / videoDuration) * 100;
-		modal.querySelector('#timeline-progress').style.width = `${progressPercent}%`;
-		
+		modal.querySelector(
+			"#timeline-progress"
+		).style.width = `${progressPercent}%`;
+
 		// Update playback cursor
-		modal.querySelector('#playback-cursor').style.left = `calc(${progressPercent}% - 1px)`;
+		modal.querySelector(
+			"#playback-cursor"
+		).style.left = `calc(${progressPercent}% - 1px)`;
 	}
 
 	function updateControlSelection(selected) {
 		selectedControl = selected;
-		
+
 		// Update start control styling
-		const startControl = modal.querySelector('#start-time-display').closest('div').closest('div');
-		if (selected === 'start') {
-			startControl.style.background = 'rgba(76, 175, 80, 0.3)';
-			startControl.style.borderColor = '#4CAF50';
-			startControl.style.borderWidth = '2px';
+		const startControl = modal
+			.querySelector("#start-time-display")
+			.closest("div")
+			.closest("div");
+		if (selected === "start") {
+			startControl.style.background = "rgba(76, 175, 80, 0.3)";
+			startControl.style.borderColor = "#4CAF50";
+			startControl.style.borderWidth = "2px";
 		} else {
-			startControl.style.background = 'rgba(76, 175, 80, 0.1)';
-			startControl.style.borderColor = '#4CAF50';
-			startControl.style.borderWidth = '1px';
+			startControl.style.background = "rgba(76, 175, 80, 0.1)";
+			startControl.style.borderColor = "#4CAF50";
+			startControl.style.borderWidth = "1px";
 		}
-		
+
 		// Update end control styling
-		const endControl = modal.querySelector('#end-time-display').closest('div').closest('div');
-		if (selected === 'end') {
-			endControl.style.background = 'rgba(244, 67, 54, 0.3)';
-			endControl.style.borderColor = '#f44336';
-			endControl.style.borderWidth = '2px';
+		const endControl = modal
+			.querySelector("#end-time-display")
+			.closest("div")
+			.closest("div");
+		if (selected === "end") {
+			endControl.style.background = "rgba(244, 67, 54, 0.3)";
+			endControl.style.borderColor = "#f44336";
+			endControl.style.borderWidth = "2px";
 		} else {
-			endControl.style.background = 'rgba(244, 67, 54, 0.1)';
-			endControl.style.borderColor = '#f44336';
-			endControl.style.borderWidth = '1px';
+			endControl.style.background = "rgba(244, 67, 54, 0.1)";
+			endControl.style.borderColor = "#f44336";
+			endControl.style.borderWidth = "1px";
 		}
 	}
 
 	function stepFrame(direction, isStart = true) {
 		const frameTime = 1 / videoFrameRate;
-		const newTime = video.currentTime + (direction * frameTime);
+		const newTime = video.currentTime + direction * frameTime;
 		const clampedTime = Math.max(0, Math.min(videoDuration, newTime));
-		
+
 		video.currentTime = clampedTime;
-		
+
 		if (isStart) {
 			startTime = clampedTime;
 		} else {
 			endTime = clampedTime;
 		}
-		
+
 		updateTimelineMarkers();
 		updateTimeDisplays();
 	}
@@ -2571,12 +2641,12 @@ function loadShakaPlayer(filename, cachePath, context) {
 	function setCurrentTime(isStart = true) {
 		if (isStart) {
 			startTime = video.currentTime;
-			updateControlSelection('start');
+			updateControlSelection("start");
 		} else {
 			endTime = video.currentTime;
-			updateControlSelection('end');
+			updateControlSelection("end");
 		}
-		
+
 		// Ensure start < end
 		if (startTime >= endTime) {
 			if (isStart) {
@@ -2585,7 +2655,7 @@ function loadShakaPlayer(filename, cachePath, context) {
 				startTime = Math.max(0, endTime - 1);
 			}
 		}
-		
+
 		updateTimelineMarkers();
 		updateTimeDisplays();
 	}
@@ -2593,7 +2663,7 @@ function loadShakaPlayer(filename, cachePath, context) {
 	function previewClip() {
 		video.currentTime = startTime;
 		video.play();
-		
+
 		// Stop at end time
 		const checkTime = () => {
 			if (video.currentTime >= endTime) {
@@ -2614,16 +2684,19 @@ function loadShakaPlayer(filename, cachePath, context) {
 
 	function showExportModal() {
 		// Determine default export path
-		const isInHome = context.dir === '/' || context.dir.startsWith('/home') || context.dir.startsWith('/Users');
-		const defaultPath = isInHome ? '../exports' : '../exports';
-		
+		const isInHome =
+			context.dir === "/" ||
+			context.dir.startsWith("/home") ||
+			context.dir.startsWith("/Users");
+		const defaultPath = isInHome ? "../exports" : "../exports";
+
 		// Create simplified export modal
-		const exportModal = document.createElement('div');
+		const exportModal = document.createElement("div");
 		exportModal.style.cssText = `
 			position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 10002;
 			background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center;
 		`;
-		
+
 		exportModal.innerHTML = `
 			<div style="
 				background: #2a2a2a; border-radius: 8px; padding: 24px; max-width: 400px; width: 90%;
@@ -2662,43 +2735,52 @@ function loadShakaPlayer(filename, cachePath, context) {
 				</div>
 			</div>
 		`;
-		
+
 		document.body.appendChild(exportModal);
-		
+
 		// Focus on export path input
-		const exportPathInput = exportModal.querySelector('#export-path');
+		const exportPathInput = exportModal.querySelector("#export-path");
 		exportPathInput.focus();
 		exportPathInput.select();
-		
+
 		// Export modal event listeners
-		exportModal.querySelector('#cancel-export').addEventListener('click', () => {
-			exportModal.remove();
-		});
-		
+		exportModal
+			.querySelector("#cancel-export")
+			.addEventListener("click", () => {
+				exportModal.remove();
+			});
+
 		// Handle Enter key to start export
 		const handleExport = () => {
-			const exportPath = exportModal.querySelector('#export-path').value.trim();
+			const exportPath = exportModal
+				.querySelector("#export-path")
+				.value.trim();
 			if (!exportPath) {
-				OC.dialogs.alert('Please enter an export location.', 'Export Error');
+				OC.dialogs.alert(
+					"Please enter an export location.",
+					"Export Error"
+				);
 				return;
 			}
-			
+
 			// Start the export process
 			startExport(exportPath);
 			exportModal.remove();
 		};
-		
-		exportModal.querySelector('#confirm-export').addEventListener('click', handleExport);
-		
+
+		exportModal
+			.querySelector("#confirm-export")
+			.addEventListener("click", handleExport);
+
 		// Enter key support
-		exportPathInput.addEventListener('keydown', (e) => {
-			if (e.key === 'Enter') {
+		exportPathInput.addEventListener("keydown", e => {
+			if (e.key === "Enter") {
 				e.preventDefault();
 				handleExport();
 			}
 		});
-		
-		exportModal.addEventListener('click', (e) => {
+
+		exportModal.addEventListener("click", e => {
 			if (e.target === exportModal) {
 				exportModal.remove();
 			}
@@ -2709,17 +2791,23 @@ function loadShakaPlayer(filename, cachePath, context) {
 	async function startExport(exportPath) {
 		try {
 			// Generate unique filename for the clip
-			const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
-			const baseName = filename.replace(/\.[^/.]+$/, ''); // Remove extension
-			const extension = filename.split('.').pop();
+			const timestamp = new Date()
+				.toISOString()
+				.replace(/[:.]/g, "-")
+				.slice(0, -5);
+			const baseName = filename.replace(/\.[^/.]+$/, ""); // Remove extension
+			const extension = filename.split(".").pop();
 			const clipFilename = `${baseName}_clip_${timestamp}.${extension}`;
-			
+
 			// Show immediate notification
 			showExportNotification(clipFilename, exportPath);
-			
+
 			// Get the full file path for the original video
-			const originalPath = context.dir === "/" ? `/${filename}` : `${context.dir}/${filename}`;
-			
+			const originalPath =
+				context.dir === "/"
+					? `/${filename}`
+					: `${context.dir}/${filename}`;
+
 			// Call the export API
 			const response = await fetch(
 				OC.generateUrl("/apps/hyper_viewer/api/export-clip"),
@@ -2740,29 +2828,28 @@ function loadShakaPlayer(filename, cachePath, context) {
 			);
 
 			const result = await response.json();
-			
+
 			if (!response.ok) {
-				throw new Error(result.error || 'Export failed');
+				throw new Error(result.error || "Export failed");
 			}
-			
-			console.log('✅ Export started successfully:', result);
-			
+
+			console.log("✅ Export started successfully:", result);
 		} catch (error) {
-			console.error('❌ Export failed:', error);
-			OC.dialogs.alert(`Export failed: ${error.message}`, 'Export Error');
+			console.error("❌ Export failed:", error);
+			OC.dialogs.alert(`Export failed: ${error.message}`, "Export Error");
 		}
 	}
 
 	function showExportNotification(clipFilename, exportPath) {
 		// Create notification
-		const notification = document.createElement('div');
+		const notification = document.createElement("div");
 		notification.style.cssText = `
 			position: fixed; top: 20px; right: 20px; z-index: 10003;
 			background: #4CAF50; color: white; padding: 16px 20px; border-radius: 8px;
 			box-shadow: 0 4px 12px rgba(0,0,0,0.3); max-width: 400px;
 			font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 		`;
-		
+
 		notification.innerHTML = `
 			<div style="display: flex; align-items: center; gap: 12px;">
 				<div style="font-size: 20px;">✂️</div>
@@ -2775,15 +2862,15 @@ function loadShakaPlayer(filename, cachePath, context) {
 				</div>
 			</div>
 		`;
-		
+
 		document.body.appendChild(notification);
-		
+
 		// Auto-remove after 5 seconds
 		setTimeout(() => {
 			if (notification.parentNode) {
-				notification.style.opacity = '0';
-				notification.style.transform = 'translateX(100%)';
-				notification.style.transition = 'all 0.3s ease';
+				notification.style.opacity = "0";
+				notification.style.transform = "translateX(100%)";
+				notification.style.transition = "all 0.3s ease";
 				setTimeout(() => notification.remove(), 300);
 			}
 		}, 5000);
@@ -2791,7 +2878,10 @@ function loadShakaPlayer(filename, cachePath, context) {
 
 	// Fixed frame adjustment functions
 	function adjustStartTime(deltaSeconds) {
-		const newStartTime = Math.max(0, Math.min(startTime + deltaSeconds, endTime - 0.1));
+		const newStartTime = Math.max(
+			0,
+			Math.min(startTime + deltaSeconds, endTime - 0.1)
+		);
 		startTime = newStartTime;
 		video.currentTime = newStartTime; // Seek video to show the frame
 		updateTimelineMarkers();
@@ -2799,7 +2889,10 @@ function loadShakaPlayer(filename, cachePath, context) {
 	}
 
 	function adjustEndTime(deltaSeconds) {
-		const newEndTime = Math.max(startTime + 0.1, Math.min(endTime + deltaSeconds, videoDuration));
+		const newEndTime = Math.max(
+			startTime + 0.1,
+			Math.min(endTime + deltaSeconds, videoDuration)
+		);
 		endTime = newEndTime;
 		video.currentTime = newEndTime; // Seek video to show the frame
 		updateTimelineMarkers();
@@ -2807,120 +2900,142 @@ function loadShakaPlayer(filename, cachePath, context) {
 	}
 
 	// Event listeners for clipping controls
-	modal.querySelector('#toggle-clip-mode').addEventListener('click', toggleClipMode);
-	modal.querySelector('#exit-clip-mode').addEventListener('click', toggleClipMode);
-	
+	modal
+		.querySelector("#toggle-clip-mode")
+		.addEventListener("click", toggleClipMode);
+	modal
+		.querySelector("#exit-clip-mode")
+		.addEventListener("click", toggleClipMode);
+
 	// Start time controls - fixed to adjust markers, not seek to current time
-	modal.querySelector('#start-frame-back').addEventListener('click', () => adjustStartTime(-1 / 30)); // -1 frame at 30fps
-	modal.querySelector('#start-frame-forward').addEventListener('click', () => adjustStartTime(1 / 30)); // +1 frame at 30fps
-	modal.querySelector('#start-set-current').addEventListener('click', () => setCurrentTime(true));
-	
+	modal
+		.querySelector("#start-frame-back")
+		.addEventListener("click", () => adjustStartTime(-1 / 30)); // -1 frame at 30fps
+	modal
+		.querySelector("#start-frame-forward")
+		.addEventListener("click", () => adjustStartTime(1 / 30)); // +1 frame at 30fps
+	modal
+		.querySelector("#start-set-current")
+		.addEventListener("click", () => setCurrentTime(true));
+
 	// End time controls - fixed to adjust markers, not seek to current time
-	modal.querySelector('#end-frame-back').addEventListener('click', () => adjustEndTime(-1 / 30)); // -1 frame at 30fps
-	modal.querySelector('#end-frame-forward').addEventListener('click', () => adjustEndTime(1 / 30)); // +1 frame at 30fps
-	modal.querySelector('#end-set-current').addEventListener('click', () => setCurrentTime(false));
-	
+	modal
+		.querySelector("#end-frame-back")
+		.addEventListener("click", () => adjustEndTime(-1 / 30)); // -1 frame at 30fps
+	modal
+		.querySelector("#end-frame-forward")
+		.addEventListener("click", () => adjustEndTime(1 / 30)); // +1 frame at 30fps
+	modal
+		.querySelector("#end-set-current")
+		.addEventListener("click", () => setCurrentTime(false));
+
 	// Preview and export controls
-	modal.querySelector('#preview-clip').addEventListener('click', previewClip);
-	modal.querySelector('#reset-markers').addEventListener('click', resetMarkers);
-	modal.querySelector('#export-clip').addEventListener('click', showExportModal);
+	modal.querySelector("#preview-clip").addEventListener("click", previewClip);
+	modal
+		.querySelector("#reset-markers")
+		.addEventListener("click", resetMarkers);
+	modal
+		.querySelector("#export-clip")
+		.addEventListener("click", showExportModal);
 
 	// Timeline interactions
-	const timelineContainer = modal.querySelector('#timeline-container');
-	const startMarker = modal.querySelector('#start-marker');
-	const endMarker = modal.querySelector('#end-marker');
-	
+	const timelineContainer = modal.querySelector("#timeline-container");
+	const startMarker = modal.querySelector("#start-marker");
+	const endMarker = modal.querySelector("#end-marker");
+
 	// Timeline click to seek
-	timelineContainer.addEventListener('click', (e) => {
+	timelineContainer.addEventListener("click", e => {
 		if (isDragging) return; // Don't seek while dragging
-		
+
 		const rect = timelineContainer.getBoundingClientRect();
 		const clickX = e.clientX - rect.left;
 		const clickPercent = Math.max(0, Math.min(1, clickX / rect.width));
 		const seekTime = clickPercent * videoDuration;
 		video.currentTime = seekTime;
 	});
-	
+
 	// Marker dragging functionality
 	function setupMarkerDragging(marker, isStart) {
-		marker.addEventListener('mousedown', (e) => {
+		marker.addEventListener("mousedown", e => {
 			e.preventDefault();
 			e.stopPropagation();
 			isDragging = true;
-			dragTarget = isStart ? 'start' : 'end';
+			dragTarget = isStart ? "start" : "end";
 			updateControlSelection(dragTarget);
-			
-			const handleMouseMove = (e) => {
+
+			const handleMouseMove = e => {
 				if (!isDragging) return;
-				
+
 				const rect = timelineContainer.getBoundingClientRect();
 				const mouseX = e.clientX - rect.left;
 				const percent = Math.max(0, Math.min(1, mouseX / rect.width));
 				const newTime = percent * videoDuration;
-				
+
 				if (isStart) {
 					startTime = Math.min(newTime, endTime - 0.1); // Keep 0.1s minimum gap
 				} else {
 					endTime = Math.max(newTime, startTime + 0.1);
 				}
-				
+
 				// Update video position to show frame
 				video.currentTime = newTime;
-				
+
 				updateTimelineMarkers();
 				updateTimeDisplays();
 			};
-			
+
 			const handleMouseUp = () => {
 				isDragging = false;
 				dragTarget = null;
-				document.removeEventListener('mousemove', handleMouseMove);
-				document.removeEventListener('mouseup', handleMouseUp);
+				document.removeEventListener("mousemove", handleMouseMove);
+				document.removeEventListener("mouseup", handleMouseUp);
 			};
-			
-			document.addEventListener('mousemove', handleMouseMove);
-			document.addEventListener('mouseup', handleMouseUp);
+
+			document.addEventListener("mousemove", handleMouseMove);
+			document.addEventListener("mouseup", handleMouseUp);
 		});
-		
+
 		// Visual feedback and tooltip on hover
 		const tooltip = marker.querySelector('div[id$="-tooltip"]');
-		
-		marker.addEventListener('mouseenter', () => {
+
+		marker.addEventListener("mouseenter", () => {
 			if (!isDragging) {
-				marker.style.transform = 'scale(1.1)';
-				marker.style.boxShadow = '0 0 8px rgba(255,255,255,0.5)';
+				marker.style.transform = "scale(1.1)";
+				marker.style.boxShadow = "0 0 8px rgba(255,255,255,0.5)";
 				if (tooltip) {
-					tooltip.style.display = 'block';
-					tooltip.textContent = formatTime(isStart ? startTime : endTime);
+					tooltip.style.display = "block";
+					tooltip.textContent = formatTime(
+						isStart ? startTime : endTime
+					);
 				}
 			}
 		});
-		
-		marker.addEventListener('mouseleave', () => {
+
+		marker.addEventListener("mouseleave", () => {
 			if (!isDragging) {
-				marker.style.transform = 'scale(1)';
-				marker.style.boxShadow = 'none';
+				marker.style.transform = "scale(1)";
+				marker.style.boxShadow = "none";
 				if (tooltip) {
-					tooltip.style.display = 'none';
+					tooltip.style.display = "none";
 				}
 			}
 		});
 	}
-	
+
 	setupMarkerDragging(startMarker, true);
 	setupMarkerDragging(endMarker, false);
 
 	// Keyboard controls for video clipping
 	function handleKeyDown(e) {
 		// Handle ESC to close modal (works always)
-		if (e.key === 'Escape') {
+		if (e.key === "Escape") {
 			e.preventDefault();
 			closeModal();
 			return;
 		}
-		
+
 		// Handle spacebar for play/pause (works always)
-		if (e.key === ' ' || e.key === 'Spacebar') {
+		if (e.key === " " || e.key === "Spacebar") {
 			e.preventDefault();
 			if (video.paused) {
 				video.play();
@@ -2929,40 +3044,51 @@ function loadShakaPlayer(filename, cachePath, context) {
 			}
 			return;
 		}
-		
+
 		// Only handle keys when clipping mode is active
-		if (!modal.querySelector('#clipping-panel').style.display || modal.querySelector('#clipping-panel').style.display === 'none') {
+		if (
+			!modal.querySelector("#clipping-panel").style.display ||
+			modal.querySelector("#clipping-panel").style.display === "none"
+		) {
 			return;
 		}
 
 		// Prevent default for our handled keys
-		const handledKeys = ['ArrowLeft', 'ArrowRight', 'Enter'];
-		if (handledKeys.includes(e.key) || (e.key === 'Enter' && (e.ctrlKey || e.metaKey))) {
+		const handledKeys = ["ArrowLeft", "ArrowRight", "Enter"];
+		if (
+			handledKeys.includes(e.key) ||
+			(e.key === "Enter" && (e.ctrlKey || e.metaKey))
+		) {
 			e.preventDefault();
 		}
 
 		switch (e.key) {
-			case 'ArrowLeft':
+			case "ArrowLeft":
 				// Move playback cursor back one frame
 				if (video.currentTime > 0) {
 					video.currentTime = Math.max(0, video.currentTime - 1 / 30);
 				}
 				break;
-				
-			case 'ArrowRight':
+
+			case "ArrowRight":
 				// Move playback cursor forward one frame
 				if (video.currentTime < video.duration) {
-					video.currentTime = Math.min(video.duration, video.currentTime + 1 / 30);
+					video.currentTime = Math.min(
+						video.duration,
+						video.currentTime + 1 / 30
+					);
 				}
 				break;
-				
-			case 'Enter':
+
+			case "Enter":
 				if (e.ctrlKey || e.metaKey) {
 					// Ctrl/Cmd + Enter: Open export dialog
 					showExportModal();
 				} else {
 					// Just Enter: Start export (if export modal is open)
-					const exportModal = document.querySelector('#confirm-export');
+					const exportModal = document.querySelector(
+						"#confirm-export"
+					);
 					if (exportModal) {
 						exportModal.click();
 					}
@@ -2972,12 +3098,12 @@ function loadShakaPlayer(filename, cachePath, context) {
 	}
 
 	// Add keyboard event listener
-	document.addEventListener('keydown', handleKeyDown);
+	document.addEventListener("keydown", handleKeyDown);
 
 	// Clean up keyboard listener when modal is closed
 	const originalClose = modal.remove;
 	modal.remove = function() {
-		document.removeEventListener('keydown', handleKeyDown);
+		document.removeEventListener("keydown", handleKeyDown);
 		originalClose.call(this);
 	};
 }
