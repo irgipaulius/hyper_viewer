@@ -1910,7 +1910,7 @@ function openWithDefaultPlayer(filename, directory, context) {
 	console.log(`🎥 Opening with default player: ${filename}`);
 	
 	try {
-		// Get the file info from context
+		// Get the file list
 		const fileList = context?.fileInfoModel?.fileList || context?.fileList || window.OCA?.Files?.App?.fileList;
 		
 		if (!fileList) {
@@ -1918,7 +1918,7 @@ function openWithDefaultPlayer(filename, directory, context) {
 			return;
 		}
 		
-		// Find the file model in the fileList
+		// Find the file model
 		const fileModel = fileList.files.find(f => f.name === filename);
 		
 		if (!fileModel) {
@@ -1926,22 +1926,33 @@ function openWithDefaultPlayer(filename, directory, context) {
 			return;
 		}
 		
-		// Use Nextcloud's Viewer with proper file object
-		if (window.OCA?.Viewer?.open) {
-			// Modern Viewer API - pass the file object directly
-			window.OCA.Viewer.open({
-				fileInfo: fileModel,
-				list: fileList.files,
-				enableSidebar: true
-			});
-		} else if (fileList.showDetailsView) {
-			// Fallback: trigger the file's default action through fileList
-			fileList.showDetailsView(filename, 'sharing');
+		// Get the default file action (usually 'View' for videos)
+		// Filter out our custom HLS action to get the native video viewer
+		const allActions = OCA.Files.fileActions.getActions(
+			fileModel.mimetype,
+			'file',
+			OC.PERMISSION_READ
+		);
+		
+		// Find the native viewer action (not our custom actions)
+		const nativeViewerAction = Object.values(allActions).find(action => 
+			action.name === 'view' || 
+			action.name === 'View' ||
+			(action.displayName && action.displayName.toLowerCase() === 'view')
+		);
+		
+		if (nativeViewerAction && nativeViewerAction.action) {
+			console.log('🎬 Triggering native viewer action');
+			nativeViewerAction.action(filename, context);
 		} else {
-			// Last resort: try to open via file actions
-			const defaultAction = OCA.Files.fileActions.getDefault(fileModel.mimetype, 'file', OC.PERMISSION_READ);
-			if (defaultAction) {
-				defaultAction.action(filename, context);
+			// Fallback: Try to use Viewer directly
+			console.log('🎬 Fallback: Using OCA.Viewer.open');
+			const filePath = directory === "/" ? `/${filename}` : `${directory}/${filename}`;
+			
+			if (window.OCA?.Viewer) {
+				window.OCA.Viewer.open({
+					path: filePath
+				});
 			}
 		}
 	} catch (error) {
