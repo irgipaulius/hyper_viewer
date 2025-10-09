@@ -155,7 +155,8 @@ class ClipController extends Controller {
         $ncBasePath = dirname(dirname(dirname(dirname(__DIR__))));
         $occPath = $ncBasePath . '/occ';
         $userId = $this->userSession->getUser()->getUID();
-        $scanPath = $userId . $exportDir;
+        // Scan path should be relative to user's files directory (no username prefix)
+        $scanPath = $exportDir;
         
         // Build FFmpeg command
         $ffmpegCmd = sprintf(
@@ -167,10 +168,11 @@ class ClipController extends Controller {
         );
         
         // Build scan command (use full PHP path for FreeBSD)
+        // occ files:scan expects path in format: username/files/relative/path
         $scanCmd = sprintf(
             '/usr/local/bin/php %s files:scan --path=%s',
             escapeshellarg($occPath),
-            escapeshellarg($scanPath)
+            escapeshellarg($userId . '/files' . $scanPath)
         );
         
         // Chain commands in background (use sh for FreeBSD compatibility)
