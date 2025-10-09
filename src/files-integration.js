@@ -2230,10 +2230,10 @@ function loadShakaPlayer(filename, cachePath, context) {
         <!-- Video Player Container (Shaka Player will be attached here) -->
         <div id="video-player-container" style="
             position: relative; width: min(90vw, 1200px); height: min(70vh, 600px);
-            background: #000; border-radius: 8px 8px 0 0; overflow: hidden;
+            background: #000; border-radius: 8px 8px 0 0; overflow: visible; padding-bottom: 50px;
         ">
             <video id="${videoId}" autoplay style="
-                width: 100%; height: 100%; object-fit: contain; background: #000;
+                width: 100%; height: calc(100% - 50px); object-fit: contain; background: #000;
             "></video>
         </div>
         
@@ -2270,12 +2270,26 @@ function loadShakaPlayer(filename, cachePath, context) {
                         position: absolute; top: -2px; left: 0%; width: 12px; height: 44px; 
                         background: #4CAF50; cursor: ew-resize; z-index: 3; border-radius: 2px;
                         display: flex; align-items: center; justify-content: center; color: white; font-size: 8px;
-                    ">S</div>
+                    " title="Start time">
+                        S
+                        <div id="start-marker-tooltip" style="
+                            position: absolute; bottom: 50px; left: 50%; transform: translateX(-50%);
+                            background: rgba(0,0,0,0.9); color: white; padding: 4px 8px; border-radius: 4px;
+                            font-size: 11px; white-space: nowrap; pointer-events: none; display: none;
+                        ">0:00.000</div>
+                    </div>
                     <div id="end-marker" style="
                         position: absolute; top: -2px; right: 0%; width: 12px; height: 44px; 
                         background: #f44336; cursor: ew-resize; z-index: 3; border-radius: 2px;
                         display: flex; align-items: center; justify-content: center; color: white; font-size: 8px;
-                    ">E</div>
+                    " title="End time">
+                        E
+                        <div id="end-marker-tooltip" style="
+                            position: absolute; bottom: 50px; left: 50%; transform: translateX(-50%);
+                            background: rgba(0,0,0,0.9); color: white; padding: 4px 8px; border-radius: 4px;
+                            font-size: 11px; white-space: nowrap; pointer-events: none; display: none;
+                        ">0:00.000</div>
+                    </div>
                 </div>
             </div>
             
@@ -2742,6 +2756,7 @@ function loadShakaPlayer(filename, cachePath, context) {
 	function adjustStartTime(deltaSeconds) {
 		const newStartTime = Math.max(0, Math.min(startTime + deltaSeconds, endTime - 0.1));
 		startTime = newStartTime;
+		video.currentTime = newStartTime; // Seek video to show the frame
 		updateTimelineMarkers();
 		updateTimeDisplays();
 	}
@@ -2749,6 +2764,7 @@ function loadShakaPlayer(filename, cachePath, context) {
 	function adjustEndTime(deltaSeconds) {
 		const newEndTime = Math.max(startTime + 0.1, Math.min(endTime + deltaSeconds, videoDuration));
 		endTime = newEndTime;
+		video.currentTime = newEndTime; // Seek video to show the frame
 		updateTimelineMarkers();
 		updateTimeDisplays();
 	}
@@ -2829,11 +2845,17 @@ function loadShakaPlayer(filename, cachePath, context) {
 			document.addEventListener('mouseup', handleMouseUp);
 		});
 		
-		// Visual feedback on hover
+		// Visual feedback and tooltip on hover
+		const tooltip = marker.querySelector('div[id$="-tooltip"]');
+		
 		marker.addEventListener('mouseenter', () => {
 			if (!isDragging) {
 				marker.style.transform = 'scale(1.1)';
 				marker.style.boxShadow = '0 0 8px rgba(255,255,255,0.5)';
+				if (tooltip) {
+					tooltip.style.display = 'block';
+					tooltip.textContent = formatTime(isStart ? startTime : endTime);
+				}
 			}
 		});
 		
@@ -2841,6 +2863,9 @@ function loadShakaPlayer(filename, cachePath, context) {
 			if (!isDragging) {
 				marker.style.transform = 'scale(1)';
 				marker.style.boxShadow = 'none';
+				if (tooltip) {
+					tooltip.style.display = 'none';
+				}
 			}
 		});
 	}
@@ -2850,6 +2875,24 @@ function loadShakaPlayer(filename, cachePath, context) {
 
 	// Keyboard controls for video clipping
 	function handleKeyDown(e) {
+		// Handle ESC to close modal (works always)
+		if (e.key === 'Escape') {
+			e.preventDefault();
+			closeModal();
+			return;
+		}
+		
+		// Handle spacebar for play/pause (works always)
+		if (e.key === ' ' || e.key === 'Spacebar') {
+			e.preventDefault();
+			if (video.paused) {
+				video.play();
+			} else {
+				video.pause();
+			}
+			return;
+		}
+		
 		// Only handle keys when clipping mode is active
 		if (!modal.querySelector('#clipping-panel').style.display || modal.querySelector('#clipping-panel').style.display === 'none') {
 			return;
