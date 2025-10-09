@@ -2450,16 +2450,16 @@ function loadShakaPlayer(filename, cachePath, context) {
 			controlPanelElements: [
 				"play_pause",
 				"time_and_duration",
-				"spacer",
-				"volume",
 				"mute",
-				"playback_speed",
-				"quality",
+				"volume",
+				"spacer",
 				"overflow_menu",
 				"fullscreen"
 			],
 			overflowMenuButtons: [
 				"picture_in_picture",
+				"quality",
+				"playback_speed",
 				"save_video_frame",
 				"statistics"
 			],
@@ -2476,6 +2476,30 @@ function loadShakaPlayer(filename, cachePath, context) {
 
 		const ui = new shaka.ui.Overlay(player, videoContainer, video);
 		ui.configure(uiConfig);
+
+		// Add CSS to prevent Shaka controls from overlapping clipping panel
+		const seekBarFix = document.createElement("style");
+		seekBarFix.textContent = `
+			/* Add bottom margin to video container to create space */
+			#video-player-container {
+				margin-bottom: 20px !important;
+			}
+			
+			/* Ensure Shaka controls stay within bounds */
+			.shaka-video-container {
+				margin-bottom: 0 !important;
+			}
+			
+			.shaka-controls-container {
+				position: relative !important;
+			}
+			
+			/* Add top margin to clipping panel for extra safety */
+			#clipping-panel {
+				margin-top: 20px !important;
+			}
+		`;
+		document.head.appendChild(seekBarFix);
 
 		// Build manifest URL
 		const encodedCachePath = encodeURIComponent(cachePath);
