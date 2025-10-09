@@ -38,6 +38,9 @@ return [
 		['name' => 'transcode#proxyTranscode', 'url' => '/api/proxy-transcode', 'verb' => 'GET'],
 		['name' => 'transcode#proxyStream', 'url' => '/api/proxy-stream', 'verb' => 'GET'],
 		
+		// Video Clipping
+		['name' => 'clip#exportClip', 'url' => '/api/export-clip', 'verb' => 'POST'],
+		
 		// Management Dashboard API
 		['name' => 'cache#getActiveJobs', 'url' => '/api/jobs/active', 'verb' => 'GET'],
 		['name' => 'cache#getJobProgress', 'url' => '/api/jobs/active/{filename}', 'verb' => 'GET'],

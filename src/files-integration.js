@@ -2562,7 +2562,11 @@ function loadShakaPlayer(filename, cachePath, context) {
 	}
 
 	function showExportModal() {
-		// Create export modal
+		// Determine default export path
+		const isInHome = context.dir === '/' || context.dir.startsWith('/home') || context.dir.startsWith('/Users');
+		const defaultPath = isInHome ? '../exports' : '../exports';
+		
+		// Create simplified export modal
 		const exportModal = document.createElement('div');
 		exportModal.style.cssText = `
 			position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 10002;
@@ -2571,38 +2575,20 @@ function loadShakaPlayer(filename, cachePath, context) {
 		
 		exportModal.innerHTML = `
 			<div style="
-				background: #2a2a2a; border-radius: 8px; padding: 24px; max-width: 500px; width: 90%;
+				background: #2a2a2a; border-radius: 8px; padding: 24px; max-width: 400px; width: 90%;
 				color: white; box-shadow: 0 4px 20px rgba(0,0,0,0.5);
 			">
 				<h3 style="margin: 0 0 20px 0; color: #FF9800;">📤 Export Video Clip</h3>
 				
 				<div style="margin-bottom: 20px;">
 					<label style="display: block; margin-bottom: 8px; font-weight: bold;">Export Location:</label>
-					<input id="export-path" type="text" value="../exports" style="
+					<input id="export-path" type="text" value="${defaultPath}" style="
 						width: 100%; padding: 12px; border: 1px solid #555; border-radius: 4px; 
 						background: #333; color: white; font-family: monospace; box-sizing: border-box;
 					">
 					<small style="color: #ccc; margin-top: 4px; display: block;">
-						Relative to video location. Use "../exports" for parent directory.
+						Relative to video location. Directory will be created if it doesn't exist.
 					</small>
-				</div>
-				
-				<div style="margin-bottom: 20px;">
-					<label style="display: block; margin-bottom: 12px; font-weight: bold;">Export Quality:</label>
-					<div style="display: flex; gap: 12px; margin-bottom: 16px;">
-						<label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 8px 12px; border: 2px solid #4CAF50; border-radius: 6px; background: rgba(76, 175, 80, 0.1);">
-							<input type="radio" name="export-quality" value="original" checked style="margin: 0;">
-							<span style="color: #4CAF50; font-weight: bold;">📹 Original Quality</span>
-						</label>
-						<label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 8px 12px; border: 2px solid #666; border-radius: 6px; background: rgba(100, 100, 100, 0.1);">
-							<input type="radio" name="export-quality" value="720p" style="margin: 0;">
-							<span style="color: #ccc;">🎬 720p MP4 (Compressed)</span>
-						</label>
-					</div>
-					<label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-						<input type="checkbox" id="generate-proxy" checked style="margin: 0;">
-						<span>⚡ Generate HLS proxy for clip</span>
-					</label>
 				</div>
 				
 				<div style="margin-bottom: 20px; padding: 12px; background: rgba(76, 175, 80, 0.1); border-radius: 4px; border: 1px solid #4CAF50;">
@@ -2611,6 +2597,7 @@ function loadShakaPlayer(filename, cachePath, context) {
 						<div>Start: ${formatTime(startTime)}</div>
 						<div>End: ${formatTime(endTime)}</div>
 						<div>Duration: ${formatTime(endTime - startTime)}</div>
+						<div style="color: #4CAF50; margin-top: 8px;">✨ Original quality lossless cut</div>
 					</div>
 				</div>
 				
@@ -2627,50 +2614,37 @@ function loadShakaPlayer(filename, cachePath, context) {
 		
 		document.body.appendChild(exportModal);
 		
+		// Focus on export path input
+		const exportPathInput = exportModal.querySelector('#export-path');
+		exportPathInput.focus();
+		exportPathInput.select();
+		
 		// Export modal event listeners
 		exportModal.querySelector('#cancel-export').addEventListener('click', () => {
 			exportModal.remove();
 		});
 		
-		// Radio button styling
-		const radioButtons = exportModal.querySelectorAll('input[name="export-quality"]');
-		radioButtons.forEach(radio => {
-			radio.addEventListener('change', () => {
-				radioButtons.forEach(r => {
-					const label = r.closest('label');
-					if (r.checked) {
-						label.style.border = '2px solid #4CAF50';
-						label.style.background = 'rgba(76, 175, 80, 0.1)';
-						label.querySelector('span').style.color = '#4CAF50';
-						label.querySelector('span').style.fontWeight = 'bold';
-					} else {
-						label.style.border = '2px solid #666';
-						label.style.background = 'rgba(100, 100, 100, 0.1)';
-						label.querySelector('span').style.color = '#ccc';
-						label.querySelector('span').style.fontWeight = 'normal';
-					}
-				});
-			});
-		});
-		
-		exportModal.querySelector('#confirm-export').addEventListener('click', () => {
-			const exportPath = exportModal.querySelector('#export-path').value;
-			const exportQuality = exportModal.querySelector('input[name="export-quality"]:checked').value;
-			const generateProxy = exportModal.querySelector('#generate-proxy').checked;
+		// Handle Enter key to start export
+		const handleExport = () => {
+			const exportPath = exportModal.querySelector('#export-path').value.trim();
+			if (!exportPath) {
+				OC.dialogs.alert('Please enter an export location.', 'Export Error');
+				return;
+			}
 			
-			console.log('🚀 Export settings:', {
-				filename,
-				startTime,
-				endTime,
-				duration: endTime - startTime,
-				exportPath,
-				exportQuality,
-				generateProxy
-			});
-			
-			// TODO: Implement actual export functionality
-			OC.dialogs.alert('Export functionality will be implemented next!', 'Coming Soon');
+			// Start the export process
+			startExport(exportPath);
 			exportModal.remove();
+		};
+		
+		exportModal.querySelector('#confirm-export').addEventListener('click', handleExport);
+		
+		// Enter key support
+		exportPathInput.addEventListener('keydown', (e) => {
+			if (e.key === 'Enter') {
+				e.preventDefault();
+				handleExport();
+			}
 		});
 		
 		exportModal.addEventListener('click', (e) => {
@@ -2680,18 +2654,117 @@ function loadShakaPlayer(filename, cachePath, context) {
 		});
 	}
 
+	// Export functionality
+	async function startExport(exportPath) {
+		try {
+			// Generate unique filename for the clip
+			const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+			const baseName = filename.replace(/\.[^/.]+$/, ''); // Remove extension
+			const extension = filename.split('.').pop();
+			const clipFilename = `${baseName}_clip_${timestamp}.${extension}`;
+			
+			// Show immediate notification
+			showExportNotification(clipFilename, exportPath);
+			
+			// Get the full file path for the original video
+			const originalPath = context.dir === "/" ? `/${filename}` : `${context.dir}/${filename}`;
+			
+			// Call the export API
+			const response = await fetch(
+				OC.generateUrl("/apps/hyper_viewer/api/export-clip"),
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+						requesttoken: OC.requestToken
+					},
+					body: JSON.stringify({
+						originalPath,
+						startTime,
+						endTime,
+						exportPath,
+						clipFilename
+					})
+				}
+			);
+
+			const result = await response.json();
+			
+			if (!response.ok) {
+				throw new Error(result.error || 'Export failed');
+			}
+			
+			console.log('✅ Export started successfully:', result);
+			
+		} catch (error) {
+			console.error('❌ Export failed:', error);
+			OC.dialogs.alert(`Export failed: ${error.message}`, 'Export Error');
+		}
+	}
+
+	function showExportNotification(clipFilename, exportPath) {
+		// Create notification
+		const notification = document.createElement('div');
+		notification.style.cssText = `
+			position: fixed; top: 20px; right: 20px; z-index: 10003;
+			background: #4CAF50; color: white; padding: 16px 20px; border-radius: 8px;
+			box-shadow: 0 4px 12px rgba(0,0,0,0.3); max-width: 400px;
+			font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+		`;
+		
+		notification.innerHTML = `
+			<div style="display: flex; align-items: center; gap: 12px;">
+				<div style="font-size: 20px;">✂️</div>
+				<div>
+					<div style="font-weight: bold; margin-bottom: 4px;">Export Started</div>
+					<div style="font-size: 13px; opacity: 0.9;">
+						Creating: ${clipFilename}<br>
+						Location: ${exportPath}
+					</div>
+				</div>
+			</div>
+		`;
+		
+		document.body.appendChild(notification);
+		
+		// Auto-remove after 5 seconds
+		setTimeout(() => {
+			if (notification.parentNode) {
+				notification.style.opacity = '0';
+				notification.style.transform = 'translateX(100%)';
+				notification.style.transition = 'all 0.3s ease';
+				setTimeout(() => notification.remove(), 300);
+			}
+		}, 5000);
+	}
+
+	// Fixed frame adjustment functions
+	function adjustStartTime(deltaSeconds) {
+		const newStartTime = Math.max(0, Math.min(startTime + deltaSeconds, endTime - 0.1));
+		startTime = newStartTime;
+		updateTimelineMarkers();
+		updateTimeDisplays();
+	}
+
+	function adjustEndTime(deltaSeconds) {
+		const newEndTime = Math.max(startTime + 0.1, Math.min(endTime + deltaSeconds, videoDuration));
+		endTime = newEndTime;
+		updateTimelineMarkers();
+		updateTimeDisplays();
+	}
+
 	// Event listeners for clipping controls
 	modal.querySelector('#toggle-clip-mode').addEventListener('click', toggleClipMode);
 	modal.querySelector('#exit-clip-mode').addEventListener('click', toggleClipMode);
 	
-	// Start time controls
-	modal.querySelector('#start-frame-back').addEventListener('click', () => stepFrame(-1, true));
-	modal.querySelector('#start-frame-forward').addEventListener('click', () => stepFrame(1, true));
+	// Start time controls - fixed to adjust markers, not seek to current time
+	modal.querySelector('#start-frame-back').addEventListener('click', () => adjustStartTime(-1 / 30)); // -1 frame at 30fps
+	modal.querySelector('#start-frame-forward').addEventListener('click', () => adjustStartTime(1 / 30)); // +1 frame at 30fps
 	modal.querySelector('#start-set-current').addEventListener('click', () => setCurrentTime(true));
 	
-	// End time controls
-	modal.querySelector('#end-frame-back').addEventListener('click', () => stepFrame(-1, false));
-	modal.querySelector('#end-frame-forward').addEventListener('click', () => stepFrame(1, false));
+	// End time controls - fixed to adjust markers, not seek to current time
+	modal.querySelector('#end-frame-back').addEventListener('click', () => adjustEndTime(-1 / 30)); // -1 frame at 30fps
+	modal.querySelector('#end-frame-forward').addEventListener('click', () => adjustEndTime(1 / 30)); // +1 frame at 30fps
 	modal.querySelector('#end-set-current').addEventListener('click', () => setCurrentTime(false));
 	
 	// Preview and export controls
@@ -2774,4 +2847,57 @@ function loadShakaPlayer(filename, cachePath, context) {
 	
 	setupMarkerDragging(startMarker, true);
 	setupMarkerDragging(endMarker, false);
+
+	// Keyboard controls for video clipping
+	function handleKeyDown(e) {
+		// Only handle keys when clipping mode is active
+		if (!modal.querySelector('#clipping-panel').style.display || modal.querySelector('#clipping-panel').style.display === 'none') {
+			return;
+		}
+
+		// Prevent default for our handled keys
+		const handledKeys = ['ArrowLeft', 'ArrowRight', 'Enter'];
+		if (handledKeys.includes(e.key) || (e.key === 'Enter' && (e.ctrlKey || e.metaKey))) {
+			e.preventDefault();
+		}
+
+		switch (e.key) {
+			case 'ArrowLeft':
+				// Move playback cursor back one frame
+				if (video.currentTime > 0) {
+					video.currentTime = Math.max(0, video.currentTime - 1 / 30);
+				}
+				break;
+				
+			case 'ArrowRight':
+				// Move playback cursor forward one frame
+				if (video.currentTime < video.duration) {
+					video.currentTime = Math.min(video.duration, video.currentTime + 1 / 30);
+				}
+				break;
+				
+			case 'Enter':
+				if (e.ctrlKey || e.metaKey) {
+					// Ctrl/Cmd + Enter: Open export dialog
+					showExportModal();
+				} else {
+					// Just Enter: Start export (if export modal is open)
+					const exportModal = document.querySelector('#confirm-export');
+					if (exportModal) {
+						exportModal.click();
+					}
+				}
+				break;
+		}
+	}
+
+	// Add keyboard event listener
+	document.addEventListener('keydown', handleKeyDown);
+
+	// Clean up keyboard listener when modal is closed
+	const originalClose = modal.remove;
+	modal.remove = function() {
+		document.removeEventListener('keydown', handleKeyDown);
+		originalClose.call(this);
+	};
 }
