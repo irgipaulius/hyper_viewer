@@ -86,14 +86,15 @@ class ClipController extends Controller {
             $outputFile = $exportLocalPath . '/' . $clipFilename;
             
             // Start lossless clip export in background
-            $this->startClipExport($originalLocalPath, $outputFile, $startTime, $endTime, $exportDir);
+            $logFile = $this->startClipExport($originalLocalPath, $outputFile, $startTime, $endTime, $exportDir);
             
             return new JSONResponse([
                 'success' => true,
                 'message' => 'Clip export started',
                 'clipFilename' => $clipFilename,
                 'exportPath' => $exportDir,
-                'outputFile' => $outputFile
+                'outputFile' => $outputFile,
+                'logFile' => $logFile
             ]);
             
         } catch (\Exception $e) {
@@ -139,11 +140,11 @@ class ClipController extends Controller {
         }
     }
 
-    private function startClipExport(string $inputPath, string $outputPath, float $startTime, float $endTime, string $exportDir): void {
-        // Create unique log file for this export
-        $logId = uniqid();
-        $tempDir = sys_get_temp_dir();
-        $logFile = $tempDir . '/hyper_viewer_export_' . $logId . '.log';
+    private function startClipExport(string $inputPath, string $outputPath, float $startTime, float $endTime, string $exportDir): string {
+        // Create hidden log file next to the output file
+        $outputDir = dirname($outputPath);
+        $outputFilename = basename($outputPath);
+        $logFile = $outputDir . '/.' . $outputFilename . '.log';
         
         // FFmpeg command for lossless cutting
         // Using stream copy (-c copy) for lossless operation
@@ -155,19 +156,32 @@ class ClipController extends Controller {
         $userId = $this->userSession->getUser()->getUID();
         $scanPath = $userId . $exportDir;
         
-        // Chain FFmpeg with Nextcloud file scan for immediate visibility
-        $cmd = sprintf(
-            'nohup bash -c "/usr/local/bin/ffmpeg -y -ss %f -i %s -t %f -c copy -avoid_negative_ts make_zero %s && php %s files:scan --path=%s" > %s 2>&1 &',
+        // Build FFmpeg command
+        $ffmpegCmd = sprintf(
+            '/usr/local/bin/ffmpeg -y -ss %f -i %s -t %f -c copy -avoid_negative_ts make_zero %s',
             $startTime,
             escapeshellarg($inputPath),
             $duration,
-            escapeshellarg($outputPath),
+            escapeshellarg($outputPath)
+        );
+        
+        // Build scan command
+        $scanCmd = sprintf(
+            'php %s files:scan --path=%s',
             escapeshellarg($occPath),
-            escapeshellarg($scanPath),
+            escapeshellarg($scanPath)
+        );
+        
+        // Chain commands in background
+        $fullCmd = sprintf(
+            'nohup bash -c %s > %s 2>&1 &',
+            escapeshellarg($ffmpegCmd . ' && ' . $scanCmd),
             escapeshellarg($logFile)
         );
 
         // Execute the command
-        exec($cmd, $output, $returnCode);
+        exec($fullCmd, $output, $returnCode);
+        
+        return $logFile;
     }
 }
