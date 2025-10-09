@@ -200,68 +200,99 @@ function initializeFilesIntegration() {
  * Add HLS badges to videos in the file list
  */
 function addHlsBadgesToFileList() {
-	// Inject CSS for HLS badges
+	console.log('🎨 Initializing HLS badges for file list...');
+	
+	// Inject CSS for HLS badges (works for both list and grid view)
 	const style = document.createElement('style');
 	style.textContent = `
+		/* HLS Badge styling */
 		.hls-badge {
 			position: absolute;
-			top: 8px;
-			right: 8px;
-			background: rgba(60, 60, 60, 0.9);
+			top: 4px;
+			right: 4px;
+			background: rgba(60, 60, 60, 0.95);
 			color: #FF9800;
-			padding: 3px 8px;
-			border-radius: 4px;
-			font-size: 10px;
+			padding: 2px 6px;
+			border-radius: 3px;
+			font-size: 9px;
 			font-weight: bold;
 			letter-spacing: 0.5px;
-			z-index: 100;
+			z-index: 1000;
 			pointer-events: none;
-			box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+			box-shadow: 0 1px 3px rgba(0,0,0,0.4);
 			backdrop-filter: blur(4px);
+			line-height: 1.2;
 		}
 		
-		/* Make sure badge is visible on thumbnails */
-		.files-fileList tr[data-file] .thumbnail-wrapper {
-			position: relative;
+		/* List view - make thumbnail container relative */
+		.files-fileList tr[data-file] td.filename .thumbnail {
+			position: relative !important;
+		}
+		
+		/* Grid view - make thumbnail container relative */
+		.files-fileList .files-filestable .filename .thumbnail,
+		.files-fileList .grid-item .thumbnail,
+		section.files-grid .grid-item .thumbnail {
+			position: relative !important;
 		}
 	`;
 	document.head.appendChild(style);
 	
 	// Function to check and add badges
 	async function updateHlsBadges() {
-		const fileList = document.querySelector('#filestable tbody.files-fileList');
-		if (!fileList) return;
+		console.log('🔍 Checking for videos to badge...');
 		
 		const directory = window.OCA?.Files?.App?.fileList?.getCurrentDirectory() || '/';
-		const videoRows = fileList.querySelectorAll('tr[data-file][data-mime="video/quicktime"], tr[data-file][data-mime="video/mp4"]');
 		
-		for (const row of videoRows) {
-			const filename = row.getAttribute('data-file');
+		// Try multiple selectors for different Nextcloud views
+		let videoElements = [];
+		
+		// List view
+		const listViewVideos = document.querySelectorAll(
+			'#filestable tbody.files-fileList tr[data-file][data-mime="video/quicktime"], ' +
+			'#filestable tbody.files-fileList tr[data-file][data-mime="video/mp4"]'
+		);
+		
+		// Grid view
+		const gridViewVideos = document.querySelectorAll(
+			'section.files-grid .grid-item[data-mime="video/quicktime"], ' +
+			'section.files-grid .grid-item[data-mime="video/mp4"]'
+		);
+		
+		videoElements = [...listViewVideos, ...gridViewVideos];
+		console.log(`📹 Found ${videoElements.length} video elements`);
+		
+		for (const element of videoElements) {
+			const filename = element.getAttribute('data-file');
 			if (!filename) continue;
 			
 			// Skip if badge already exists
-			if (row.querySelector('.hls-badge')) continue;
+			if (element.querySelector('.hls-badge')) continue;
 			
 			try {
 				// Check if HLS cache exists
 				const cachePath = await checkHlsCache(filename, directory);
 				
 				if (cachePath) {
-					// Add HLS badge
-					const thumbnailWrapper = row.querySelector('.thumbnail-wrapper') || 
-					                        row.querySelector('td.filename .thumbnail');
+					// Find thumbnail container (different for list vs grid)
+					const thumbnailContainer = 
+						element.querySelector('td.filename .thumbnail') || // List view
+						element.querySelector('.thumbnail') || // Grid view
+						element.querySelector('.icon-file'); // Fallback
 					
-					if (thumbnailWrapper) {
-						// Ensure wrapper has relative positioning
-						thumbnailWrapper.style.position = 'relative';
+					if (thumbnailContainer) {
+						// Ensure container has relative positioning
+						thumbnailContainer.style.position = 'relative';
 						
 						const badge = document.createElement('div');
 						badge.className = 'hls-badge';
 						badge.textContent = 'HLS';
 						badge.title = 'HLS cache available';
-						thumbnailWrapper.appendChild(badge);
+						thumbnailContainer.appendChild(badge);
 						
 						console.log(`✅ Added HLS badge to: ${filename}`);
+					} else {
+						console.warn(`⚠️ No thumbnail container found for: ${filename}`);
 					}
 				}
 			} catch (error) {
@@ -270,35 +301,64 @@ function addHlsBadgesToFileList() {
 		}
 	}
 	
-	// Update badges on initial load
-	setTimeout(updateHlsBadges, 2000);
-	
-	// Update badges when file list changes
-	const observer = new MutationObserver(() => {
+	// Update badges with delay for initial load
+	setTimeout(() => {
+		console.log('🚀 Running initial badge update...');
 		updateHlsBadges();
+	}, 3000);
+	
+	// Update badges periodically to catch late-loaded thumbnails
+	setInterval(updateHlsBadges, 5000);
+	
+	// Update badges when file list changes (MutationObserver)
+	const observer = new MutationObserver(() => {
+		setTimeout(updateHlsBadges, 500);
 	});
 	
-	// Wait for file list to exist
-	const checkFileList = setInterval(() => {
-		const fileListElement = document.querySelector('#filestable tbody.files-fileList');
-		if (fileListElement) {
-			observer.observe(fileListElement, {
+	// Observe both list and grid containers
+	const observeFileList = () => {
+		// List view container
+		const listContainer = document.querySelector('#filestable tbody.files-fileList');
+		if (listContainer) {
+			observer.observe(listContainer, {
 				childList: true,
 				subtree: true
 			});
-			clearInterval(checkFileList);
+			console.log('👀 Observing list view for changes');
 		}
-	}, 500);
+		
+		// Grid view container
+		const gridContainer = document.querySelector('section.files-grid');
+		if (gridContainer) {
+			observer.observe(gridContainer, {
+				childList: true,
+				subtree: true
+			});
+			console.log('👀 Observing grid view for changes');
+		}
+		
+		// If containers don't exist yet, try again
+		if (!listContainer && !gridContainer) {
+			setTimeout(observeFileList, 1000);
+		}
+	};
 	
-	// Also update on directory change
+	observeFileList();
+	
+	// Hook into directory changes
 	if (window.OCA?.Files?.App?.fileList) {
 		const originalChangeDirectory = window.OCA.Files.App.fileList.changeDirectory;
 		window.OCA.Files.App.fileList.changeDirectory = function(...args) {
 			const result = originalChangeDirectory.apply(this, args);
-			setTimeout(updateHlsBadges, 1000);
+			setTimeout(() => {
+				console.log('📂 Directory changed, updating badges...');
+				updateHlsBadges();
+			}, 1500);
 			return result;
 		};
 	}
+	
+	console.log('✅ HLS badge system initialized');
 }
 
 /**
