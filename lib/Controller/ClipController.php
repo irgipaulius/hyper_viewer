@@ -52,7 +52,7 @@ class ClipController extends Controller {
             $userFolder = $this->rootFolder->getUserFolder($this->userSession->getUser()->getUID());
             
             if (!$userFolder->nodeExists($originalPath)) {
-                return new JSONResponse(['error' => 'Original video file not found'], 404);
+                return new JSONResponse(['error' => 'Original video file not found: ' . $originalPath], 404);
             }
             
             $originalFile = $userFolder->get($originalPath);
@@ -62,10 +62,18 @@ class ClipController extends Controller {
                 return new JSONResponse(['error' => 'Cannot access original video file'], 500);
             }
             
+            // Normalize export directory path (resolve .. properly)
+            $videoDir = dirname($originalPath);
+            $exportDir = $this->normalizePath($videoDir . '/' . $exportPath);
+            
             // Create export directory if it doesn't exist
-            $exportDir = dirname($originalPath) . '/' . $exportPath;
-            if (!$userFolder->nodeExists($exportDir)) {
-                $userFolder->newFolder($exportDir);
+            try {
+                if (!$userFolder->nodeExists($exportDir)) {
+                    // Create directory recursively
+                    $this->createDirectoryRecursive($userFolder, $exportDir);
+                }
+            } catch (\Exception $e) {
+                return new JSONResponse(['error' => 'Failed to create export directory: ' . $e->getMessage()], 500);
             }
             
             $exportFolder = $userFolder->get($exportDir);
@@ -84,12 +92,50 @@ class ClipController extends Controller {
                 'success' => true,
                 'message' => 'Clip export started',
                 'clipFilename' => $clipFilename,
-                'exportPath' => $exportPath,
+                'exportPath' => $exportDir,
                 'outputFile' => $outputFile
             ]);
             
         } catch (\Exception $e) {
-            return new JSONResponse(['error' => $e->getMessage()], 500);
+            return new JSONResponse(['error' => 'Export failed: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Normalize a path by resolving .. and . components
+     */
+    private function normalizePath(string $path): string {
+        // Remove duplicate slashes and split into components
+        $path = preg_replace('#/+#', '/', $path);
+        $parts = explode('/', $path);
+        $normalized = [];
+        
+        foreach ($parts as $part) {
+            if ($part === '' || $part === '.') {
+                continue;
+            }
+            if ($part === '..') {
+                array_pop($normalized);
+            } else {
+                $normalized[] = $part;
+            }
+        }
+        
+        return '/' . implode('/', $normalized);
+    }
+
+    /**
+     * Create a directory recursively
+     */
+    private function createDirectoryRecursive($userFolder, string $path): void {
+        $parts = explode('/', trim($path, '/'));
+        $currentPath = '';
+        
+        foreach ($parts as $part) {
+            $currentPath .= '/' . $part;
+            if (!$userFolder->nodeExists($currentPath)) {
+                $userFolder->newFolder($currentPath);
+            }
         }
     }
 
