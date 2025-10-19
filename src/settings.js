@@ -128,7 +128,11 @@ function initializeDashboard() {
  * Refresh statistics
  */
 function refreshStatistics() {
-	fetch(OC.generateUrl('/apps/hyper_viewer/api/jobs/statistics'))
+	fetch(OC.generateUrl('/apps/hyper_viewer/api/jobs/statistics'), {
+		headers: {
+			requesttoken: OC.requestToken
+		}
+	})
 		.then(response => response.json())
 		.then(data => {
 			const stats = data.stats || {}
@@ -146,38 +150,35 @@ function refreshStatistics() {
  * Refresh active jobs
  */
 function refreshActiveJobs() {
-	fetch(OC.generateUrl('/apps/hyper_viewer/api/jobs/active'))
+	fetch(OC.generateUrl('/apps/hyper_viewer/api/jobs/active'), {
+		headers: {
+			requesttoken: OC.requestToken
+		}
+	})
 		.then(response => response.json())
 		.then(data => {
 			const jobs = data.activeJobs || []
 			const container = document.getElementById('active-jobs-container')
 			
 			if (jobs.length === 0) {
-				container.innerHTML = `
-					<div class="empty-state">
-						<div class="empty-icon">😴</div>
-						<p>No active jobs running</p>
-					</div>
-				`
+				container.innerHTML = '<p class="emptycontent-desc">No active jobs running</p>'
 			} else {
 				container.innerHTML = jobs.map(job => `
 					<div class="job-card">
 						<div class="job-header">
-							<div class="job-filename">${escapeHtml(job.filename)}</div>
-							<div class="job-status processing">${escapeHtml(job.status)}</div>
+							<span class="job-filename">${escapeHtml(job.filename)}</span>
+							<span class="job-status">${escapeHtml(job.status)}</span>
 						</div>
 						<div class="job-progress">
-							<div class="progress-bar">
-								<div class="progress-fill" style="width: ${job.progress}%"></div>
-							</div>
-							<div class="progress-text">${job.progress}%</div>
+							<progress value="${job.progress}" max="100"></progress>
+							<span style="font-size: 12px; margin-left: 8px;">${job.progress}%</span>
 						</div>
 						<div class="job-details">
-							<span class="detail-item">⏱️ ${escapeHtml(job.time)}</span>
-							<span class="detail-item">🎬 ${job.frame} frames</span>
-							<span class="detail-item">⚡ ${escapeHtml(job.speed)}</span>
-							<span class="detail-item">📺 ${escapeHtml(job.fps)} fps</span>
-							${job.cacheSize ? `<span class="detail-item">💾 ${escapeHtml(job.cacheSize)}</span>` : ''}
+							<span>Time: ${escapeHtml(job.time)}</span>
+							<span>Frames: ${job.frame}</span>
+							<span>Speed: ${escapeHtml(job.speed)}</span>
+							<span>FPS: ${escapeHtml(job.fps)}</span>
+							${job.cacheSize ? `<span>Size: ${escapeHtml(job.cacheSize)}</span>` : ''}
 						</div>
 						<div class="job-resolutions">
 							${job.resolutions.map(res => `<span class="resolution-tag">${escapeHtml(res)}</span>`).join('')}
@@ -195,38 +196,37 @@ function refreshActiveJobs() {
  * Refresh auto-generation directories
  */
 function refreshAutoGeneration() {
-	fetch(OC.generateUrl('/apps/hyper_viewer/api/auto-generation'))
+	fetch(OC.generateUrl('/apps/hyper_viewer/api/auto-generation'), {
+		headers: {
+			requesttoken: OC.requestToken
+		}
+	})
 		.then(response => response.json())
 		.then(data => {
 			const dirs = data.autoGenDirs || []
 			const container = document.getElementById('autogen-container')
 			
 			if (dirs.length === 0) {
-				container.innerHTML = `
-					<div class="empty-state">
-						<div class="empty-icon">📁</div>
-						<p>No auto-generation directories configured</p>
-					</div>
-				`
+				container.innerHTML = '<p class="emptycontent-desc">No auto-generation directories configured</p>'
 			} else {
 				container.innerHTML = dirs.map(dir => `
 					<div class="auto-gen-card">
 						<div class="auto-gen-header">
-							<div class="auto-gen-path">📁 ${escapeHtml(dir.directory)}</div>
-							<div class="auto-gen-status ${dir.enabled ? 'enabled' : 'disabled'}">
+							<span class="auto-gen-path">${escapeHtml(dir.directory)}</span>
+							<span class="auto-gen-status ${dir.enabled ? 'enabled' : 'disabled'}">
 								${dir.enabled ? 'Enabled' : 'Disabled'}
-							</div>
+							</span>
 						</div>
 						<div class="auto-gen-details">
-							<span class="detail-item">📍 ${escapeHtml(dir.cacheLocation)}</span>
-							<span class="detail-item">📅 ${formatDate(dir.registeredAt)}</span>
+							<span>Cache: ${escapeHtml(dir.cacheLocation)}</span>
+							<span>Registered: ${formatDate(dir.registeredAt)}</span>
 						</div>
 						<div class="auto-gen-resolutions">
 							${dir.resolutions.map(res => `<span class="resolution-tag">${escapeHtml(res)}</span>`).join('')}
 						</div>
 						<div class="auto-gen-actions">
 							<button class="button" onclick="removeAutoGeneration('${escapeHtml(dir.configKey)}')">
-								🗑️ Remove
+								Remove
 							</button>
 						</div>
 					</div>
@@ -247,7 +247,10 @@ window.removeAutoGeneration = function(configKey) {
 	}
 	
 	fetch(OC.generateUrl('/apps/hyper_viewer/api/auto-generation/' + encodeURIComponent(configKey)), {
-		method: 'DELETE'
+		method: 'DELETE',
+		headers: {
+			requesttoken: OC.requestToken
+		}
 	})
 		.then(response => response.json())
 		.then(data => {
