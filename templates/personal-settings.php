@@ -7,6 +7,61 @@ style('hyper_viewer', 'settings');
 	<h2><?php p($l->t('Hyper Viewer')); ?></h2>
 	<p class="settings-hint"><?php p($l->t('Configure HLS cache locations for video streaming')); ?></p>
 	
+	<!-- Statistics Cards -->
+	<div class="stats-grid">
+		<div class="stat-card">
+			<div class="stat-icon">⚡</div>
+			<div class="stat-content">
+				<div class="stat-number" id="stat-active">0</div>
+				<div class="stat-label"><?php p($l->t('Active Jobs')); ?></div>
+			</div>
+		</div>
+		<div class="stat-card">
+			<div class="stat-icon">🤖</div>
+			<div class="stat-content">
+				<div class="stat-number" id="stat-autogen">0</div>
+				<div class="stat-label"><?php p($l->t('Auto-Gen Dirs')); ?></div>
+			</div>
+		</div>
+		<div class="stat-card">
+			<div class="stat-icon">✅</div>
+			<div class="stat-content">
+				<div class="stat-number" id="stat-completed">0</div>
+				<div class="stat-label"><?php p($l->t('Completed')); ?></div>
+			</div>
+		</div>
+		<div class="stat-card">
+			<div class="stat-icon">⏳</div>
+			<div class="stat-content">
+				<div class="stat-number" id="stat-pending">0</div>
+				<div class="stat-label"><?php p($l->t('Pending')); ?></div>
+			</div>
+		</div>
+	</div>
+
+	<!-- Active Jobs Section -->
+	<div class="dashboard-section">
+		<h3><?php p($l->t('🔥 Active Jobs')); ?></h3>
+		<div id="active-jobs-container">
+			<div class="empty-state">
+				<div class="empty-icon">😴</div>
+				<p><?php p($l->t('No active jobs running')); ?></p>
+			</div>
+		</div>
+	</div>
+
+	<!-- Auto-Generation Directories -->
+	<div class="dashboard-section">
+		<h3><?php p($l->t('🤖 Auto-Generation Directories')); ?></h3>
+		<div id="autogen-container">
+			<div class="empty-state">
+				<div class="empty-icon">📁</div>
+				<p><?php p($l->t('No auto-generation directories configured')); ?></p>
+			</div>
+		</div>
+	</div>
+	
+	<!-- Cache Locations Configuration -->
 	<div class="cache-locations">
 		<h3><?php p($l->t('HLS Cache Locations')); ?></h3>
 		<p><?php p($l->t('Hyper Viewer will search these locations for .m3u8 files in order:')); ?></p>
